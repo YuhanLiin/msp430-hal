@@ -22,15 +22,17 @@ use panic_msp430 as _;
 static RED_LED: Mutex<RefCell<Option<Pin<P1, Pin0, Output>>>> = Mutex::new(RefCell::new(None));
 static P2IV: Mutex<RefCell<Option<PxIV<P2>>>> = Mutex::new(RefCell::new(None));
 
-// Red LED should blink 2 seconds on, 2 seconds off
-// Both green and red LEDs should blink when P2.3 LED is pressed
+// Red LED should blink about 3.3 seconds on, 3.3 seconds off: the WDT interval is 2^15 cycles of ACLK
+// (WDTIS = 100b, SLAU445I Table 12-2, p. 366), which is VLOCLK, 10 kHz typical (SLASEC4D Table 5-8, p. 40)
+// Both green and red LEDs should blink when P2.3 button (S2) is pressed
+// (LED1, red, on P1.0; LED2, green, on P6.6; S2 on P2.3: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
     let mut wdt = Wdt::constrain(periph.wdt_a).to_interval();
 
     let (_smclk, aclk, _delay) = ClockConfig::new(periph.cs)
-        .mclk_refoclk(MclkDiv::_1) // 32 kHz MCLK
+        .mclk_refoclk(MclkDiv::_1) // 32 kHz MCLK (REFO, 32768 Hz: SLASEC4D Table 5-7, p. 40)
         .smclk_on(SmclkDiv::_2) // 16 kHz SMCLK
         .aclk_vloclk()
         .freeze(&mut Fram::new(periph.frctl));
@@ -45,9 +47,11 @@ fn main() -> ! {
         .split(&pmm);
 
     let red_led = p1.pin0.to_output();
-    // Onboard button with interrupt disabled
+    // Onboard button with interrupt disabled (S2, which connects P2.3 to GND and has no pull-up on the
+    // board: SLAU680 Figure 18, p. 26)
     let mut button = p2.pin3;
-    // Some random pin with interrupt enabled. IFG will be set manually.
+    // Some random pin with interrupt enabled. IFG will be set manually. (On the LaunchPad P2.7 is XIN,
+    // wired to the 32.768-kHz crystal Q1: SLAU680 2.5, p. 13; SLAU680 Figure 18, p. 26)
     let mut pin = p2.pin7.pulldown();
     let mut green_led = p6.pin6;
     let p2iv = p2.pxiv;
@@ -70,6 +74,7 @@ fn main() -> ! {
     }
 }
 
+// The port P2 vector at FFD2h, decoded with P2IV (SLASEC4D Table 6-2, p. 64)
 #[interrupt]
 fn PORT2() {
     with(|cs| {
@@ -82,6 +87,7 @@ fn PORT2() {
     });
 }
 
+// The watchdog timer interval mode vector at FFE6h, WDTIFG (SLASEC4D Table 6-2, p. 63)
 #[interrupt]
 fn WDT() {
     with(|cs| {
