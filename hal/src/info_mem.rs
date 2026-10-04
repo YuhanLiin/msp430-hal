@@ -32,12 +32,16 @@ impl InfoMemory {
     /// Temporarily grants mutable access to the information memory as an array.
     ///
     /// Write protection is automatically disabled before calling the closure and restored immediately after it returns.
+    /// The closure runs with interrupts disabled, as the user's guide recommends for FRAM writes, so keep it
+    /// short (SLAU445I 1.9.3, p. 45: "completed within as short a time as possible with interrupts disabled").
     #[inline]
     pub fn write<T>(&mut self, f: impl FnOnce(&mut [u8; INFO_MEM_SIZE]) -> T) -> T {
-        Self::disable_write_protect();
-        let ret = f(&mut self.info_mem);
-        Self::enable_write_protect();
-        ret
+        critical_section::with(|_| {
+            Self::disable_write_protect();
+            let ret = f(self.info_mem);
+            Self::enable_write_protect();
+            ret
+        })
     }
 
     /// Disable write protection and directly return the info memory as an array.
@@ -50,7 +54,7 @@ impl InfoMemory {
     #[inline(always)]
     fn disable_write_protect() {
         let sys = unsafe { _pac::Sys::steal() };
-        sys.syscfg0().write(|w| unsafe { w
+        sys.syscfg0().modify(|_, w| unsafe { w
             .frwppw().bits(SYSCFG0_PASSWORD)
             .dfwp().clear_bit()
         });
@@ -59,7 +63,7 @@ impl InfoMemory {
     #[inline(always)]
     fn enable_write_protect() {
         let sys = unsafe { _pac::Sys::steal() };
-        sys.syscfg0().write(|w| unsafe { w
+        sys.syscfg0().modify(|_, w| unsafe { w
             .frwppw().bits(SYSCFG0_PASSWORD)
             .dfwp().set_bit()
         });
