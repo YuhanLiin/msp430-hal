@@ -397,24 +397,6 @@ where
     }
 }
 
-#[cfg(feature = "mfm")]
-impl<M: PinMap> SpiConfig<crate::pac::EUsciB1, Slave, M>
-where crate::pac::EUsciB1: SpiUsci<M>
-{
-    /// Set eUSCI_B1 up as the 4-wire SPI slave of the Manchester Function Module, see [`crate::mfm`]. The MFM
-    /// connects to it internally, so its own pins aren't needed (SLASEC4D 6.10.14, p. 79: "the eUSCI_B1 must
-    /// be configured in 4-wire SPI slave mode"; SLAU445I 25.6.1, p. 668).
-    pub fn mfm_slave(mut self, ste_pol: StePolarity) -> SpiSlave<crate::pac::EUsciB1, M> {
-        // UCMODEx = 01b: STE active high, 10b: STE active low (SLAU445I Table 23-12, p. 620)
-        self.ctlw0.ucmode = match ste_pol {
-            StePolarity::EnabledWhenHigh => Ucmode::FourPinSPI1,
-            StePolarity::EnabledWhenLow  => Ucmode::FourPinSPI0,
-        };
-        self.configure_hw();
-        SpiSlave { usci: self.usci, _pin_map: PhantomData }
-    }
-}
-
 /// The polarity of the STE pin. The values are those of UCMODEx (SLAU445I Table 23-1, p. 606;
 /// SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620).
 pub enum StePolarity {
