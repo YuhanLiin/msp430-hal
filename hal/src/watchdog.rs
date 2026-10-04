@@ -81,8 +81,7 @@ impl<MODE: WatchdogSelect> Wdt<MODE> {
         // Write argument bits, password, and correct mode bit (WDTTMSEL) to the watchdog write proxy
         // (SLAU445I Table 12-2, p. 366). WDTCTL reads 069h in the upper byte, so the password is always
         // written over it (SLAU445I 12.2, p. 363).
-        unsafe { w.bits(bits) }
-            .wdtpw().password()
+        unsafe { w.bits(bits).wdtpw().bits(PASSWORD) }
             .wdttmsel().bit(MODE::mode_bit())
     }
 
