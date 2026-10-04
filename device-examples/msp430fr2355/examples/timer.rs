@@ -15,6 +15,8 @@ use nb::block;
 use panic_msp430 as _;
 
 // 0.5 second on, 0.5 second off
+// (TB0 counts ACLK, which is VLOCLK, 10 kHz typical (SLASEC4D Table 5-8, p. 40), divided by 2 and by 5.
+// LED1, red, is on P1.0: SLAU680 Figure 18, p. 26.)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -47,6 +49,8 @@ fn main() -> ! {
         p1_0.set_high().unwrap();
         // first 0.5 s of timer countdown expires while subtimer expires, so this should only block
         // for 0.5 s
+        // (In up mode TBxR counts from 0 to TBxCL0; CCR2's CCIFG is set when TBxR reaches TBxCL2, SLAU445I
+        // 14.2.4.2, p. 399, and TBIFG when the timer counts from TBxCL0 to zero, SLAU445I 14.2.3.1, p. 394.)
         block!(timer.wait()).unwrap();
         p1_0.set_low().unwrap();
     }
