@@ -13,24 +13,29 @@ use nb::block;
 use panic_msp430 as _;
 
 // Turn on P1.0 if temp between 20 and 25C
+// No board document covers an LED on P1.0: there is none for the MSP430FR25x2. P1.0 is a GPIO output,
+// P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
 #[entry]
 fn main() -> ! {
-    // Take peripherals and disable watchdog
+    // Take peripherals and disable watchdog. The watchdog runs from every PUC and must be halted, here
+    // with WDTHOLD (SLAU445I 12.2.2, p. 363; SLAU445I Table 12-2, p. 366).
     let periph = msp430fr25x2::Peripherals::take().unwrap();
     let _wdt = Wdt::constrain(periph.wdt_a);
 
-    // Configure GPIO
+    // Configure GPIO. Pmm::new clears LOCKLPM5, so the pins take on their configuration
+    // (SLAU445I 8.3.1, p. 316).
     let (mut pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut led = port1.pin0.to_output();
 
     // ADC setup.
-    // Temp sensor needs >= 30 us sample time.
-    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time.
+    // Temp sensor needs >= 30 us sample time (SLASEE4C Table 5-22, p. 39: tSENSOR(sample) 30 µs minimum;
+    // SLAU445I 21.2.7.8, p. 556).
+    // MODCLK is at most 5.8 MHz, so 256 cycles take at least 44 us (SLASEE4C Table 5-9, p. 28).
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
+        Resolution::_10BIT,
         SamplingRate::_200KSPS,
         SampleTime::_256,
     )

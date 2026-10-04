@@ -29,7 +29,7 @@ msp430fr2522 = ["25x2"]           # 2kB RAM up to 4 self-capacitive or mutual-ca
 # Derived features. Do not provide these.
 2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source"]
 247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source"]
-25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "eusci_b", "vloclk_source"]
+25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "adc", "adcpctl", "eusci_b"]
 eusci_aclk = [] # eUSCI peripherals can source from ACLK
 eusci_modclk = [] # eUSCI peripherals can source from MODCLK
 adc12bit = ["adc"]
