@@ -991,3 +991,10 @@ pub mod clock {
     /// FLLREFDIV = 000b, the reference divided by 1 (SLAU445I Table 3-7, p. 116)
     pub const FLLREFDIV_1: Fllrefdiv = Fllrefdiv::_1;
 }
+
+/* LPM */
+pub(crate) mod lpm {
+    // All six ports, P1 to P6 (SLASEC4D 6.10.3, p. 69), to return to general-purpose I/O before LPMx.5
+    // (SLAU445I 1.4.3.1, p. 41, step 2)
+    crate::lpm::reset_all_pin_functions_impl!(P1, P2, P3, P4, P5, P6);
+}

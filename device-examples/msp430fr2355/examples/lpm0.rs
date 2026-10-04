@@ -21,6 +21,7 @@ use panic_msp430 as _;
 static P2IV: Mutex<RefCell<Option< PxIV<P2> >>> = Mutex::new(RefCell::new(None));
 
 // P1.0 should toggle when P2.3 is pressed
+// (LED1, red, on P1.0; button S2 on P2.3, which connects the pin to GND: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -30,6 +31,8 @@ fn main() -> ! {
 
     // Floating input pins consume a *huge* amount of power (relatively speaking).
     // Set unused pins to outputs or enable their pull resistors.
+    // (SLAU445I 8.3.2, p. 317: "To prevent a floating input and to reduce power consumption, unused I/O
+    // pins should be configured as I/O function, output direction", or with the pullup or pulldown on.)
     let p1 = Batch::new(periph.p1)
         .pulldown_all()
         .config_pin0(|p| p.to_output())
@@ -55,6 +58,8 @@ fn main() -> ! {
 
     loop {
         // Since no peripherals were configured to use SMCLK / ACLK we could just as well enter LPM3 / LPM4 here
+        // (LPM3 keeps only ACLK, LPM4 no clock, and an I/O interrupt wakes both: SLASEC4D Table 6-1, p. 61.
+        // Errata on entering LPM3 or LPM4: SLAZ695J CS13 and PMM32.)
         enter_lpm0();
         red_led.toggle().ok();
 
@@ -65,6 +70,9 @@ fn main() -> ! {
 }
 
 // Interrupt handlers with the `wake_cpu` argument will set the MSP430 back to Active Mode after the interrupt completes.
+// ("The SR bits stored on the stack can be modified within the interrupt service routine to return to a
+// different operating mode when the RETI instruction is executed": SLAU445I 1.4.2, p. 40. This is the
+// port P2 vector at FFD2h: SLASEC4D Table 6-2, p. 64.)
 #[interrupt(wake_cpu)]
 fn PORT2() {
     with(|cs| {
@@ -75,7 +83,7 @@ fn PORT2() {
     });
 }
 
-/// Enable pulldowns on unused ports to massively reduce power usage.
+/// Enable pulldowns on unused ports to massively reduce power usage (SLAU445I 8.3.2, p. 317).
 fn init_unused_gpio(p3: P3, p4: P4, p5: P5, p6: P6, pmm: &Pmm) {
     Batch::new(p3).pulldown_all().split(pmm);
     Batch::new(p4).pulldown_all().split(pmm);

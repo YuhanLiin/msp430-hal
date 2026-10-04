@@ -637,3 +637,9 @@ pub mod clock {
     /// FLLREFDIV = 000b, the reference divided by 1 (SLAU445I Table 3-7, p. 116)
     pub const FLLREFDIV_1: Fllrefdiv = Fllrefdiv::_1;
 }
+
+/* LPM */
+// The device's ports, P1 and P2 (SLASEE4C 6.10.3, p. 51)
+pub(crate) mod lpm {
+    crate::lpm::reset_all_pin_functions_impl!(P1, P2);
+}
