@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Add the `reset_cause` example for the MSP430FR2476.
 - Breaking: `Wdt::wait()` is only available in interval mode.
 - The watchdog examples of all devices set the same 1 s timeout through `Wdt` and toggle the LED once per second.
+- Fixed the MSP430FR2476 `gpio` and `gpio_interrupts` examples, which used the wrong LED pins, and the LED and button descriptions of the MSP430FR2355 examples, per the LaunchPad guides. The LED variable names of the MSP430FR2476 examples match the board.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.

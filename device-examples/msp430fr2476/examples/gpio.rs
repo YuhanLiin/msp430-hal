@@ -6,7 +6,7 @@ use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
 
-// Green onboard LED should go on when P2.3 button is pressed
+// The green part of LED2 should go on when button S2 (P2.3) is pressed
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();
@@ -16,18 +16,18 @@ fn main() -> ! {
     let p2 = Batch::new(periph.p2)
         .config_pin3(|p| p.pullup())
         .split(&pmm);
-    let p6 = Batch::new(periph.p6)
-        .config_pin6(|p| p.to_output())
+    let p5 = Batch::new(periph.p5)
+        .config_pin0(|p| p.to_output())
         .split(&pmm);
 
     let mut p2_3 = p2.pin3;
-    let mut p6_6 = p6.pin6;
+    let mut led2_green = p5.pin0;
 
     loop {
         if p2_3.is_high().unwrap() {
-            p6_6.set_low().ok();
+            led2_green.set_low().ok();
         } else {
-            p6_6.set_high().ok();
+            led2_green.set_high().ok();
         }
     }
 }
