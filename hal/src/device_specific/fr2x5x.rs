@@ -784,6 +784,9 @@ mod timer {
         timer::*,
     };
 
+    // Timer0_B3, Timer1_B3 and Timer2_B3 have three capture/compare registers each, Timer3_B7 seven
+    // (SLASEC4D 6.10.9, p. 73). Timer_B registers: SLAU445I Table 14-5, p. 408.
+    // Timer0_B3 at 0380h (SLASEC4D Table 6-45, p. 88)
     timer_b_impl!(
         Tb0,
         tb0,
@@ -801,6 +804,7 @@ mod timer {
         [CCR2, tb0cctl2, tb0ccr2]
     );
 
+    // Timer1_B3 at 03C0h (SLASEC4D Table 6-46, p. 88)
     timer_b_impl!(
         Tb1,
         tb1,
@@ -818,6 +822,7 @@ mod timer {
         [CCR2, tb1cctl2, tb1ccr2]
     );
 
+    // Timer2_B3 at 0400h (SLASEC4D Table 6-47, p. 88)
     timer_b_impl!(
         Tb2,
         tb2,
@@ -835,6 +840,7 @@ mod timer {
         [CCR2, tb2cctl2, tb2ccr2]
     );
 
+    // Timer3_B7 at 0440h, with CCR0 to CCR6 (SLASEC4D Table 6-48, p. 89)
     timer_b_impl!(
         Tb3,
         tb3,
@@ -856,23 +862,56 @@ mod timer {
         [CCR6, tb3cctl6, tb3ccr6]
     );
 
+    // TBxCLK pins, the TBCLK input of each timer (SLASEC4D Tables 6-16 to 6-19, p. 73 to p. 75), each
+    // with PxSELx = 01 and PxDIR = 0 (SLASEC4D Table 6-64, p. 98; SLASEC4D Table 6-67, p. 104; SLASEC4D
+    // Table 6-68, p. 106). SLASEC4D Table 6-18, p. 74 lists TB2CLK on P2.7, but TB2CLK is P5.2
+    // (SLASEC4D Table 6-67, p. 104; SLASEC4D Table 4-2, p. 25: TB2CLK on pin 41 of the PT package,
+    // which SLASEC4D Table 4-2, p. 24 gives to P5.2).
+    // TB0CLK: SLASEC4D Table 6-16, p. 73; SLASEC4D Table 6-64, p. 98
     impl TimerPeriph for Tb0 {
-        type Tbxclk = Pin<P2, Pin7, Alternate1<Input<Floating>>>;
+        type Tbxclk = Pin<P2, Pin7, Alternate1<Input<Floating>>>; // TB0CLK, P2SELx = 01
     }
     impl CapCmpTimer3 for Tb0 {}
 
+    // TB1CLK: SLASEC4D Table 6-17, p. 74; SLASEC4D Table 6-64, p. 98
     impl TimerPeriph for Tb1 {
-        type Tbxclk = Pin<P2, Pin2, Alternate1<Input<Floating>>>;
+        type Tbxclk = Pin<P2, Pin2, Alternate1<Input<Floating>>>; // TB1CLK, P2SELx = 01
     }
     impl CapCmpTimer3 for Tb1 {}
 
+    // TB2CLK: SLASEC4D Table 6-67, p. 104 (P5.2, not the P2.7 of SLASEC4D Table 6-18, p. 74, see above)
     impl TimerPeriph for Tb2 {
-        type Tbxclk = Pin<P5, Pin2, Alternate1<Input<Floating>>>;
+        type Tbxclk = Pin<P5, Pin2, Alternate1<Input<Floating>>>; // TB2CLK, P5SELx = 01
     }
     impl CapCmpTimer3 for Tb2 {}
 
+    // TB3CLK: SLASEC4D Table 6-19, p. 75; SLASEC4D Table 6-68, p. 106
     impl TimerPeriph for Tb3 {
-        type Tbxclk = Pin<P6, Pin6, Alternate1<Input<Floating>>>;
+        type Tbxclk = Pin<P6, Pin6, Alternate1<Input<Floating>>>; // TB3CLK, P6SELx = 01
     }
     impl CapCmpTimer7 for Tb3 {}
+
+    // INCLK is the CCR2 output of TB0 on TB1 ("Timer0_B3 CCR2B output", SLASEC4D Table 6-17, p. 74).
+    // It isn't connected on TB0 (SLASEC4D Table 6-16, p. 73: "N/A"), and on TB2 and TB3 it is the
+    // TBxCLK pin inverted (TB2CLK and TB3CLK written with an overline, SLASEC4D Table 6-18, p. 74 and
+    // SLASEC4D Table 6-19, p. 75): the pin of `TimerConfig::tbclk`, counted on its falling edges, as
+    // TBxR counts "with each rising edge of the clock signal" (SLAU445I 14.2.1, p. 393).
+    impl CascadedTimer for Tb1 {
+        type Source = Tb0;
+    }
+
+    // TODO: uncomment if pac supports it
+    // // The TBxOUTH trigger is eCOMP0 or the TBxTRG pin for TB0 and TB1, eCOMP1 or the pin for TB2,
+    // // and only eCOMP1 for TB3 (SLASEC4D Table 6-20, p. 76). TB0TRGSEL to TB3TRGSEL are SYSCFG2
+    // // bits 15 to 12, 0 for the internal and 1 for the external source (SLAU445I 1.16.1.3, Table 1-26,
+    // // p. 77).
+    // high_impedance_timer_impl!(Tb0, tb0trgsel);
+    // high_impedance_timer_impl!(Tb1, tb1trgsel);
+    // high_impedance_timer_impl!(Tb2, tb2trgsel);
+    // high_impedance_timer_impl!(Tb3, tb3trgsel);
+    // // The TBxTRG pins, inputs (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-64, p. 98; SLASEC4D
+    // // Table 6-67, p. 104). TB3 has none: TB3TRGSEL = 1 is "N/A" (SLASEC4D Table 6-20, p. 76).
+    // impl<PULL> HighImpedancePin<Tb0> for Pin<P1, Pin2, Alternate2<Input<PULL>>> {} // TB0TRG, P1SELx = 10
+    // impl<PULL> HighImpedancePin<Tb1> for Pin<P2, Pin3, Alternate1<Input<PULL>>> {} // TB1TRG, P2SELx = 01
+    // impl<PULL> HighImpedancePin<Tb2> for Pin<P5, Pin3, Alternate1<Input<PULL>>> {} // TB2TRG, P5SELx = 01
 }

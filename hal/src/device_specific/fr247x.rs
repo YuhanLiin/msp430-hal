@@ -1115,6 +1115,9 @@ mod timer {
         timer::*,
     };
 
+    // TA0 to TA3 have three capture/compare registers each (SLASEO7C 9.10.8, p. 55), TB0 seven
+    // (SLASEO7C Table 9-15, p. 59); registers: SLASEO7C Tables 9-44 to 9-48, p. 77 to p. 79.
+    // TA0 registers: SLASEO7C Table 9-44, p. 77; Timer_A registers: SLAU445I Table 13-3, p. 383
     timer_a_impl!(
         Ta0,
         ta0,
@@ -1132,6 +1135,7 @@ mod timer {
         [CCR2, ta0cctl2, ta0ccr2]
     );
 
+    // TA1 registers: SLASEO7C Table 9-45, p. 77 to p. 78; Timer_A registers: SLAU445I Table 13-3, p. 383
     timer_a_impl!(
         Ta1,
         ta1,
@@ -1149,6 +1153,7 @@ mod timer {
         [CCR2, ta1cctl2, ta1ccr2]
     );
 
+    // TA2 registers: SLASEO7C Table 9-46, p. 78; Timer_A registers: SLAU445I Table 13-3, p. 383
     timer_a_impl!(
         Ta2,
         ta2,
@@ -1166,6 +1171,7 @@ mod timer {
         [CCR2, ta2cctl2, ta2ccr2]
     );
 
+    // TA3 registers: SLASEO7C Table 9-47, p. 78; Timer_A registers: SLAU445I Table 13-3, p. 383
     timer_a_impl!(
         Ta3,
         ta3,
@@ -1183,6 +1189,8 @@ mod timer {
         [CCR2, ta3cctl2, ta3ccr2]
     );
 
+    // TB0 registers, CCR0 to CCR6: SLASEO7C Table 9-48, p. 78 to p. 79; Timer_B registers:
+    // SLAU445I Table 14-5, p. 408
     timer_b_impl!(
         Tb0,
         tb0,
@@ -1204,56 +1212,96 @@ mod timer {
         [CCR6, tb0cctl6, tb0ccr6]
     );
 
+    // The external clock input (TACLK/TBCLK) of each timer, from the timer signal connections
+    // (SLASEO7C Tables 9-12 to 9-16, p. 55 to p. 60) and the pin function tables
+    // (SLASEO7C Tables 9-23 to 9-28, p. 65 to p. 70). These functions need PxDIR = 0, so the pins are
+    // inputs.
     impl TimerPeriph for Ta0 {
+        // P1.0 TA0CLK, P1SELx = 10 (SLASEO7C Table 9-23, p. 65; SLASEO7C Table 9-12, p. 55)
         type Tbxclk = Pin<P1, Pin0, Alternate2<Input<Floating>>>;
     }
-    impl CapCmpTimer3 for Ta0 {}
+    impl CapCmpTimer3 for Ta0 {} // CCR0 to CCR2 (SLASEO7C 9.10.8, p. 55)
 
     impl TimerPeriph for Ta1 {
+        // P1.6 TA1CLK, P1SELx = 10 (SLASEO7C Table 9-23, p. 65; SLASEO7C Table 9-13, p. 56)
         type Tbxclk = Pin<P1, Pin6, Alternate2<Input<Floating>>>;
     }
-    impl CapCmpTimer3 for Ta1 {}
+    impl CapCmpTimer3 for Ta1 {} // CCR0 to CCR2 (SLASEO7C 9.10.8, p. 55)
 
     impl TimerPeriph<DefaultMapping> for Ta2 {
+        // P3.4 TA2CLK, P3SELx = 01, TA2RMP = 0 (SLASEO7C Table 9-25, p. 67; SLASEO7C Table 9-16, p. 60)
         type Tbxclk = Pin<P3, Pin4, Alternate1<Input<Floating>>>;
 
         fn configure_pin_mapping() {
+            // TA2RMP, SYSCFG3 bit 2, = 0: default pins (SLAU445I Table 1-32, p. 83;
+            // SLASEO7C Table 9-16, p. 60)
             let sys = unsafe { crate::_pac::Sys::steal() };
-            sys.syscfg3().write(|w| w.ta2rmp().clear_bit());
+            unsafe { sys.syscfg3().clear_bits(|w| w.ta2rmp().clear_bit()) };
         }
     }
     impl TimerPeriph<RemappedMapping> for Ta2 {
+        // P5.5 TA2CLK, P5SELx = 10, TA2RMP = 1 (SLASEO7C Table 9-27, p. 69; SLASEO7C Table 9-16, p. 60)
         type Tbxclk = Pin<P5, Pin5, Alternate2<Input<Floating>>>;
 
         fn configure_pin_mapping() {
+            // TA2RMP, SYSCFG3 bit 2, = 1: remapped pins (SLAU445I Table 1-32, p. 83;
+            // SLASEO7C Table 9-16, p. 60)
             let sys = unsafe { crate::_pac::Sys::steal() };
-            sys.syscfg3().write(|w| w.ta2rmp().set_bit());
+            unsafe { sys.syscfg3().set_bits(|w| w.ta2rmp().set_bit()) };
         }
     }
-    impl CapCmpTimer3<DefaultMapping> for Ta2 {}
+    impl CapCmpTimer3<DefaultMapping> for Ta2 {} // CCR0 to CCR2 (SLASEO7C 9.10.8, p. 55)
     impl CapCmpTimer3<RemappedMapping> for Ta2 {}
 
     impl TimerPeriph<DefaultMapping> for Ta3 {
+        // P4.2 TA3CLK, P4SELx = 01, TA3RMP = 0 (SLASEO7C Table 9-26, p. 68; SLASEO7C Table 9-16, p. 60)
         type Tbxclk = Pin<P4, Pin2, Alternate1<Input<Floating>>>;
 
         fn configure_pin_mapping() {
+            // TA3RMP, SYSCFG3 bit 3, = 0: default pins (SLAU445I Table 1-32, p. 83;
+            // SLASEO7C Table 9-16, p. 60)
             let sys = unsafe { crate::_pac::Sys::steal() };
-            sys.syscfg3().write(|w| w.ta3rmp().clear_bit());
+            unsafe { sys.syscfg3().clear_bits(|w| w.ta3rmp().clear_bit()) };
         }
     }
     impl TimerPeriph<RemappedMapping> for Ta3 {
+        // P5.4 TA3CLK, P5SELx = 10, TA3RMP = 1 (SLASEO7C Table 9-27, p. 69; SLASEO7C Table 9-16, p. 60)
         type Tbxclk = Pin<P5, Pin4, Alternate2<Input<Floating>>>;
 
         fn configure_pin_mapping() {
+            // TA3RMP, SYSCFG3 bit 3, = 1: remapped pins (SLAU445I Table 1-32, p. 83;
+            // SLASEO7C Table 9-16, p. 60)
             let sys = unsafe { crate::_pac::Sys::steal() };
-            sys.syscfg3().write(|w| w.ta3rmp().set_bit());
+            unsafe { sys.syscfg3().set_bits(|w| w.ta3rmp().set_bit()) };
         }
     }
-    impl CapCmpTimer3<DefaultMapping> for Ta3 {}
+    impl CapCmpTimer3<DefaultMapping> for Ta3 {} // CCR0 to CCR2 (SLASEO7C 9.10.8, p. 55)
     impl CapCmpTimer3<RemappedMapping> for Ta3 {}
 
     impl TimerPeriph for Tb0 {
-        type Tbxclk = Pin<P2, Pin7, Alternate1<Input<Floating>>>;
+        // TB0CLK is only bonded out in the 48-pin package (SLASEO7C Table 7-2, p. 18: pin 40 of the PT
+        // package, none on RHA and RHB). P6.1 TB0CLK, P6SELx = 01 (SLASEO7C Table 9-28, p. 70;
+        // SLASEO7C Table 9-15, p. 59)
+        type Tbxclk = Pin<P6, Pin1, Alternate1<Input<Floating>>>;
     }
-    impl CapCmpTimer7 for Tb0 {}
+    impl CapCmpTimer7 for Tb0 {} // CCR0 to CCR6 (SLASEO7C Table 9-15, p. 59)
+
+    // INCLK is the VLO on TA0 and TA2, and the CCR2 output of TA0 on TA1 and of TA2 on TA3. It
+    // isn't connected on TB0. (SLASEO7C Tables 9-12 to 9-15, p. 55 to p. 59)
+    impl VloclkTimer for Ta0 {}
+    impl VloclkTimer for Ta2 {}
+    impl CascadedTimer for Ta1 {
+        type Source = Ta0;
+    }
+    impl CascadedTimer for Ta3 {
+        type Source = Ta2;
+    }
+
+    // The TB0OUTH trigger is eCOMP0 or the TB0TRG pin, P3.5 (SLASEO7C Table 9-17, p. 61: TB0TRGSEL = 0
+    // selects the eCOMP0 output, 1 selects P3.5). TB0TRGSEL is SYSCFG2 bit 15, "1b = External source
+    // selected" (SLAU445I Table 1-31, p. 82). The multiplexer in SLASEO7C Figure 9-3, p. 60 shows the
+    // inputs the other way round; the code follows SLASEO7C Table 9-17, p. 61.
+    high_impedance_timer_impl!(Tb0, tb0trgsel);
+    // P3.5 TB0TRG, P3SELx = 10, P3DIR.5 = 0 (SLASEO7C Table 9-25, p. 67)
+    impl<PULL> HighImpedancePin<Tb0> for Pin<P3, Pin5, Alternate2<Input<PULL>>> {}
 }
