@@ -229,59 +229,78 @@ pub mod ecomp {
         sac::Amplifier,
     };
 
+    // eCOMP0 channels (SLASEC4D Table 6-23, p. 78): CPPSEL and CPNSEL 000b is COMP0.0 (P1.0), 001b
+    // COMP0.1 (P1.1), 010b the low-power 1.2 V reference, 101b the SAC0 output OA0O (P1.1) on the
+    // positive side and the SAC2 output OA2O (P3.1) on the negative side, and 110b the 6-bit DAC;
+    // 011b and 100b are N/A. The input pins are in their PxSELx = 11 function (SLASEC4D Table 6-63,
+    // p. 96; SLASEC4D Table 6-65, p. 100). The output COMP0.O is P2.0 with P2SELx = 10 and P2DIR = 1
+    // (SLASEC4D Table 6-64, p. 98; SLASEC4D Table 6-25, p. 78).
     impl ECompInputs for EComp0 {
-        type COMPx_0   = Pin<P1, Pin0, Alternate2<Input<Floating>>>;
-        type COMPx_1   = Pin<P1, Pin1, Alternate2<Input<Floating>>>;
-        type COMPx_2   = Infallible; // Not used
-        type COMPx_3   = Infallible; // Not used
-        type COMPx_Out = Pin<P2, Pin0, Alternate2<Output>>;
+        type COMPx_0   = Pin<P1, Pin0, Alternate3<Input<Floating>>>; // COMP0.0, P1SELx = 11
+        type COMPx_1   = Pin<P1, Pin1, Alternate3<Input<Floating>>>; // COMP0.1, P1SELx = 11
+        type COMPx_2   = Infallible; // Not used: CPxSEL 011b is N/A
+        type COMPx_3   = Infallible; // Not used: CPxSEL 100b is N/A
+        type COMPx_Out = Pin<P2, Pin0, Alternate2<Output>>; // COMP0.O, P2SELx = 10, out
         #[cfg(feature = "sac")]
-        type SACp = Amplifier<Sac0>;
+        type SACp = Amplifier<Sac0>; // CPPSEL 101b: OA0O
         #[cfg(feature = "sac")]
-        type SACn = Amplifier<Sac2>;
-        
-        type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
+        type SACn = Amplifier<Sac2>; // CPNSEL 101b: OA2O
+
+        type DeviceSpecific0    = (); // Internal 1.2V reference (CPxSEL 010b). No type required.
         type DeviceSpecific1    = Infallible; // Not used
         type DeviceSpecific2Pos = Infallible; // Not used
         type DeviceSpecific2Neg = Infallible; // Not used
-        type DeviceSpecific3Pos = Pin<P1, Pin1, Alternate2<Input<Floating>>>;
-        type DeviceSpecific3Neg = Pin<P3, Pin1, Alternate2<Input<Floating>>>;
+        // CPPSEL 101b: OA0O, P1SELx = 11
+        type DeviceSpecific3Pos = Pin<P1, Pin1, Alternate3<Input<Floating>>>;
+        // CPNSEL 101b: OA2O, P3SELx = 11
+        type DeviceSpecific3Neg = Pin<P3, Pin1, Alternate3<Input<Floating>>>;
     }
+    // eCOMP1 channels (SLASEC4D Table 6-24, p. 78): CPPSEL and CPNSEL 000b is COMP1.0 (P2.5), 001b
+    // COMP1.1 (P2.4), 010b the low-power 1.2 V reference, 101b the SAC1 output OA1O (P1.5) on the
+    // positive side and the SAC3 output OA3O (P3.5) on the negative side, and 110b the 6-bit DAC;
+    // 011b and 100b are N/A. The input pins are in their PxSELx = 11 function (SLASEC4D Table 6-63,
+    // p. 96; SLASEC4D Table 6-64, p. 98; SLASEC4D Table 6-65, p. 100). The output COMP1.O is P2.1 with
+    // P2SELx = 10 and P2DIR = 1 (SLASEC4D Table 6-64, p. 98; SLASEC4D Table 6-26, p. 79).
     impl ECompInputs for EComp1 {
-        type COMPx_0   = Pin<P2, Pin5, Alternate2<Input<Floating>>>;
-        type COMPx_1   = Pin<P2, Pin4, Alternate2<Input<Floating>>>;
-        type COMPx_2   = Infallible; // Not used
-        type COMPx_3   = Infallible; // Not used
-        type COMPx_Out = Pin<P2, Pin1, Alternate2<Output>>;
+        type COMPx_0   = Pin<P2, Pin5, Alternate3<Input<Floating>>>; // COMP1.0, P2SELx = 11
+        type COMPx_1   = Pin<P2, Pin4, Alternate3<Input<Floating>>>; // COMP1.1, P2SELx = 11
+        type COMPx_2   = Infallible; // Not used: CPxSEL 011b is N/A
+        type COMPx_3   = Infallible; // Not used: CPxSEL 100b is N/A
+        type COMPx_Out = Pin<P2, Pin1, Alternate2<Output>>; // COMP1.O, P2SELx = 10, out
         #[cfg(feature = "sac")]
-        type SACp = Amplifier<Sac1>;
+        type SACp = Amplifier<Sac1>; // CPPSEL 101b: OA1O
         #[cfg(feature = "sac")]
-        type SACn = Amplifier<Sac3>;
+        type SACn = Amplifier<Sac3>; // CPNSEL 101b: OA3O
 
-        type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
+        type DeviceSpecific0    = (); // Internal 1.2V reference (CPxSEL 010b). No type required.
         type DeviceSpecific1    = Infallible; // Not used
         type DeviceSpecific2Pos = Infallible; // Not used
         type DeviceSpecific2Neg = Infallible; // Not used
-        type DeviceSpecific3Pos = Pin<P1, Pin5, Alternate2<Input<Floating>>>;
-        type DeviceSpecific3Neg = Pin<P3, Pin5, Alternate2<Input<Floating>>>;
+        // CPPSEL 101b: OA1O, P1SELx = 11
+        type DeviceSpecific3Pos = Pin<P1, Pin5, Alternate3<Input<Floating>>>;
+        // CPNSEL 101b: OA3O, P3SELx = 11
+        type DeviceSpecific3Neg = Pin<P3, Pin5, Alternate3<Input<Floating>>>;
     }
 
-    /// List of possible inputs to the positive input of an eCOMP comparator.
+    /// List of possible inputs to the positive input of an eCOMP comparator (CPPSEL, SLASEC4D
+    /// Tables 6-23 and 6-24, p. 78).
     /// The amplifier output and DAC options take a reference to ensure they have been configured.
     #[allow(non_camel_case_types)]
     pub enum PositiveInput<'a, COMP: ECompInputs> {
-        /// COMPx.0. P1.0 for COMP0, P2.5 for COMP1
+        /// COMPx.0. P1.0 for COMP0, P2.5 for COMP1 (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-64, p. 98)
         COMPx_0(COMP::COMPx_0),
-        /// COMPx.1. P1.1 for COMP0, P2.4 for COMP1
+        /// COMPx.1. P1.1 for COMP0, P2.4 for COMP1 (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-64, p. 98)
         COMPx_1(COMP::COMPx_1),
-        /// Internal 1.2V reference
+        /// Internal 1.2V reference: the low-power 1.2 V reference, "fixed at channel 2" (SLASEC4D
+        /// 6.10.13, p. 78), 1.20 V typical (SLASEC4D Table 5-10, p. 41)
         _1V2,
         #[cfg(feature = "sac")]
-        /// Output of amplifier SAC0 for eCOMP0, SAC2 for eCOMP1.
+        /// Output of amplifier SAC0 for eCOMP0, SAC1 for eCOMP1. (CPPSEL 101b: SLASEC4D Tables 6-23
+        /// and 6-24, p. 78)
         ///
         /// Requires a reference to ensure that it has been configured.
         OAxO(&'a COMP::SACp),
-        /// This eCOMP's internal 6-bit DAC
+        /// This eCOMP's internal 6-bit DAC (SLASEC4D 6.10.13, p. 78)
         ///
         /// Requires a reference to ensure that it has been configured.
         Dac(&'a dyn CompDacPeriph<COMP>),
@@ -289,6 +308,7 @@ pub mod ecomp {
     impl<COMP: ECompInputs> PositiveInput<'_, COMP> {
         #[inline(always)]
         pub(crate) fn cppsel(&self) -> u8 {
+            // CPPSEL values (SLASEC4D Tables 6-23 and 6-24, p. 78)
             match self {
                 PositiveInput::COMPx_0(_) => 0b000,
                 PositiveInput::COMPx_1(_) => 0b001,
@@ -300,25 +320,29 @@ pub mod ecomp {
         }
     }
 
-    /// List of possible inputs to the negative input of an eCOMP comparator.
+    /// List of possible inputs to the negative input of an eCOMP comparator (CPNSEL, SLASEC4D
+    /// Tables 6-23 and 6-24, p. 78).
     /// The amplifier output and DAC options take a reference to ensure they have been configured.
     #[allow(non_camel_case_types)]
     pub enum NegativeInput<'a, COMP: ECompInputs> {
-        /// COMPx.0. P1.0 for COMP0, P2.5 for COMP1
+        /// COMPx.0. P1.0 for COMP0, P2.5 for COMP1 (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-64, p. 98)
         COMPx_0(COMP::COMPx_0),
-        /// COMPx.1. P1.1 for COMP0, P2.4 for COMP1
+        /// COMPx.1. P1.1 for COMP0, P2.4 for COMP1 (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-64, p. 98)
         COMPx_1(COMP::COMPx_1),
-        /// Internal 1.2V reference
+        /// Internal 1.2V reference: the low-power 1.2 V reference, "fixed at channel 2" (SLASEC4D
+        /// 6.10.13, p. 78), 1.20 V typical (SLASEC4D Table 5-10, p. 41)
         _1V2,
         #[cfg(feature = "sac")]
-        /// Output of amplifier SAC1 for eCOMP0, SAC3 for eCOMP1.
+        /// Output of amplifier SAC2 for eCOMP0, SAC3 for eCOMP1. (CPNSEL 101b: SLASEC4D Tables 6-23
+        /// and 6-24, p. 78)
         OAxO(&'a COMP::SACn),
-        /// This eCOMP's internal 6-bit DAC
+        /// This eCOMP's internal 6-bit DAC (SLASEC4D 6.10.13, p. 78)
         Dac(&'a dyn CompDacPeriph<COMP>),
     }
     impl<COMP: ECompInputs> NegativeInput<'_, COMP> {
         #[inline(always)]
         pub(crate) fn cpnsel(&self) -> u8 {
+            // CPNSEL values (SLASEC4D Tables 6-23 and 6-24, p. 78)
             match self {
                 NegativeInput::COMPx_0(_) => 0b000,
                 NegativeInput::COMPx_1(_) => 0b001,
@@ -330,8 +354,10 @@ pub mod ecomp {
         }
     }
 
+    // eCOMP registers (SLAU445I Table 18-1, p. 508): eCOMP0 at 08E0h (SLASEC4D Table 6-57, p. 93)
     impl_ecomp!(EComp0, cpctl0, cpctl1, cpdacctl, cpdacdata, cpint, cpiv);
 
+    // eCOMP1 at 0900h (SLASEC4D Table 6-58, p. 93)
     impl_ecomp!(EComp1, cp1ctl0, cp1ctl1, cp1dacctl, cp1dacdata, cp1int, cp1iv);
 }
 

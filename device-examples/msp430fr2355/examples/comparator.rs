@@ -30,23 +30,22 @@ fn main() -> ! {
     // eCOMP configuration
     let (_dac_conf, comp_conf) = ECompConfig::begin(periph.e_comp0);
 
-    // TODO: fix later
-    // let mut comparator = comp_conf.configure(
-    //         // V+: the low-power 1.2 V reference, CPPSEL = 010b. V-: COMP0.1 on P1.1 in its P1SELx = 11
-    //         // function, CPNSEL = 001b. (SLASEC4D Table 6-23, p. 78; SLASEC4D Table 6-63, p. 96)
-    //         PositiveInput::_1V2,
-    //         NegativeInput::COMPx_1(port1.pin1.to_alternate3()),
-    //         OutputPolarity::Noninverted,
-    //         PowerMode::LowPower,
-    //         Hysteresis::Off,
-    //         FilterStrength::Off,
-    //     ).no_output_pin();
+    let mut comparator = comp_conf.configure(
+            // V+: the low-power 1.2 V reference, CPPSEL = 010b. V-: COMP0.1 on P1.1 in its P1SELx = 11
+            // function, CPNSEL = 001b. (SLASEC4D Table 6-23, p. 78; SLASEC4D Table 6-63, p. 96)
+            PositiveInput::_1V2,
+            NegativeInput::COMPx_1(port1.pin1.to_alternate3()),
+            OutputPolarity::Noninverted,
+            PowerMode::LowPower,
+            Hysteresis::Off,
+            FilterStrength::Off,
+        ).no_output_pin();
 
     // If P1.1 is less than 1.2V then LED turns on
     // (CPOUT is high when V+ is higher than V-: SLAU445I 18.2.1, p. 505; LED1 on P1.0: SLAU680 Figure 18,
     // p. 26)
     loop {
-        // led.set_state(comparator.value().into()).ok();
+        led.set_state(comparator.value().into()).ok();
     }
 }
 

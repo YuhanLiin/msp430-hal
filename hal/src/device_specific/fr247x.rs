@@ -261,14 +261,19 @@ pub mod ecomp {
     use crate::pac::EComp0;
     use crate::{ecomp::*, gpio::*};
 
+    // eCOMP0 pins and channels (SLASEO7C Tables 9-21 and 9-22, p. 63; pin functions:
+    // SLASEO7C Tables 9-23 to 9-28, p. 65 to p. 70). CPPSEL and CPNSEL 000b and 001b are external
+    // inputs, 010b to 101b are device specific and 110b is the DAC (SLAU445I Table 18-2, p. 509). Here
+    // 010b is the low-power 1.2 V reference, 011b and 100b are COMP0.2 and COMP0.3, and 101b is N/A,
+    // so the device-specific inputs other than the reference are unused.
     impl ECompInputs for EComp0 {
-        type COMPx_0   = Pin<P1, Pin1, Alternate3<Input<Floating>>>;
-        type COMPx_1   = Pin<P2, Pin2, Alternate3<Input<Floating>>>;
-        type COMPx_2   = Pin<P5, Pin7, Alternate3<Input<Floating>>>;
-        type COMPx_3   = Pin<P6, Pin0, Alternate3<Input<Floating>>>;
-        type COMPx_Out = Pin<P3, Pin4, Alternate2<Output>>;
+        type COMPx_0   = Pin<P1, Pin1, Alternate3<Input<Floating>>>; // P1.1 COMP0.0, P1SELx = 11
+        type COMPx_1   = Pin<P2, Pin2, Alternate3<Input<Floating>>>; // P2.2 COMP0.1, P2SELx = 11
+        type COMPx_2   = Pin<P5, Pin7, Alternate3<Input<Floating>>>; // P5.7 COMP0.2, P5SELx = 11
+        type COMPx_3   = Pin<P6, Pin0, Alternate3<Input<Floating>>>; // P6.0 COMP0.3, P6SELx = 11
+        type COMPx_Out = Pin<P3, Pin4, Alternate2<Output>>;          // P3.4 COMP0OUT, P3SELx = 10, output
 
-        type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
+        type DeviceSpecific0    = (); // Internal 1.2V reference (010b). No type required.
         type DeviceSpecific1    = Infallible; // Not used
         type DeviceSpecific2Pos = Infallible; // Not used
         type DeviceSpecific2Neg = Infallible; // Not used
@@ -276,21 +281,22 @@ pub mod ecomp {
         type DeviceSpecific3Neg = Infallible; // Not used
     }
 
-    /// List of possible inputs to the positive input of an eCOMP comparator.
-    /// The amplifier output and DAC options take a reference to ensure they have been configured.
+    /// List of possible inputs to the positive input of an eCOMP comparator
+    /// (CPPSEL, SLASEO7C Table 9-21, p. 63). The DAC option takes a reference to ensure it has been
+    /// configured.
     #[allow(non_camel_case_types)]
     pub enum PositiveInput<'a, COMP: ECompInputs> {
-        /// COMPx.0. P1.1 for COMP0
+        /// COMPx.0. P1.1 for COMP0 (000b)
         COMPx_0(COMP::COMPx_0),
-        /// COMPx.1. P2.2 for COMP0
+        /// COMPx.1. P2.2 for COMP0 (001b)
         COMPx_1(COMP::COMPx_1),
-        /// COMPx.2. P5.7 for COMP0
+        /// COMPx.2. P5.7 for COMP0 (011b)
         COMPx_2(COMP::COMPx_2),
-        /// COMPx.3. P6.0 for COMP0
+        /// COMPx.3. P6.0 for COMP0 (100b)
         COMPx_3(COMP::COMPx_3),
-        /// Internal 1.2V reference
+        /// Internal 1.2V reference (010b), the low-power 1.2 V reference
         _1V2,
-        /// This eCOMP's internal 6-bit DAC
+        /// This eCOMP's internal 6-bit DAC (110b)
         ///
         /// Requires a reference to ensure that it has been configured.
         Dac(&'a dyn CompDacPeriph<COMP>),
@@ -298,6 +304,8 @@ pub mod ecomp {
     impl<COMP: ECompInputs> PositiveInput<'_, COMP> {
         #[inline(always)]
         pub(crate) fn cppsel(&self) -> u8 {
+            // CPPSEL (SLASEO7C Table 9-21, p. 63): the 1.2 V reference takes 010b, so COMP0.2 and COMP0.3
+            // are 011b and 100b
             match self {
                 PositiveInput::COMPx_0(_) => 0b000,
                 PositiveInput::COMPx_1(_) => 0b001,
@@ -309,26 +317,28 @@ pub mod ecomp {
         }
     }
 
-    /// List of possible inputs to the negative input of an eCOMP comparator.
-    /// The amplifier output and DAC options take a reference to ensure they have been configured.
+    /// List of possible inputs to the negative input of an eCOMP comparator
+    /// (CPNSEL, SLASEO7C Table 9-21, p. 63). The DAC option takes a reference to ensure it has been
+    /// configured.
     #[allow(non_camel_case_types)]
     pub enum NegativeInput<'a, COMP: ECompInputs> {
-        /// COMPx.0. P1.1 for COMP0
+        /// COMPx.0. P1.1 for COMP0 (000b)
         COMPx_0(COMP::COMPx_0),
-        /// COMPx.1. P2.2 for COMP0
+        /// COMPx.1. P2.2 for COMP0 (001b)
         COMPx_1(COMP::COMPx_1),
-        /// COMPx.2. P5.7 for COMP0
+        /// COMPx.2. P5.7 for COMP0 (011b)
         COMPx_2(COMP::COMPx_2),
-        /// COMPx.3. P6.0 for COMP0
+        /// COMPx.3. P6.0 for COMP0 (100b)
         COMPx_3(COMP::COMPx_3),
-        /// Internal 1.2V reference
+        /// Internal 1.2V reference (010b), the low-power 1.2 V reference
         _1V2,
-        /// This eCOMP's internal 6-bit DAC
+        /// This eCOMP's internal 6-bit DAC (110b)
         Dac(&'a dyn CompDacPeriph<COMP>),
     }
     impl<COMP: ECompInputs> NegativeInput<'_, COMP> {
         #[inline(always)]
         pub(crate) fn cpnsel(&self) -> u8 {
+            // CPNSEL, the same channels as CPPSEL (SLASEO7C Table 9-21, p. 63)
             match self {
                 NegativeInput::COMPx_0(_) => 0b000,
                 NegativeInput::COMPx_1(_) => 0b001,
@@ -340,7 +350,9 @@ pub mod ecomp {
         }
     }
 
-    impl_ecomp!(EComp0, cp0ctl0, cp0ctl1, cp0dacctl, cp0dacdata, cpint, cpiv);
+    // eCOMP0 registers (SLASEO7C Table 9-56, p. 82). That table leaves out CP0DACDATA, which is at offset
+    // 12h (SLAU445I Table 18-1, p. 508).
+    impl_ecomp!(EComp0, cp0ctl0, cp0ctl1, cp0dacctl, cp0dacdata, cp0int, cp0iv);
 }
 
 /* eUSCI */
