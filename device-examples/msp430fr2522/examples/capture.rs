@@ -17,7 +17,7 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// Connect push button input to P1.1. When button is pressed, putty should print the # of cycles
+// Connect push button input to P1.5. When button is pressed, putty should print the # of cycles
 // since the last press. Sometimes we get 2 consecutive readings due to lack of debouncing.
 #[entry]
 fn main() -> ! {
@@ -34,7 +34,7 @@ fn main() -> ! {
     let (smclk, aclk, _delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut fram);
 
     let mut tx = SerialConfig::new(
@@ -51,9 +51,9 @@ fn main() -> ! {
 
     let captures = CaptureParts3::config(periph.ta0, TimerConfig::aclk(&aclk))
         .config_cap2_input_A(p1.pin5.to_alternate2())
-        .config_cap1_trigger(CapTrigger::FallingEdge)
+        .config_cap2_trigger(CapTrigger::FallingEdge)
         .commit();
-    let mut capture = captures.cap1;
+    let mut capture = captures.cap2;
 
     let mut last_cap = 0;
     loop {

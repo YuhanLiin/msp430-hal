@@ -39,7 +39,7 @@ fn main() -> ! {
     let (smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_8MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut fram);
 
     let mut i2c: I2cSingleMaster<_, DefaultMapping> =
@@ -65,14 +65,14 @@ fn main() -> ! {
             }
         }
 
-        // Blocking write. Write two bytes (length of buffer) to address 0x12.
+        // Blocking write. Write two bytes (length of buffer) to SLAVE_ADDR.
         // If a NACK is recieved the transmission is aborted.
         let wr_res = i2c.write(SLAVE_ADDR, &send_buf);
         if wr_res.is_err() {
             is_ok = false;
         }
 
-        // Blocking read. Read one byte from address 0x12.
+        // Blocking read. Read one byte from SLAVE_ADDR.
         // Each byte recieved is automatically ACKed, except for the last one which is NACKed.
         let mut recv = [0];
         let rd_res = i2c.read(SLAVE_ADDR, &mut recv);

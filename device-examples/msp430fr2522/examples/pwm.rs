@@ -13,7 +13,7 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// P6.4 LED should be bright, P6.3 LED should be dim
+// P1.5 LED should be bright, P1.4 LED should be dim
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
@@ -27,7 +27,7 @@ fn main() -> ! {
     let (smclk, _aclk, _delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut fram);
 
     let pwm = PwmParts3::new(periph.ta0, TimerConfig::smclk(&smclk), 5000);

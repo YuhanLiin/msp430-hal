@@ -34,7 +34,7 @@ fn main() -> ! {
     let (_smclk, _aclk, _delay) = ClockConfig::new(periph.cs)
         .mclk_refoclk(MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut Fram::new(periph.frctl));
 
     let mut rtc = Rtc::new(periph.rtc).use_vloclk();

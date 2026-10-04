@@ -22,8 +22,8 @@ use panic_msp430 as _;
 static RED_LED: Mutex<RefCell<Option<Pin<P1, Pin0, Output>>>> = Mutex::new(RefCell::new(None));
 static P2IV: Mutex<RefCell<Option<PxIV<P2>>>> = Mutex::new(RefCell::new(None));
 
-// Red LED should blink 2 seconds on, 2 seconds off
-// Both green and red LEDs should blink when P2.3 LED is pressed
+// Red LED should blink 1 second on, 1 second off
+// The red LED also toggles when the P2.3 button is pressed
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
@@ -32,7 +32,7 @@ fn main() -> ! {
     let (_smclk, aclk, _delay) = ClockConfig::new(periph.cs)
         .mclk_refoclk(MclkDiv::_1) // 32 kHz MCLK
         .smclk_on(SmclkDiv::_2) // 16 kHz SMCLK
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut Fram::new(periph.frctl));
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
@@ -45,7 +45,7 @@ fn main() -> ! {
     // Onboard button with interrupt disabled
     let mut button = p2.pin3;
     // Some random pin with interrupt enabled. IFG will be set manually.
-    let mut pin = p2.pin7.pulldown();
+    let mut pin = p2.pin6.pulldown();
     let p2iv = p2.pxiv;
 
     with(|cs| RED_LED.borrow_ref_mut(cs).replace(red_led));
@@ -75,7 +75,7 @@ fn PORT2() {
             return;
         };
 
-        if let GpioVector::Pin7Isr = p2iv.get_interrupt_vector() {
+        if let GpioVector::Pin6Isr = p2iv.get_interrupt_vector() {
             red_led.toggle().ok();
         }
     });

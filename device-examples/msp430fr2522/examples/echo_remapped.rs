@@ -21,7 +21,7 @@ use panic_msp430 as _;
 #[cfg(not(debug_assertions))]
 use panic_never as _;
 
-// Prints "HELLO" when started then echos on UART1
+// Prints "HELLO" when started then echos on eUSCI_A0
 // Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
@@ -66,7 +66,7 @@ fn main() -> ! {
             e_usci_a0 = msp430fr25x2::Peripherals::steal().e_usci_a0;
         }
 
-        // SECOND: Remap UART to P5.2 TX / P5.1 RX
+        // SECOND: Remap UART to P2.0 TX / P2.1 RX
         let serial = SerialConfig::<_, _, RemappedMapping>::new(
             e_usci_a0,
             BitOrder::LsbFirst,

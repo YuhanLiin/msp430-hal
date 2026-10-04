@@ -32,17 +32,18 @@ fn main() -> ! {
     let (_smclk, aclk, _delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut fram);
 
     let parts = TimerParts3::new(
         periph.ta0,
-        TimerConfig::aclk(&aclk).clk_div(TimerDiv::_2, TimerExDiv::_5),
+        // ACLK is 32768 Hz, / 32 = 1024 Hz
+        TimerConfig::aclk(&aclk).clk_div(TimerDiv::_8, TimerExDiv::_4),
     );
     let mut timer = parts.timer;
     let mut subtimer = parts.subtimer2;
 
-    set_time(&mut timer, &mut subtimer, 500);
+    set_time(&mut timer, &mut subtimer, 512);
     loop {
         block!(subtimer.wait()).unwrap();
         p1_0.set_high().unwrap();

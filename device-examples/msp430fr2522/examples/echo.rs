@@ -21,7 +21,7 @@ use panic_msp430 as _;
 #[cfg(not(debug_assertions))]
 use panic_never as _;
 
-// Prints "HELLO" when started then echos on UART1
+// Prints "HELLO" when started then echos on eUSCI_A0
 // Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
