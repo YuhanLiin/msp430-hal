@@ -21,37 +21,59 @@ pub mod gpio {
     use crate::hw_traits::gpio::gpio_impl;
     use crate::{adc, gpio::*};
 
-    // Define alternate pin transitions
-    // P1 alternate 1
+    // Define alternate pin transitions. Alternate1, 2 and 3 set the PxSEL1/PxSEL0 bit pair, which the pin
+    // function tables (SLASE59F Tables 6-17 to 6-20, p. 55 to p. 59) call PxSELx, to 01, 10 and 11: the
+    // primary, secondary and tertiary module function (SLAU445I 8.2.5, Table 8-3, p. 314). A function that
+    // needs a fixed PxDIR (a clock input or output) is only offered in that direction, because PxSELx
+    // "does not automatically set the pin direction" (SLAU445I 8.2.5, p. 314).
+    // P1 alternate 1, P1SELx = 01 with any P1DIR (SLASE59F Table 6-17, p. 55): P1.0 UCB0STE, P1.1 UCB0CLK,
+    // P1.2 UCB0SIMO/UCB0SDA, P1.3 UCB0SOMI/UCB0SCL, P1.4 UCA0TXD/UCA0SIMO, P1.5 UCA0RXD/UCA0SOMI,
+    // P1.6 UCA0CLK, P1.7 UCA0STE
     impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P1, PIN, DIR> {}
-    // P1 alternate 2
-    impl<PULL> ToAlternate2 for Pin<P1, Pin0, Input<PULL>> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin1, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin2, DIR> {}
-    impl       ToAlternate2 for Pin<P1, Pin3, Output> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin4, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin5, DIR> {}
-    impl<PULL> ToAlternate2 for Pin<P1, Pin6, Input<PULL>> {}
-    impl       ToAlternate2 for Pin<P1, Pin7, Output> {}
+    // P1 alternate 2, P1SELx = 10 (SLASE59F Table 6-17, p. 55). On the timer pins P1DIR picks the capture
+    // input (0) or the compare output (1).
+    impl<PULL> ToAlternate2 for Pin<P1, Pin0, Input<PULL>> {} // TA0CLK: P1SELx = 10, P1DIR = 0
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin1, DIR> {}         // TA0.CCI1A in / TA0.1 out: P1SELx = 10
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin2, DIR> {}         // TA0.CCI2A in / TA0.2 out: P1SELx = 10
+    impl       ToAlternate2 for Pin<P1, Pin3, Output> {}      // MCLK: P1SELx = 10, P1DIR = 1
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin4, DIR> {}         // TA1.CCI2A in / TA1.2 out: P1SELx = 10
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin5, DIR> {}         // TA1.CCI1A in / TA1.1 out: P1SELx = 10
+    impl<PULL> ToAlternate2 for Pin<P1, Pin6, Input<PULL>> {} // TA1CLK: P1SELx = 10, P1DIR = 0
+    impl       ToAlternate2 for Pin<P1, Pin7, Output> {}      // SMCLK: P1SELx = 10, P1DIR = 1
 
-    // P1 ADCPCTLx. 'x' determined by ADC channel impl in adc module.
+    // P1 ADCPCTLx. 'x' determined by ADC channel impl in adc module. ADCPCTLx = 1 in SYSCFG2 selects
+    // A0 to A7 on P1.0 to P1.7, whatever P1DIR and P1SELx are (SLASE59F Table 6-17, p. 55; SLAU445I
+    // 1.12.2.3, p. 51; ADCPCTL0 to ADCPCTL7 in SYSCFG2: SLAU445I Table 1-31, p. 82).
     impl<PIN: PinNum, DIR> ToAdcPctl for Pin<P1, PIN, DIR> where Self: adc::AdcPctlCapable {}
 
-    // P2 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {}
-    impl       ToAlternate1 for Pin<P2, Pin2, Output> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin4, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin5, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin6, DIR> {}
+    // P2 alternate 1, P2SELx = 01 with any P2DIR (SLASE59F Table 6-18, p. 56, for P2.0 to P2.2 and
+    // SLASE59F Table 6-19, p. 58, for P2.3 to P2.7). P2.3 and P2.7 are GPIO only.
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {} // XOUT: P2SELx = 01
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {} // XIN: P2SELx = 01
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin4, DIR> {} // UCA1CLK: P2SELx = 01
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin5, DIR> {} // UCA1RXD/UCA1SOMI: P2SELx = 01
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin6, DIR> {} // UCA1TXD/UCA1SIMO: P2SELx = 01
+    // P2 alternate 2, P2SELx = 10 (SLASE59F Table 6-18, p. 56)
+    impl       ToAlternate2 for Pin<P2, Pin2, Output> {} // ACLK: P2SELx = 10, P2DIR = 1
 
-    // P3 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin1, DIR> {}
+    // P3 alternate 1, P3SELx = 01 with any P3DIR (SLASE59F Table 6-20, p. 59). P3.0 and P3.2 are GPIO only.
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin1, DIR> {} // UCA1STE: P3SELx = 01
 
-    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable
+    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable. Only P1 and P2 have
+    // interrupts (SLASE59F 6.10.3, p. 46; SLASE59F Tables 6-32 and 6-33, p. 64), with the vectors at FFDCh
+    // and FFDAh (SLASE59F Table 6-2, p. 42). Registers: PxIN, PxOUT, PxDIR, PxREN, PxSEL0, PxSEL1, PxSELC,
+    // PxIES, PxIE and PxIFG (SLAU445I Tables 8-9 to 8-18, p. 334 to p. 337), P1IV and P2IV (SLAU445I
+    // Tables 8-5 and 8-6, p. 332).
     gpio_impl!(p1: P1 => p1in, p1out, p1dir, p1ren, p1selc, p1sel0, p1sel1, [p1ies, p1ie, p1ifg, p1iv]);
     gpio_impl!(p2: P2 => p2in, p2out, p2dir, p2ren, p2selc, p2sel0, p2sel1, [p2ies, p2ie, p2ifg, p2iv]);
     gpio_impl!(p3: P3 => p3in, p3out, p3dir, p3ren, p3selc, p3sel0, p3sel1);
+
+    // Pins per port (SLASE59F 6.10.3, p. 46: "P1 and P2 are full 8-bit ports; P3 has 3 bits implemented").
+    // The pins a port lacks are always the top ones. The DSBGA package also lacks P2.4 and P3.1 (SLASE59F
+    // Table 4-1, p. 11).
+    impl_port_pins!(P1, 8);
+    impl_port_pins!(P2, 8);
+    impl_port_pins!(P3, 3);
 }
 
 /* ADC */

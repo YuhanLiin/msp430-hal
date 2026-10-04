@@ -11,76 +11,125 @@ pub mod gpio {
     use crate::hw_traits::gpio::gpio_impl;
 
     // Define alternate pin transitions
+    //
+    // Alternate1, 2 and 3 are PxSELx (PxSEL1/PxSEL0) = 01, 10 and 11, the primary, secondary and
+    // tertiary module functions (SLAU445I 8.2.5, Table 8-3, p. 314). Each impl is a row of the port's
+    // pin function table (SLASEC4D Tables 6-63 to 6-68, p. 96 to p. 106). PxSEL doesn't set the direction
+    // (SLAU445I 8.2.5, p. 314): `in` below is PxDIR = 0 and `out` is PxDIR = 1. A timer pin's direction
+    // picks the capture input (CCIxA, in) or the compare output (out).
+    //
+    // Some functions work in one direction only, and most of these list VSS (ground) for the other one:
+    // the module has no signal for that direction. With PxSELx = 01 or 10 the output driver drives the
+    // module's signal (SLASEC4D Figures 6-4 to 6-9, p. 95 to p. 105), so an input-only function such as
+    // TB3CLK drives the pin low with PxDIR = 1. An output-only function such as MCLK never reaches the pin
+    // with PxDIR = 0, because the driver is off. Neither does anything useful, and nothing is missing:
+    // these functions are only given to `Input` or `Output` pins.
 
-    // P1 alternate 1
+    // P1 alternate 1, P1SELx = 01 (SLASEC4D Table 6-63, p. 96): P1.0 UCB0STE, P1.1 UCB0CLK,
+    // P1.2 UCB0SIMO/UCB0SDA, P1.3 UCB0SOMI/UCB0SCL, P1.4 UCA0STE, P1.5 UCA0CLK, P1.6 UCA0RXD/UCA0SOMI,
+    // P1.7 UCA0TXD/UCA0SIMO
     impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P1, PIN, DIR> {}
-    // P1 alternate 2
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin0, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin1, DIR> {}
-    impl<PULL> ToAlternate2 for Pin<P1, Pin2, Input<PULL>> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin6, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin7, DIR> {}
-    // P1 alternate 3
+    // P1 alternate 2, P1SELx = 10 (SLASEC4D Table 6-63, p. 96). P1.3 to P1.5 have no 10 function.
+    impl       ToAlternate2 for Pin<P1, Pin0, Output> {} // 10: SMCLK out / VSS in
+    impl       ToAlternate2 for Pin<P1, Pin1, Output> {} // 10: ACLK out / VSS in
+    impl<PULL> ToAlternate2 for Pin<P1, Pin2, Input<PULL>> {} // 10: TB0TRG in (no out row)
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin6, DIR> {} // 10: TB0.CCI1A in / TB0.1 out
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin7, DIR> {} // 10: TB0.CCI2A in / TB0.2 out
+    // P1 alternate 3, P1SELx = 11 (SLASEC4D Table 6-63, p. 96): the analog functions, A0 to A7 on
+    // P1.0 to P1.7, with COMP0.0 and Veref+ on P1.0, OA0O and COMP0.1 on P1.1, OA0- and Veref- on P1.2,
+    // OA0+ on P1.3, OA1O on P1.5, OA1- on P1.6, OA1+ and VREF+ on P1.7 (the OAx on the MSP430FR235x only)
     impl<PIN: PinNum, DIR> ToAlternate3 for Pin<P1, PIN, DIR> {}
 
-    // P2 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {}
-    impl<PULL> ToAlternate1 for Pin<P2, Pin2, Input<PULL>> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin3, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin6, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin7, DIR> {}
-    // P2 alternate 2
-    impl ToAlternate2 for Pin<P2, Pin0, Output> {}
-    impl ToAlternate2 for Pin<P2, Pin1, Output> {}
-    impl<DIR> ToAlternate2 for Pin<P2, Pin6, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P2, Pin7, DIR> {}
-    // P2 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P2, Pin4, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P2, Pin5, DIR> {}
+    // P2 alternate 1, P2SELx = 01 (SLASEC4D Table 6-64, p. 98). P2.4 and P2.5 have no 01 function. The
+    // name "P2.3/UCB0CLK/TB1TRG" lists UCB0CLK, but the table has no UCB0CLK row for P2.3, and UCB0CLK
+    // is only on P1.1 (SLASEC4D Table 4-2, p. 24).
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {} // 01: TB1.CCI1A in / TB1.1 out
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {} // 01: TB1.CCI2A in / TB1.2 out
+    impl<PULL> ToAlternate1 for Pin<P2, Pin2, Input<PULL>> {} // 01: TB1CLK in (no out row)
+    impl<PULL> ToAlternate1 for Pin<P2, Pin3, Input<PULL>> {} // 01: TB1TRG in / VSS out
+    impl       ToAlternate1 for Pin<P2, Pin6, Output> {} // 01: MCLK out / VSS in
+    impl<PULL> ToAlternate1 for Pin<P2, Pin7, Input<PULL>> {} // 01: TB0CLK in / VSS out
+    // P2 alternate 2, P2SELx = 10 (SLASEC4D Table 6-64, p. 98)
+    impl ToAlternate2 for Pin<P2, Pin0, Output> {} // 10: COMP0.O out (no in row)
+    impl ToAlternate2 for Pin<P2, Pin1, Output> {} // 10: COMP1.O out (no in row)
+    impl<DIR> ToAlternate2 for Pin<P2, Pin6, DIR> {} // 10: XOUT, either direction
+    impl<DIR> ToAlternate2 for Pin<P2, Pin7, DIR> {} // 10: XIN, either direction
+    // P2 alternate 3, P2SELx = 11 (SLASEC4D Table 6-64, p. 98)
+    impl<DIR> ToAlternate3 for Pin<P2, Pin4, DIR> {} // 11: COMP1.1
+    impl<DIR> ToAlternate3 for Pin<P2, Pin5, DIR> {} // 11: COMP1.0
 
-    // P3 alternate 1
-    impl<DIR> ToAlternate1 for Pin<P3, Pin0, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P3, Pin4, DIR> {}
-    // P3 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P3, Pin1, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P3, Pin2, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P3, Pin3, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P3, Pin5, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P3, Pin6, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P3, Pin7, DIR> {}
+    // P3 alternate 1, P3SELx = 01 (SLASEC4D Table 6-65, p. 100)
+    impl      ToAlternate1 for Pin<P3, Pin0, Output> {} // 01: MCLK out / VSS in
+    impl      ToAlternate1 for Pin<P3, Pin4, Output> {} // 01: SMCLK out / VSS in
+    // P3 alternate 3 is the SAC2 and SAC3 op-amp pins, on the MSP430FR235x only (P3SELx = 11,
+    // SLASEC4D Table 6-65, p. 100, note 2: "MSP430FR235x devices only")
+    #[cfg(feature = "sac")]
+    impl<DIR> ToAlternate3 for Pin<P3, Pin1, DIR> {} // 11: OA2O
+    #[cfg(feature = "sac")]
+    impl<DIR> ToAlternate3 for Pin<P3, Pin2, DIR> {} // 11: OA2-
+    #[cfg(feature = "sac")]
+    impl<DIR> ToAlternate3 for Pin<P3, Pin3, DIR> {} // 11: OA2+
+    #[cfg(feature = "sac")]
+    impl<DIR> ToAlternate3 for Pin<P3, Pin5, DIR> {} // 11: OA3O
+    #[cfg(feature = "sac")]
+    impl<DIR> ToAlternate3 for Pin<P3, Pin6, DIR> {} // 11: OA3-
+    #[cfg(feature = "sac")]
+    impl<DIR> ToAlternate3 for Pin<P3, Pin7, DIR> {} // 11: OA3+
 
-    // P4 alternate 1
+    // P4 alternate 1, P4SELx = 01 (SLASEC4D Table 6-66, p. 102): P4.0 UCA1STE, P4.1 UCA1CLK,
+    // P4.2 UCA1RXD/UCA1SOMI, P4.3 UCA1TXD/UCA1SIMO, P4.4 UCB1STE, P4.5 UCB1CLK, P4.6 UCB1SIMO/UCB1SDA,
+    // P4.7 UCB1SOMI/UCB1SCL
     impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P4, PIN, DIR> {}
-    // P4 alternate 2
-    impl<DIR> ToAlternate2 for Pin<P4, Pin0, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P4, Pin2, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P4, Pin3, DIR> {}
+    // P4 alternate 2, P4SELx = 10 (SLASEC4D Table 6-66, p. 102). On P4.0, ISORXD feeds UCA1RXD and
+    // TB3.CCI2B, and ISOTXD is "the logical AND product of UCA1TXD and TB3.2B" (SLASEC4D Table 4-2,
+    // p. 24).
+    impl<DIR> ToAlternate2 for Pin<P4, Pin0, DIR> {} // 10: ISORXD in / ISOTXD out
+    impl<DIR> ToAlternate2 for Pin<P4, Pin2, DIR> {} // 10: UCA1RXD, inverted
+    impl<DIR> ToAlternate2 for Pin<P4, Pin3, DIR> {} // 10: UCA1TXD, inverted
 
-    // P5 alternate 1
-    impl<DIR> ToAlternate1 for Pin<P5, Pin0, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P5, Pin1, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P5, Pin2, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P5, Pin3, DIR> {}
-    // P5 alternate 2
-    impl<DIR> ToAlternate2 for Pin<P5, Pin0, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P5, Pin1, DIR> {}
-    // P5 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P5, Pin0, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P5, Pin1, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P5, Pin2, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P5, Pin3, DIR> {}
+    // P5 alternate 1, P5SELx = 01 (SLASEC4D Table 6-67, p. 104)
+    impl<DIR> ToAlternate1 for Pin<P5, Pin0, DIR> {} // 01: TB2.CCI1A in / TB2.1 out
+    impl<DIR> ToAlternate1 for Pin<P5, Pin1, DIR> {} // 01: TB2.CCI2A in / TB2.2 out
+    impl<PULL> ToAlternate1 for Pin<P5, Pin2, Input<PULL>> {} // 01: TB2CLK in / VSS out
+    impl<PULL> ToAlternate1 for Pin<P5, Pin3, Input<PULL>> {} // 01: TB2TRG in / VSS out
+    // P5 alternate 2, P5SELx = 10 (SLASEC4D Table 6-67, p. 104)
+    impl<DIR> ToAlternate2 for Pin<P5, Pin0, DIR> {} // 10: MFM.RX
+    impl<DIR> ToAlternate2 for Pin<P5, Pin1, DIR> {} // 10: MFM.TX
+    // P5 alternate 3, P5SELx = 11 (SLASEC4D Table 6-67, p. 104)
+    impl<DIR> ToAlternate3 for Pin<P5, Pin0, DIR> {} // 11: A8
+    impl<DIR> ToAlternate3 for Pin<P5, Pin1, DIR> {} // 11: A9
+    impl<DIR> ToAlternate3 for Pin<P5, Pin2, DIR> {} // 11: A10
+    impl<DIR> ToAlternate3 for Pin<P5, Pin3, DIR> {} // 11: A11
 
-    // P6 alternate 1
-    impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P6, PIN, DIR> {}
+    // P6 alternate 1, P6SELx = 01 (SLASEC4D Table 6-68, p. 106)
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin0, DIR> {} // 01: TB3.CCI1A in / TB3.1 out
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin1, DIR> {} // 01: TB3.CCI2A in / TB3.2 out
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin2, DIR> {} // 01: TB3.CCI3A in / TB3.3 out
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin3, DIR> {} // 01: TB3.CCI4A in / TB3.4 out
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin4, DIR> {} // 01: TB3.CCI5A in / TB3.5 out
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin5, DIR> {} // 01: TB3.CCI6A in / TB3.6 out
+    impl<PULL> ToAlternate1 for Pin<P6, Pin6, Input<PULL>> {} // 01: TB3CLK in / VSS out
 
-    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable
+    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable. P1 to P4 have
+    // PxSELC and the interrupt registers, P5 and P6 only PxSELC (SLASEC4D Tables 6-41 to 6-43, p. 86 to
+    // p. 87): "Interrupt conditions are possible in P1, P2, P3, and P4" (SLASEC4D 6.10.3, p. 69; port
+    // vectors in SLASEC4D Table 6-2, p. 64).
     gpio_impl!(p1: P1 => p1in, p1out, p1dir, p1ren, p1selc, p1sel0, p1sel1, [p1ies, p1ie, p1ifg, p1iv]);
     gpio_impl!(p2: P2 => p2in, p2out, p2dir, p2ren, p2selc, p2sel0, p2sel1, [p2ies, p2ie, p2ifg, p2iv]);
     gpio_impl!(p3: P3 => p3in, p3out, p3dir, p3ren, p3selc, p3sel0, p3sel1, [p3ies, p3ie, p3ifg, p3iv]);
     gpio_impl!(p4: P4 => p4in, p4out, p4dir, p4ren, p4selc, p4sel0, p4sel1, [p4ies, p4ie, p4ifg, p4iv]);
     gpio_impl!(p5: P5 => p5in, p5out, p5dir, p5ren, p5selc, p5sel0, p5sel1);
     gpio_impl!(p6: P6 => p6in, p6out, p6dir, p6ren, p6selc, p6sel0, p6sel1);
+
+    // Pins per port (SLASEC4D 6.10.3, p. 69: "P1, P2, P3, and P4 are full 8-bit ports; P5 and P6
+    // feature up to 5-bit and 7-bit ports"). The pins a port lacks are always the top ones: P5 has P5.0
+    // to P5.4 and P6 has P6.0 to P6.6 (SLASEC4D Table 6-67, p. 104; SLASEC4D Table 6-68, p. 106).
+    impl_port_pins!(P1, 8);
+    impl_port_pins!(P2, 8);
+    impl_port_pins!(P3, 8);
+    impl_port_pins!(P4, 8);
+    impl_port_pins!(P5, 5);
+    impl_port_pins!(P6, 7);
 }
 
 /* ADC */

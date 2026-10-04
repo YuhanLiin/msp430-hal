@@ -77,6 +77,11 @@ pub mod gpio {
     // same as P1SEL1; the PAC places it at 0Dh, as SLAU445I Table 8-4, p. 320 does.
     gpio_impl!(p1: P1 => p1in, p1out, p1dir, p1ren, p1selc, p1sel0, p1sel1, [p1ies, p1ie, p1ifg, p1iv]);
     gpio_impl!(p2: P2 => p2in, p2out, p2dir, p2ren, p2selc, p2sel0, p2sel1, [p2ies, p2ie, p2ifg, p2iv]);
+
+    // Pins per port (SLASEE4C 6.10.3, p. 51: "P1 implements 8 bits, and P2 implements 7 bits"). The pins a
+    // port lacks are always the top ones: P2.7 here (SLASEE4C Table 6-16, p. 60).
+    impl_port_pins!(P1, 8);
+    impl_port_pins!(P2, 7);
 }
 
 /* ADC */

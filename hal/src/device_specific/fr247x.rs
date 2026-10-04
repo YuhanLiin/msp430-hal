@@ -11,96 +11,124 @@ pub mod gpio {
     use crate::hw_traits::gpio::gpio_impl;
 
     // Define alternate pin transitions
+    //
+    // Alternate1, 2 and 3 are PxSELx (PxSEL1/PxSEL0) = 01, 10 and 11, the primary, secondary and
+    // tertiary module functions (SLAU445I Table 8-3, p. 314). Each impl is a row of the port's pin
+    // function table (SLASEO7C Tables 9-23 to 9-28, p. 65 to p. 70). PxSEL doesn't set the direction
+    // (SLAU445I 8.2.5, p. 314), so a function the table lists with one PxDIR value is only given to
+    // `Input` (PxDIR = 0) or `Output` (PxDIR = 1) pins. A timer pin's direction picks the capture input
+    // (CCIxA, in) or the compare output (out). An eUSCI or TA2/TA3 signal only reaches the pin in its
+    // mapping, set by USCIB0RMP (SYSCFG2, SLAU445I Table 1-31, p. 82) or USCIA0RMP, USCIB1RMP, TA2RMP
+    // and TA3RMP (SYSCFG3, SLAU445I Table 1-32, p. 83): "Only one selected port is valid at any time"
+    // (SLASEO7C Table 9-11 notes 1 and 2, p. 54; SLASEO7C Table 9-16 notes 1 and 2, p. 60).
 
-    // P1 alternate 1
+    // P1 alternate 1, P1SELx = 01 (SLASEO7C Table 9-23, p. 65): P1.0 UCB0STE, P1.1 UCB0CLK,
+    // P1.2 UCB0SIMO/UCB0SDA, P1.3 UCB0SOMI/UCB0SCL (USCIB0RMP = 0), P1.4 UCA0TXD/UCA0SIMO,
+    // P1.5 UCA0RXD/UCA0SOMI, P1.6 UCA0CLK, P1.7 UCA0STE (USCIA0RMP = 0)
     impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P1, PIN, DIR> {}
-    // P1 alternate 2
-    impl<PULL> ToAlternate2 for Pin<P1, Pin0, Input<PULL>> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin1, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin2, DIR> {}
-    impl ToAlternate2 for Pin<P1, Pin3, Output> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin4, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin5, DIR> {}
-    impl<PULL> ToAlternate2 for Pin<P1, Pin6, Input<PULL>> {}
-    impl ToAlternate2 for Pin<P1, Pin7, Output> {}
-    // P1 alternate 3
+    // P1 alternate 2, P1SELx = 10 (SLASEO7C Table 9-23, p. 65)
+    impl<PULL> ToAlternate2 for Pin<P1, Pin0, Input<PULL>> {} // 10: TA0CLK, in (P1DIR.0 = 0)
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin1, DIR> {}         // 10: TA0.CCI1A in / TA0.1 out
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin2, DIR> {}         // 10: TA0.CCI2A in / TA0.2 out
+    impl ToAlternate2       for Pin<P1, Pin3, Output> {}      // 10: MCLK, out (P1DIR.3 = 1)
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin4, DIR> {}         // 10: TA1.CCI2A in / TA1.2 out
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin5, DIR> {}         // 10: TA1.CCI1A in / TA1.1 out
+    impl<PULL> ToAlternate2 for Pin<P1, Pin6, Input<PULL>> {} // 10: TA1CLK, in (P1DIR.6 = 0)
+    impl ToAlternate2       for Pin<P1, Pin7, Output> {}      // 10: SMCLK, out (P1DIR.7 = 1)
+    // P1 alternate 3, P1SELx = 11 (SLASEO7C Table 9-23, p. 65): analog inputs A0 to A7 on P1.0 to
+    // P1.7, with Veref+ on P1.0, COMP0.0 on P1.1, Veref- on P1.2 and VREF+ on P1.4
     impl<PIN: PinNum, DIR> ToAlternate3 for Pin<P1, PIN, DIR> {}
 
-    // P2 alternate 1
-    impl<DIR> ToAlternate1 for Pin<P2, Pin0, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P2, Pin1, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P2, Pin3, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P2, Pin4, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P2, Pin5, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P2, Pin6, DIR> {}
-    impl<DIR> ToAlternate1 for Pin<P2, Pin7, DIR> {}
-    // P2 alternate 2
-    impl ToAlternate2 for Pin<P2, Pin2, Output> {}
-    // P2 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P2, Pin2, DIR> {}
+    // P2 alternate 1, P2SELx = 01 (SLASEO7C Table 9-24, p. 66). P2.2 has no 01 function.
+    impl<DIR> ToAlternate1 for Pin<P2, Pin0, DIR> {} // 01: XOUT
+    impl<DIR> ToAlternate1 for Pin<P2, Pin1, DIR> {} // 01: XIN
+    impl<DIR> ToAlternate1 for Pin<P2, Pin3, DIR> {} // 01: TA2.CCI0A in / TA2.0 out, TA2RMP = 0
+    impl<DIR> ToAlternate1 for Pin<P2, Pin4, DIR> {} // 01: UCA1CLK
+    impl<DIR> ToAlternate1 for Pin<P2, Pin5, DIR> {} // 01: UCA1RXD/UCA1SOMI
+    impl<DIR> ToAlternate1 for Pin<P2, Pin6, DIR> {} // 01: UCA1TXD/UCA1SIMO
+    impl<DIR> ToAlternate1 for Pin<P2, Pin7, DIR> {} // 01: UCB1STE, USCIB1RMP = 0
+    // P2 alternate 2, P2SELx = 10 (SLASEO7C Table 9-24, p. 66)
+    impl ToAlternate2 for Pin<P2, Pin2, Output> {} // 10: ACLK, out (P2DIR.2 = 1)
+    // P2 alternate 3, P2SELx = 11 (SLASEO7C Table 9-24, p. 66)
+    impl<DIR> ToAlternate3 for Pin<P2, Pin2, DIR> {} // 11: COMP0.1
 
-    // P3 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin0, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin1, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin2, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin3, DIR> {}
-    impl<PULL> ToAlternate1 for Pin<P3, Pin4, Input<PULL>> {}
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin5, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin6, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P3, Pin7, DIR> {}
-    // P3 alternate 2
-    impl ToAlternate2 for Pin<P3, Pin4, Output> {}
-    impl<PULL> ToAlternate2 for Pin<P3, Pin5, Input<PULL>> {}
+    // P3 alternate 1, P3SELx = 01 (SLASEO7C Table 9-25, p. 67)
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin0, DIR> {}         // 01: TA2.CCI2A in / TA2.2 out, TA2RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin1, DIR> {}         // 01: UCA1STE
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin2, DIR> {}         // 01: UCB1SIMO/UCB1SDA, USCIB1RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin3, DIR> {}         // 01: TA2.CCI1A in / TA2.1 out, TA2RMP = 0
+    impl<PULL> ToAlternate1 for Pin<P3, Pin4, Input<PULL>> {} // 01: TA2CLK, in (P3DIR.4 = 0), TA2RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin5, DIR> {}         // 01: UCB1CLK, USCIB1RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin6, DIR> {}         // 01: UCB1SOMI/UCB1SCL, USCIB1RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P3, Pin7, DIR> {}         // 01: TA3.CCI2A in / TA3.2 out, TA3RMP = 0
+    // P3 alternate 2, P3SELx = 10 (SLASEO7C Table 9-25, p. 67)
+    impl ToAlternate2       for Pin<P3, Pin4, Output> {}      // 10: COMP0OUT, out (P3DIR.4 = 1)
+    impl<PULL> ToAlternate2 for Pin<P3, Pin5, Input<PULL>> {} // 10: TB0TRG, in (P3DIR.5 = 0)
 
 
-    // P4 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin0, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin1, DIR> {}
-    impl<PULL> ToAlternate1 for Pin<P4, Pin2, Input<PULL>> {}
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin3, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin4, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin5, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin6, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P4, Pin7, DIR> {}
-    // P4 alternate 2
-    impl<DIR> ToAlternate2 for Pin<P4, Pin3, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P4, Pin4, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P4, Pin5, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P4, Pin6, DIR> {}
-    impl<DIR> ToAlternate2 for Pin<P4, Pin7, DIR> {}
-    // P4 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P4, Pin3, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P4, Pin4, DIR> {}
+    // P4 alternate 1, P4SELx = 01 (SLASEO7C Table 9-26, p. 68)
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin0, DIR> {}         // 01: TA3.CCI1A in / TA3.1 out, TA3RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin1, DIR> {}         // 01: TA3.CCI0A in / TA3.0 out, TA3RMP = 0
+    impl<PULL> ToAlternate1 for Pin<P4, Pin2, Input<PULL>> {} // 01: TA3CLK, in (P4DIR.2 = 0), TA3RMP = 0
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin3, DIR> {}         // 01: UCB1SOMI/UCB1SCL, USCIB1RMP = 1
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin4, DIR> {}         // 01: UCB1SIMO/UCB1SDA, USCIB1RMP = 1
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin5, DIR> {}         // 01: UCB0SOMI/UCB0SCL, USCIB0RMP = 1
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin6, DIR> {}         // 01: UCB0SIMO/UCB0SDA, USCIB0RMP = 1
+    impl<DIR>  ToAlternate1 for Pin<P4, Pin7, DIR> {}         // 01: UCA0STE, USCIA0RMP = 1
+    // P4 alternate 2, P4SELx = 10 (SLASEO7C Table 9-26, p. 68)
+    impl<DIR> ToAlternate2 for Pin<P4, Pin3, DIR> {} // 10: TB0.CCI5A in / TB0.5 out
+    impl<DIR> ToAlternate2 for Pin<P4, Pin4, DIR> {} // 10: TB0.CCI6A in / TB0.6 out
+    impl<DIR> ToAlternate2 for Pin<P4, Pin5, DIR> {} // 10: TA3.CCI2A in / TA3.2 out, TA3RMP = 1
+    impl<DIR> ToAlternate2 for Pin<P4, Pin6, DIR> {} // 10: TA3.CCI1A in / TA3.1 out, TA3RMP = 1
+    impl<DIR> ToAlternate2 for Pin<P4, Pin7, DIR> {} // 10: TB0.CCI1A in / TB0.1 out
+    // P4 alternate 3, P4SELx = 11 (SLASEO7C Table 9-26, p. 68)
+    impl<DIR> ToAlternate3 for Pin<P4, Pin3, DIR> {} // 11: A8
+    impl<DIR> ToAlternate3 for Pin<P4, Pin4, DIR> {} // 11: A9
 
-    // P5 alternate 1
+    // P5 alternate 1, P5SELx = 01 (SLASEO7C Table 9-27, p. 69): P5.0 UCA0CLK, P5.1 UCA0RXD/UCA0SOMI,
+    // P5.2 UCA0TXD/UCA0SIMO (USCIA0RMP = 1), P5.3 UCB1CLK, P5.4 UCB1STE (USCIB1RMP = 1), P5.5 UCB0CLK,
+    // P5.6 UCB0STE (USCIB0RMP = 1), P5.7 TA2.CCI1A in / TA2.1 out (TA2RMP = 1)
     impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P5, PIN, DIR> {}
-    // P5 alternate 2
-    impl<DIR>  ToAlternate2 for Pin<P5, Pin0, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P5, Pin1, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P5, Pin2, DIR> {}
-    impl<DIR>  ToAlternate2 for Pin<P5, Pin3, DIR> {}
-    impl<PULL> ToAlternate2 for Pin<P5, Pin4, Input<PULL>> {}
-    impl<PULL> ToAlternate2 for Pin<P5, Pin5, Input<PULL>> {}
-    impl<DIR>  ToAlternate2 for Pin<P5, Pin6, DIR> {}
-    // P5 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P5, Pin3, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P5, Pin4, DIR> {}
-    impl<DIR> ToAlternate3 for Pin<P5, Pin7, DIR> {}
+    // P5 alternate 2, P5SELx = 10 (SLASEO7C Table 9-27, p. 69, whose P5.3 and P5.4 values revision C
+    // corrected: SLASEO7C 5, p. 5)
+    impl<DIR>  ToAlternate2 for Pin<P5, Pin0, DIR> {}         // 10: TB0.CCI2A in / TB0.2 out
+    impl<DIR>  ToAlternate2 for Pin<P5, Pin1, DIR> {}         // 10: TB0.CCI3A in / TB0.3 out
+    impl<DIR>  ToAlternate2 for Pin<P5, Pin2, DIR> {}         // 10: TB0.CCI4A in / TB0.4 out
+    impl<DIR>  ToAlternate2 for Pin<P5, Pin3, DIR> {}         // 10: TA3.CCI0A in / TA3.0 out, TA3RMP = 1
+    impl<PULL> ToAlternate2 for Pin<P5, Pin4, Input<PULL>> {} // 10: TA3CLK, in (P5DIR.4 = 0), TA3RMP = 1
+    impl<PULL> ToAlternate2 for Pin<P5, Pin5, Input<PULL>> {} // 10: TA2CLK, in (P5DIR.5 = 0), TA2RMP = 1
+    impl<DIR>  ToAlternate2 for Pin<P5, Pin6, DIR> {}         // 10: TA2.CCI0A in / TA2.0 out, TA2RMP = 1
+    // P5 alternate 3, P5SELx = 11 (SLASEO7C Table 9-27, p. 69)
+    impl<DIR> ToAlternate3 for Pin<P5, Pin3, DIR> {} // 11: A10
+    impl<DIR> ToAlternate3 for Pin<P5, Pin4, DIR> {} // 11: A11
+    impl<DIR> ToAlternate3 for Pin<P5, Pin7, DIR> {} // 11: COMP0.2
 
-    // P6 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P6, Pin0, DIR> {}
-    impl<PULL> ToAlternate1 for Pin<P6, Pin1, Input<PULL>> {}
-    impl<DIR>  ToAlternate1 for Pin<P6, Pin2, DIR> {}
-    // P6 alternate 3
-    impl<DIR> ToAlternate3 for Pin<P6, Pin0, DIR> {}
+    // P6 alternate 1, P6SELx = 01 (SLASEO7C Table 9-28, p. 70)
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin0, DIR> {}         // 01: TA2.CCI2A in / TA2.2 out, TA2RMP = 1
+    impl<PULL> ToAlternate1 for Pin<P6, Pin1, Input<PULL>> {} // 01: TB0CLK, in (P6DIR.1 = 0)
+    impl<DIR>  ToAlternate1 for Pin<P6, Pin2, DIR> {}         // 01: TB0.CCI0A in / TB0.0 out
+    // P6 alternate 3, P6SELx = 11 (SLASEO7C Table 9-28, p. 70)
+    impl<DIR> ToAlternate3 for Pin<P6, Pin0, DIR> {} // 11: COMP0.3
 
-    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable
+    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable. Every port has
+    // PxSELC and the interrupt registers (SLASEO7C Tables 9-40 to 9-42, p. 75 to p. 77) and its own
+    // interrupt vector (SLASEO7C Table 9-2, p. 47).
     gpio_impl!(p1: P1 => p1in, p1out, p1dir, p1ren, p1selc, p1sel0, p1sel1, [p1ies, p1ie, p1ifg, p1iv]);
     gpio_impl!(p2: P2 => p2in, p2out, p2dir, p2ren, p2selc, p2sel0, p2sel1, [p2ies, p2ie, p2ifg, p2iv]);
     gpio_impl!(p3: P3 => p3in, p3out, p3dir, p3ren, p3selc, p3sel0, p3sel1, [p3ies, p3ie, p3ifg, p3iv]);
     gpio_impl!(p4: P4 => p4in, p4out, p4dir, p4ren, p4selc, p4sel0, p4sel1, [p4ies, p4ie, p4ifg, p4iv]);
     gpio_impl!(p5: P5 => p5in, p5out, p5dir, p5ren, p5selc, p5sel0, p5sel1, [p5ies, p5ie, p5ifg, p5iv]);
     gpio_impl!(p6: P6 => p6in, p6out, p6dir, p6ren, p6selc, p6sel0, p6sel1, [p6ies, p6ie, p6ifg, p6iv]);
+
+    // Pins per port (SLASEO7C 9.10.3, p. 51: "P1, P3, P4, and P5 implement 8 bits each. P2 implements
+    // 6 bits excluding the I/Os multiplexed with XIN and XOUT. P6 implements 3 bits."). The pins a port
+    // lacks are always the top ones: P6 has P6.0 to P6.2 (SLASEO7C Table 9-28, p. 70).
+    impl_port_pins!(P1, 8);
+    impl_port_pins!(P2, 8);
+    impl_port_pins!(P3, 8);
+    impl_port_pins!(P4, 8);
+    impl_port_pins!(P5, 8);
+    impl_port_pins!(P6, 3);
 }
 
 /* ADC */
