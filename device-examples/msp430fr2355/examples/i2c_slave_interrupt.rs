@@ -1,21 +1,23 @@
+//! An I2C slave that works in its interrupt, with a master on the same chip: ten times a second
+//! eUSCI_B0, the master, writes a value from 0 to 9 into the first byte of the slave's array. LED1
+//! toggles after each write, and LED2 lights while that byte is 0: for 100 ms once a second.
+//!
+//! The slave, eUSCI_B1 at address 0x1A, holds an 8-byte array. The first byte a master writes sets the
+//! index; the bytes written or read after it go to, or come from, that index and the ones after it. A
+//! transaction that starts with a read uses the index of the one before (0 at first). The master runs at
+//! 100 kHz from SMCLK, with the internal pull-ups on its pins.
+//! (The I2C pins of eUSCI_B0 and eUSCI_B1: SLASEC4D Table 6-14, p. 72. LED1 on P1.0 is red and LED2 on
+//! P6.6 green: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (two jumper wires):
+//! 1. Connect SDA, P1.2 (J1 pin 10), to P4.6 (J2 pin 15), and SCL, P1.3 (J1 pin 9), to P4.7 (J2 pin 14).
+//!    (Header pins: SLAU680 Figure 10, p. 15.)
+//! 2. Flash this example.
+//! 3. Expected: LED1 toggles every 100 ms, and LED2 flashes once a second. Without the wires no write
+//!    arrives, the byte stays 0, and LED2 stays on.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
-
-// This I2C slave implements reading and writing from an 8-byte array (ARR_LEN).
-// If a transaction begins with a write, the first byte is treated as the desired array index.
-// A subsequent write provides data to store at the specified index. Additional writes will be stored at the following indices, the index autoincrementing after each.
-// After any number of writes the master may perform a Repeated Start and switch to reading in order to retrieve the value at the specified index.
-// Further reads will read the subsequent indices, autoincrementing.
-// If a transaction does not begin with a write, then the index from the previous transaction is used.
-// If no previous transaction has been performed the index defaults to 0.
-
-// eUSCI B0 is configured as the master, B1 as the slave.
-// Connect:
-// P1.2 <--> P4.6.
-// P1.3 <--> P4.7.
-// (UCB0SDA to UCB1SDA and UCB0SCL to UCB1SCL: SLASEC4D Table 6-14, p. 72. On the BoosterPack header
-// that is pin 10 to pin 15 and pin 9 to pin 14: SLAU680 Figure 10, p. 15.)
 
 // This example is quite big (particularly debug builds on old compiler versions), so we use a couple of tricks here to shrink binary size:
 // Anything that can panic (like RefCell) will pull in some string formatting, which bloats the binary! Instead use UnsafeCell (carefully).
@@ -46,8 +48,6 @@ static I2C_SLAVE: Mutex<UnsafeCell<Option< I2cSlave<EUsciB1> >>> = Mutex::new(Un
 const ARR_LEN: usize = 8;
 static ARR: [AtomicU8; ARR_LEN] = [const { AtomicU8::new(0) }; ARR_LEN];
 
-// Red LED on P1.0 should blink rapidly. Green LED on pin P6.6 should blink once for every ten red blinks.
-// (LED1, red, on P1.0 and LED2, green, on P6.6: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();

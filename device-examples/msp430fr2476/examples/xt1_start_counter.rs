@@ -1,33 +1,28 @@
-//! XT1 start fault counter (ENSTFCNT1) in bypass mode.
+//! XT1's start counter in bypass mode: with ENSTFCNT1 set, `freeze()` only returns once XT1 has run cleanly
+//! for 1024 cycles. LED1 turns on when `freeze()` returns: 250 ms after the generator starts at 4.096 kHz.
 //!
-//! With the start counter enabled, `freeze()` should only return once XT1 has run cleanly for
-//! 1024 cycles (device data sheets, and measured on the FR2476). LED1 is switched on right
-//! after `freeze()` returns.
-//! (SLASEO7C 8.12.3.1 note 9, p. 27: "start-up counter of 1024 clock cycles"; measured on an
-//! MSP430FR2476. SLAU445I 3.2.13, p. 110 gives 8192 for bypass mode, which the measurement
-//! contradicts. Start counter enable, ENSTFCNT1: SLAU445I Table 3-11, p. 121. LED1 on P1.0 is green:
-//! SLAU802 Figure 19, p. 25.)
+//! At 32.768 kHz those 1024 cycles take only 31 ms, too short to see, so the generator runs at 4.096 kHz
+//! here. Don't go below about 4 kHz: XT1 may count as faulty under 3.5 kHz. The data sheet's 1024 cycles
+//! match a measurement on an MSP430FR2476; the family user's guide gives 8192 for bypass mode instead.
+//! (SLASEO7C 8.12.3.1 note 9, p. 27: "start-up counter of 1024 clock cycles". 8192: SLAU445I 3.2.13, p. 110.
+//! ENSTFCNT1: SLAU445I Table 3-11, p. 121. fFault,LFXT is at most 3500 Hz: SLASEO7C 8.12.3.1, p. 27. LED1 on
+//! P1.0 is green: SLAU802 Figure 19, p. 25.)
 //!
-//! At 32.768 kHz those 1024 cycles take only 31 ms, too short to see, so this example runs the
-//! generator at 4.096 kHz, where they take 250 ms. Don't go below about 4 kHz: XT1 may count as
-//! faulty under 3.5 kHz (SLASEO7C 8.12.3.1, p. 27: fFault,LFXT is at most 3500 Hz).
-//!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 4.096 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
-//!
-//! Scope: the generator signal on CH3 through a BNC T-piece, CH1 on P1.0/LED1 (J3 pin 27).
+//! How to test (function generator and the scope):
+//! 1. Generator: square wave, 4.096 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on. Put the
+//!    generator's signal on a second scope channel (1X) as well, with the BNC T-piece.
+//! 3. Flash this example. Expected: LED1 turns on.
+//! 4. Switch the generator output off and press S3 (reset). Expected: LED1 stays off, because `freeze()`
+//!    waits for XT1.
+//! 5. Scope on LED1, P1.0 (J3 pin 27), ground clip on GND (J3 pin 22): single-shot trigger on its rising
+//!    edge, 100 ms/div, trigger point near the right of the screen. Switch the generator output on. Expected:
+//!    LED1 turns on 250 ms after the first edge on XIN.
+//! 6. Repeat steps 4 and 5 at 8.192 kHz: 125 ms. With `START_COUNTER` set to false, LED1 turns on almost at
+//!    once after the first edge.
 //! (Header pins: SLAU802 Figure 10, p. 13.)
-//! Single-shot trigger on the CH1 rising edge at 100 ms/div, with the trigger point near the
-//! right of the screen.
-//!
-//! What to try:
-//! 1. Switch the generator output off and reset the board. LED1 should stay off: `freeze()` is
-//!    waiting for XT1. If LED1 turns on with no signal at all, the start-up wait does not
-//!    block in bypass mode.
-//! 2. Switch the generator on. LED1 should turn on ~250 ms after the first XIN edge.
-//! 3. Repeat at 8.192 kHz: the delay should halve to ~125 ms.
-//! 4. Set `START_COUNTER` to false and repeat: LED1 should turn on almost immediately after
-//!    the first edge.
 #![no_main]
 #![no_std]
 

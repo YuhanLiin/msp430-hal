@@ -50,11 +50,12 @@ fn main() -> ! {
     let p1 = Batch::new(periph.p1).split(&pmm);
     let p4 = Batch::new(periph.p4).split(&pmm);
 
-    // MCLK = SMCLK = DCOCLKDIV in the 1 MHz range and ACLK from REFO (SELMS = 000b, SELA = 01b:
-    // SLAU445I Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118)
+    // MCLK = DCOCLKDIV in the 8 MHz range, 244 × 32.768 kHz, and SMCLK = MCLK / 8, 999.4 kHz, for the
+    // timer: the 1 MHz range, 32 × 32.768 kHz, is 5 % faster (SLAU445I 3.2.5, p. 104). ACLK from REFO
+    // (SELMS = 000b, SELA = 01b: SLAU445I Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118)
     let (smclk, _aclk, _delay) = ClockConfig::new(periph.cs)
-        .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
-        .smclk_on(SmclkDiv::_1)
+        .mclk_dcoclk(DcoclkFreqSel::_8MHz, MclkDiv::_1)
+        .smclk_on(SmclkDiv::_8)
         .aclk_refoclk()
         .freeze(&mut fram);
 

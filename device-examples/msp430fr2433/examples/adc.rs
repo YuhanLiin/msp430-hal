@@ -1,3 +1,20 @@
+//! A polled ADC reading: LED1 is on while the voltage on P1.2 is between 1.0 V and 2.0 V, and off otherwise.
+//!
+//! The ADC converts P1.2, input A2, again and again, with 8-bit results against AVCC, the LaunchPad's
+//! 3.3 V supply, and `read_voltage_mv()` turns each result into millivolts.
+//! (A2 is P1.2: SLASE59F Table 6-15, p. 53. AVCC is the reference after reset: SLAU445I Table 21-8, p. 567.
+//! The supply: SLAU739 2.3.1, p. 10. LED1 on P1.0 is red: SLAU739 Figure 18, p. 23.)
+//!
+//! How to test (function generator, or a jumper wire):
+//! 1. Generator: the DC waveform, Offset 1.500 V, output load High-Z. Check the voltage with the multimeter
+//!    first: 0 V to 3.3 V only (the analog input range: SLASE59F Table 5-20, p. 35). Connect it to P1.2
+//!    (J1 pin 10), its ground to GND (J2 pin 20).
+//! 2. Flash this example: LED1 is on.
+//! 3. Set the offset to 0.5 V, and then to 2.5 V: LED1 is off at both. It's on from about 1.0 V to 2.0 V.
+//!
+//! Without the generator, a jumper wire from P1.2 to GND (J2 pin 20) or to 3.3 V (J1 pin 1) turns LED1
+//! off, and a potentiometer of about 10 kΩ between 3.3 V and GND, its wiper on P1.2, turns it on in the
+//! middle of its range. (Header pins: SLAU739 Figure 18, p. 23.)
 #![no_main]
 #![no_std]
 
@@ -9,9 +26,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// If pin 1.2 is between 1V and 2V, the LED on pin 1.0 should light up.
-// P1.2 is ADC input A2 (SLASE59F Table 6-15, p. 53). On the LaunchPad it is header pin J1.10, and P1.0
-// drives the red LED1 (both: SLAU739 Figure 18, p. 23).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog

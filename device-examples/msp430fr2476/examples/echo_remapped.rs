@@ -1,3 +1,26 @@
+//! eUSCI_A0 on its default and its remapped pins: the example prints `HELLO DEFAULT` on the backchannel
+//! UART, then moves eUSCI_A0 to P5.2 (TXD) and P5.1 (RXD), prints `HELLO REMAPPED` there, and sends back
+//! every character it receives.
+//!
+//! The default pins are P1.4 and P1.5, the backchannel UART's; USCIA0RMP = 1 then selects the remapped
+//! ones. Both run at 9600 baud, 8 data bits, no parity and one stop bit, clocked by ACLK from REFO. LED1
+//! lights once the remapped UART is set up.
+//! (The pins and USCIA0RMP: SLASEO7C Table 9-11, p. 54. The backchannel UART: SLAU802 2.2.4, p. 9. LED1
+//! on P1.0 is green, P5.1 also drives the red part of LED2 through J8, and S3 is the reset button:
+//! SLAU802 Figure 19, p. 25.)
+//!
+//! How to test (two jumper wires):
+//! 1. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
+//!    UART1" at 9600 baud (SLAU802 2.2.4, p. 9). Expected: `HELLO DEFAULT` (press S3 to see it again if
+//!    the terminal wasn't open yet), and LED1 lights.
+//! 2. Now move the backchannel to the remapped pins. Pull the TXD and RXD jumpers off J101, and the J8
+//!    jumper marked P5.1, so that LED2 doesn't load the RXD line. With the jumper wires, connect the eZ-FET
+//!    side of TXD, the pin nearer the USB connector, to P5.2 (J4 pin 40), and the eZ-FET side of RXD to
+//!    P5.1 (J4 pin 39). (J101: SLAU802 Table 2, p. 8; board layout: SLAU802 Figure 1, p. 1; header pins:
+//!    SLAU802 Figure 10, p. 13.)
+//! 3. Press S3. Expected: `HELLO REMAPPED`, and each character you type comes back (with the terminal's
+//!    local echo off).
+//! 4. Put the jumpers back for the other examples.
 #![no_main]
 #![no_std]
 
@@ -15,11 +38,6 @@ use panic_msp430 as _;
 #[cfg(not(debug_assertions))]
 use panic_never as _;
 
-// Prints "HELLO DEFAULT" on the backchannel UART (eUSCI_A0 on P1.4/P1.5: SLAU802 2.2.4, p. 9) when
-// started, then remaps eUSCI_A0 to P5.2 (TXD) and P5.1 (RXD), prints "HELLO REMAPPED" and echoes there.
-// P5.2 and P5.1 are J4 pins 40 and 39 (SLAU802 Figure 10, p. 13), not the backchannel; P5.1 also
-// drives the red part of LED2 through J8 (SLAU802 Figure 19, p. 25).
-// Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
     if let Some(periph) = msp430fr247x::Peripherals::take() {

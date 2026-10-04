@@ -1,3 +1,19 @@
+//! An echo on the backchannel UART: the example prints `HELLO`, then sends back every character it
+//! receives.
+//!
+//! eUSCI_A0 runs at 9600 baud, 8 data bits, no parity and one stop bit, clocked by ACLK from REFO. A
+//! character that arrives with an error comes back as `!` (parity), `}` (overrun), `?` (framing) or `#`
+//! (break). LED1 lights once the UART is set up.
+//! (The backchannel UART is eUSCI_A0, on P1.4 (TXD) and P1.5 (RXD): SLAU802 2.2.4, p. 9; SLAU802
+//! Figure 16, p. 22. LED1 on P1.0 is green, and S3 is the reset button: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example, with the TXD and RXD jumpers of J101 on, and open the COM port of "MSP
+//!    Application UART1" at 9600 baud (SLAU802 2.2.4, p. 9).
+//! 2. Expected: LED1 lights, and the terminal shows `HELLO`. If the terminal wasn't open yet, press S3 to
+//!    start the example again.
+//! 3. Type something: each character comes back, so the terminal shows what you type (with its local
+//!    echo off).
 #![no_main]
 #![no_std]
 
@@ -15,10 +31,6 @@ use panic_msp430 as _;
 #[cfg(not(debug_assertions))]
 use panic_never as _;
 
-// Prints "HELLO" when started then echos on the backchannel UART: eUSCI_A0 on P1.4 (TXD) and P1.5
-// (RXD) (SLAU802 2.2.4, p. 9; SLAU802 Figure 16, p. 22), the "MSP Application UART1" COM port on the
-// PC (SLAU802 2.2.4, p. 10). The RXD and TXD jumpers of J101 must be on (SLAU802 Table 2, p. 8).
-// Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
     if let Some(periph) = msp430fr247x::Peripherals::take() {

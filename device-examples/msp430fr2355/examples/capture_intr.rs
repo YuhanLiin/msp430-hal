@@ -1,8 +1,25 @@
+//! A capture input handled in its interrupt: each falling edge on P1.6 toggles LED1.
+//!
+//! P1.6 is TB0.CCI1A, input A of TB0's CCR1, which captures each falling edge. Its interrupt reads
+//! TB0IV, which gives the capture, and toggles LED1. The LaunchPad's buttons, S1 on P4.1 and S2 on
+//! P2.3, aren't capture inputs, so the edges come from the function generator or a jumper wire. The
+//! example also shows how to write panic-free code, with `panic_never` in release builds.
+//! (TB0.CCI1A on P1.6: SLASEC4D Table 6-16, p. 73. TB0IV: SLAU445I 14.2.6.2, p. 405. Capture inputs:
+//! SLASEC4D Tables 6-16 to 6-19, p. 73 to p. 75. S1, S2, and LED1 on P1.0, red: SLAU680 Figure 18,
+//! p. 26.)
+//!
+//! How to test (function generator, or a jumper wire):
+//! 1. Generator: square wave, 1 Hz, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load High-Z. Check the
+//!    levels on the scope before connecting: a negative or >3.6 V signal can damage the pin. Connect it
+//!    to P1.6 (J1 pin 3), its ground to GND (J3 pin 22).
+//! 2. Flash this example. Expected: LED1 is on for 1 s, then off for 1 s.
+//! 3. Without the generator: put a jumper wire on P1.6 (J1 pin 3), and touch its free end to 3.3 V (J1
+//!    pin 1), then to GND (J2 pin 20): LED1 toggles. P1.6 has no pull resistor, so it floats between
+//!    touches, and the contact bounces: LED1 can toggle more than once, or not at all.
+//! (Header pins: SLAU680 Figure 10, p. 15.)
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
-
-// This example also demonstrates how to write panic-free code using panic_never.
 
 use core::cell::UnsafeCell;
 use critical_section::with;
@@ -36,9 +53,6 @@ static VECTOR: Mutex<UnsafeCell<Option<TBxIV<msp430fr2355::Tb0>>>> =
 static RED_LED: Mutex<UnsafeCell<Option<Pin<P1, Pin0, Output>>>> =
     Mutex::new(UnsafeCell::new(None));
 
-// Connect push button input to P1.6. When button is pressed, red LED should toggle. No debouncing,
-// so sometimes inputs are missed. P1.6 is pin 3 of the BoosterPack header (SLAU680 Figure 10, p. 15),
-// and LED1, red, is on P1.0 (SLAU680 Figure 18, p. 26).
 #[entry]
 fn main() -> ! {
     let Some(periph) = msp430fr2355::Peripherals::take() else { loop {} };

@@ -1,21 +1,25 @@
-//! Why did the device reset? `Pmm::take_reset_cause` reads the reasons, highest priority first
-//! (SYSRSTIV: SLAU445I 1.3.7, p. 36; values and priorities: SLASEO7C Table 9-10, p. 52),
-//! and RGB LED2 shows the first one:
+//! Why did the device reset? `Pmm::take_reset_cause` reads the reasons, highest priority first, and RGB
+//! LED2 shows the first one. S1 and S2 reset the device by software when they are released.
 //!
-//! | LED2                   | Reset                                                    |
-//! |------------------------|----------------------------------------------------------|
-//! | green                  | power-up: plug in the USB cable (brownout reset)         |
-//! | blue                   | the reset button S3                                      |
-//! | red                    | button S1, which calls `Pmm::software_bor()`             |
-//! | yellow (red and green) | button S2, which calls `Pmm::software_por()`             |
-//! | white                  | any other reason                                         |
+//! | LED2                   | Reset                                                         |
+//! |------------------------|---------------------------------------------------------------|
+//! | green                  | power-up: plug in the USB cable (brownout reset)              |
+//! | blue                   | the reset button S3                                           |
+//! | red                    | button S1, which calls `Pmm::software_bor()`                  |
+//! | yellow (red and green) | button S2, which calls `Pmm::software_por()`                  |
+//! | white                  | any other reason                                              |
 //! | off, with LED1 on      | no reason: the debugger started the program after flashing it |
 //!
-//! The buttons reset the device when they are released.
+//! (SYSRSTIV: SLAU445I 1.3.7, p. 36. The resets, with their priorities: brownout 02h, RST/NMI pin 04h,
+//! software BOR 06h, software POR 14h: SLASEO7C Table 9-10, p. 52. LED1 on P1.0 is green; LED2 is red
+//! on P5.1, green on P5.0 and blue on P4.7; S1 (P4.0) and S2 (P2.3) pull their pins low, and S3 is the
+//! reset button on RST: SLAU802 Figure 19, p. 25.)
 //!
-//! LED1 (P1.0) is green, LED2 is red on P5.1, green on P5.0 and blue on P4.7; S1 (P4.0) and S2 (P2.3)
-//! pull their pins low, and S3 is the reset button on RST (SLAU802 Figure 19, p. 25). The resets:
-//! brownout 02h, RST/NMI pin 04h, software BOR 06h, software POR 14h (SLASEO7C Table 9-10, p. 52).
+//! How to test:
+//! 1. Flash this example. Expected: LED1 lights and LED2 stays off: no reason.
+//! 2. Press S3: LED2 lights blue.
+//! 3. Press and release S1: LED2 lights red. Press and release S2: yellow.
+//! 4. Unplug the USB cable and plug it back in: green.
 #![no_main]
 #![no_std]
 

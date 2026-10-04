@@ -1,3 +1,18 @@
+//! GPIO interrupts and the watchdog's interval interrupt: LED1 toggles every 3.3 s or so, and each press
+//! of S2 toggles both the blue part of LED2 and LED1.
+//!
+//! The watchdog, as an interval timer, interrupts every 2^15 ACLK cycles, about 3.3 s with ACLK from the
+//! VLO, and its interrupt toggles LED1. The main loop polls the interrupt flag of S2 (P2IFG.3, with its
+//! interrupt disabled): at each press it toggles the blue part of LED2 and sets the flag of P2.7 in
+//! software, which requests the port 2 interrupt, and that toggles LED1.
+//! (WDTIS = 100b: SLAU445I Table 12-2, p. 366. The VLO runs at about 10 kHz, within ±50 %: SLASEO7C
+//! Table 9-8, p. 50. Software can set PxIFG: SLAU445I 8.2.6, p. 315. LED1 on P1.0 is green, the blue
+//! part of LED2 is P4.7, and S2 is P2.3: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 toggles every 3.3 s or so (anything from 2.2 s to 6.6 s is right).
+//! 3. Press S2: the blue part of LED2 toggles, and so does LED1.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
@@ -22,10 +37,6 @@ use panic_msp430 as _;
 static LED1: Mutex<RefCell<Option<Pin<P1, Pin0, Output>>>> = Mutex::new(RefCell::new(None));
 static P2IV: Mutex<RefCell<Option<PxIV<P2>>>> = Mutex::new(RefCell::new(None));
 
-// LED1 (P1.0), which is green, should blink, toggling every 2^15 ACLK cycles: about 3.3 s at the VLO's
-// typical 10 kHz (WDTIS = 100b: SLAU445I 12.3.1, p. 366; SLASEO7C 8.12.3.5, p. 30)
-// LED1 and the blue part of LED2 (P4.7) should both toggle when button S2 (P2.3) is pressed
-// (SLAU802 Figure 19, p. 25)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

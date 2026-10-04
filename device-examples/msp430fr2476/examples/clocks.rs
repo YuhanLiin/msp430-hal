@@ -1,3 +1,15 @@
+//! The clock system and the watchdog in both its modes: LED1 blinks, on for about 1 s and off for about
+//! 1 s, and each off time ends with a watchdog reset that starts the program again.
+//!
+//! MCLK and SMCLK run from the DCO at about 8 MHz. With LED1 on, the watchdog counts 2^23 SMCLK cycles,
+//! 1.05 s, as an interval timer. Then LED1 goes off, and the watchdog counts them again in watchdog
+//! mode, which resets the device at the end, so the program starts over.
+//! (Interval timer mode: SLAU445I 12.2.3, p. 363. Watchdog mode resets the device with a PUC: SLAU445I
+//! 12.2.2, p. 363. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 blinks, on for about 1 s and off for about 1 s.
 #![no_main]
 #![no_std]
 
@@ -13,7 +25,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// LED1 (P1.0), which is green, should blink 1 second on, 1 second off (SLAU802 Figure 19, p. 25)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();
@@ -39,8 +50,7 @@ fn main() -> ! {
 
     const DELAY: WdtClkPeriods = WdtClkPeriods::_8192k;
 
-    // blinks should be 1 second on, 1 second off: 2^23 SMCLK cycles (WDTIS = 010b: SLAU445I 12.3.1,
-    // p. 366) take 1.05 s at 8 MHz
+    // 2^23 SMCLK cycles (WDTIS = 010b: SLAU445I 12.3.1, p. 366) take 1.05 s at 8 MHz
     // Interval timer mode sets WDTIFG at the end of the interval instead of resetting (WDTTMSEL = 1:
     // SLAU445I 12.2.3, p. 363); SMCLK is WDTSSEL = 00b (SLAU445I Table 12-2, p. 366)
     let mut wdt = wdt.to_interval();

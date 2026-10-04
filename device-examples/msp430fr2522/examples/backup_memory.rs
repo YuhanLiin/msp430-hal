@@ -1,3 +1,23 @@
+//! The backup memory keeps a count through the watchdog resets. The watchdog, left running, resets
+//! the device about every 32 ms. Each start adds 1 to the count and switches an LED on P1.0 on if the
+//! count is a multiple of 10, so the LED gives a short flash about three times a second.
+//!
+//! A reset doesn't change the backup memory: its reset value is "Undefined". It keeps its value as long as
+//! it is powered, which it is in every mode but LPM4.5. A power cycle loses the count, but the LED can't
+//! show that: the count then starts from an unknown value.
+//! (32 bytes: SLASEE4C 6.10.10, p. 55. Reset value: SLAU445I Table 7-1, p. 310. Powered: SLASEE4C
+//! Table 6-1, p. 45. The watchdog runs after every PUC: SLAU445I 12.2.2, p. 363. No board document covers
+//! the LED: there is none for the MSP430FR25x2. P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1:
+//! SLASEE4C Table 6-15, p. 58.)
+//!
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED flashes briefly, about three times a second. Each flash lasts one watchdog
+//!    interval, about 32 ms, and the nine starts in between leave the LED off. If a reset cleared the
+//!    count, the LED would stay off.
+//! 4. About every 8 s two flashes come closer together: the 8-bit count wraps from 255 to 0, and 250 and
+//!    0 are only 6 apart.
 #![no_main]
 #![no_std]
 
@@ -5,13 +25,6 @@ use embedded_hal::digital::*;
 use msp430_rt::entry;
 use msp430_hal::{bak_mem::BackupMemory, gpio::Batch, pmm::Pmm};
 use panic_msp430 as _;
-
-// Use the value of backup memory to toggle the red onboard LED. The red LED should flash.
-// Backup memory maintains it's value through a system reset. Power loss *will* reset the backup memory, however.
-// No board document covers the LED: there is none for the MSP430FR25x2. The backup memory registers have
-// no reset value (SLAU445I Table 7-1, p. 310: reset "Undefined"); the device keeps them in every mode but
-// LPM4.5 (SLASEE4C Table 6-1, p. 45). P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1
-// (SLASEE4C Table 6-15, p. 58).
 
 #[entry]
 fn main() -> ! {
@@ -32,7 +45,7 @@ fn main() -> ! {
 
     bk_mem[0] = bk_mem[0].wrapping_add(1);
 
-    // Set the output pin high if nv_mem is a multiple of 10
+    // Set the output pin high if the count is a multiple of 10
     led.set_state((bk_mem[0] % 10 == 0).into()).ok();
 
     // Loop until the watchdog resets us

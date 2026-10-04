@@ -1,3 +1,26 @@
+//! Timer captures, polled: TA0 captures each falling edge on P1.5, and eUSCI_A0 prints the time since
+//! the edge before, in ACLK cycles, on P1.4.
+//!
+//! P1.5 is TA0.CCI2A, input A of TA0's CCR2, which captures TA0's count at each falling edge. TA0
+//! counts ACLK from REFO, 32768 Hz, so a second is 32768 counts, 0x8000; the count wraps around after
+//! 65536 counts, 2 s. Each capture also sets P1.0 high, which lights an LED there.
+//! (TA0.CCI2A on P1.5: SLASEE4C Table 6-15, p. 58; SLASEE4C Figure 6-2, p. 54. Captures: SLAU445I
+//! 13.2.4.1, p. 374. REFO: SLASEE4C Table 5-7, p. 27. UCA0TXD on P1.4: SLASEE4C Table 6-11, p. 53. No
+//! board document covers the parts to connect: there is none for the MSP430FR25x2.)
+//!
+//! How to test (a push button, an LED, two resistors, a USB-to-UART adapter; or the function generator):
+//! 1. Connect a push button from P1.5 to GND, and a resistor of about 47 kΩ from P1.5 to 3.3 V: P1.5's
+//!    internal pull resistor is off. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Connect a 3.3-V USB-to-UART adapter: its RX to P1.4 (UCA0TXD), GND to GND. Open its COM port at
+//!    9600 baud.
+//! 3. Flash this example, and press the button about once a second. Expected: a line per press, like
+//!    `0x8000`: the ACLK cycles since the press before, in hex. The first press counts from the start,
+//!    and presses more than 2 s apart wrap around. The LED is on after the first press.
+//! 4. The button isn't debounced, so a press or a release can print an extra line with a small value,
+//!    or `!` when a second edge came before the first was read.
+//! 5. Instead of the button, the generator: square wave, 1 Hz, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset),
+//!    output load High-Z (check the levels on the scope first), to P1.5, its ground to GND: about `0x8000`,
+//!    once a second.
 #![no_main]
 #![no_std]
 
@@ -17,12 +40,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// Connect push button input to P1.5, TA0.CCI2A, the capture input set up below (P1.1 is no timer
-// input on this device: SLASEE4C Table 6-15, p. 58; SLASEE4C Figure 6-2, p. 54). When button is
-// pressed, putty should print the # of cycles since the last press. Sometimes we get 2 consecutive
-// readings due to lack of debouncing. No board document covers a button: there is none for the
-// MSP430FR25x2. P1.0, set high on each capture, is a GPIO output, P1SELx = 00 and P1DIR = 1
-// (SLASEE4C Table 6-15, p. 58).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
@@ -78,6 +95,7 @@ fn main() -> ! {
             Err(OverCapture(_)) => {
                 p1.pin0.set_high().unwrap();
                 write(&mut tx, '!');
+                write(&mut tx, '\r');
                 write(&mut tx, '\n');
             }
         }
@@ -91,6 +109,7 @@ fn print_num<U: SerialUsci>(tx: &mut Tx<U>, num: u16) {
     print_hex(tx, (num >> 8) & 0xF);
     print_hex(tx, (num >> 4) & 0xF);
     print_hex(tx, num & 0xF);
+    write(tx, '\r');
     write(tx, '\n');
 }
 

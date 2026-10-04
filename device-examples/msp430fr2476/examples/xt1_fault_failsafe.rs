@@ -1,33 +1,30 @@
-//! XT1 fault detection and the fail-safe switch to REFO, using ACLK as the observable clock.
+//! XT1 fault detection and the fail-safe: when the signal on XIN stops, ACLK switches from XT1 to REFO and
+//! LED1 turns on. When the signal returns, the example clears the fault and ACLK goes back to XT1.
 //!
-//! The generator runs at 20 kHz instead of 32.768 kHz so the REFO fallback (32.768 kHz) is easy
-//! to tell apart on the scope.
+//! The generator runs at 20 kHz instead of 32.768 kHz, so ACLK on P2.2 shows which clock it runs from: 20 kHz
+//! from XT1, about 32.8 kHz from REFO. The fault flags are sticky, and the fail-safe stays engaged until
+//! software clears them, which the main loop does all the time, except while S2 is held.
+//! (Fail-safe: SLAU445I 3.2.13, p. 109 to p. 110. REFO runs at 32.768 kHz ±3.5 %: SLASEO7C 8.12.3.4, p. 30.
+//! LED1 on P1.0 is green, and S2 pulls P2.3 low: SLAU802 Figure 19, p. 25.)
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 20 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
-//!
-//! Scope: the generator signal on CH3 through a BNC T-piece, CH1 on P2.2/ACLK (J1 pin 5).
-//! (Header pins: SLAU802 Figure 10, p. 13. LED1 on P1.0 is green, and S2 pulls P2.3 low:
-//! SLAU802 Figure 19, p. 25. REFO runs at 32.768 kHz ±3.5 %: SLASEO7C 8.12.3.4, p. 30.)
-//!
-//! What to try:
-//! 1. ACLK = 20 kHz, LED1 off.
-//! 2. Switch the generator output off: LED1 on, ACLK jumps to about 32.8 kHz (REFO)
-//!    (SLAU445I 3.2.13, p. 109).
-//! 3. Switch it back on: the fault clears almost at once, LED1 turns off and ACLK returns to
-//!    20 kHz. Bypass mode leaves the start counter off; with `.enable_start_counter()` the
-//!    fault would only clear after 1024 clean cycles, 51 ms at 20 kHz (start-up counter of 1024
-//!    clock cycles: SLASEO7C 8.12.3.1 note 9, p. 27).
-//! 4. Repeat 2 and 3 while holding button S2 (P2.3): the fault flags are no longer cleared, so
-//!    ACLK stays on REFO even after the signal is back. The fail-safe only releases once
-//!    software clears the flags, which happens as soon as S2 is released (SLAU445I 3.2.13,
-//!    p. 109 to p. 110).
-//! 5. Lower the generator frequency step by step (10 kHz, 5 kHz, 3.5 kHz, 2 kHz, 1 kHz) to find
-//!    where the fault detector trips. The datasheet only guarantees no fault above 3.5 kHz
-//!    (SLASEO7C 8.12.3.1, p. 27: fFault,LFXT is at most 3500 Hz, and "Frequencies above the MAX
-//!    specification do not set the fault flag").
-//! 6. Vary the duty cycle. The datasheet specifies 40 % to 60 % for bypass mode (SLASEO7C 8.12.3.1,
-//!    p. 27: DCXT1,SW).
+//! How to test (function generator and the scope):
+//! 1. Generator: square wave, 20 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on.
+//! 3. Flash this example, and put the scope on ACLK, P2.2 (J1 pin 5), ground clip on GND (J3 pin 22).
+//!    Expected: ACLK is 20 kHz, and LED1 is off.
+//! 4. Switch the generator output off: LED1 turns on, and ACLK jumps to about 32.8 kHz.
+//! 5. Switch it back on: LED1 turns off almost at once, and ACLK is back at 20 kHz. Bypass mode leaves the
+//!    start counter off; with `.enable_start_counter()` the fault would only clear after 1024 clean cycles,
+//!    51 ms at 20 kHz (start-up counter: SLASEO7C 8.12.3.1 note 9, p. 27).
+//! 6. Hold S2 and repeat steps 4 and 5: ACLK stays on REFO and LED1 stays on, even with the signal back.
+//!    Release S2: LED1 turns off, and ACLK returns to 20 kHz.
+//! 7. Optional: lower the frequency step by step (10, 5, 3.5, 2, 1 kHz) to find where the fault detector
+//!    trips. The data sheet only promises that frequencies above 3.5 kHz don't set the fault flag
+//!    (fFault,LFXT: SLASEO7C 8.12.3.1, p. 27). Or vary the duty cycle: bypass mode is specified for 40 % to
+//!    60 % (DCXT1,SW: SLASEO7C 8.12.3.1, p. 27).
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

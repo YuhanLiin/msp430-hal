@@ -1,27 +1,30 @@
-//! RTC clocked by XT1 through LPM3.5: the board sleeps in LPM3.5 and the RTC wakes it every
-//! second. Each wake-up toggles LED1, whose state is kept in the backup memory.
-//! (LED1 on P1.0 is green: SLAU802 Figure 19, p. 25. In LPM3.5 the RTC runs from XT1CLK or VLOCLK:
-//! SLAU445I 15.2.2, p. 417. The backup memory is retained in LPM3.5: SLASEO7C 9.10.10, p. 61.)
+//! The RTC clocked by XT1 through LPM3.5: the board sleeps in LPM3.5, and the RTC, counting the generator's
+//! signal on XIN, wakes it every second. Each wake-up toggles LED1, whose state is kept in the backup memory.
 //!
-//! After a wake-up, `Pmm::new_locked` keeps the pins, and XT1 with them, in their LPM3.5 state
-//! until XIN and XT1 have been reconfigured, so XT1 never stops clocking the RTC.
-//! (The I/Os stay locked until LOCKLPM5 is cleared: SLAU445I 1.4.3.2, p. 42; XIN and XT1 are
-//! configured before that: SLAU445I 1.4.3.3 steps 3 and 4, p. 42.)
+//! A wake-up from LPMx.5 is a reset, so the program starts again from the top. After a wake-up,
+//! `Pmm::new_locked` keeps the pins, and XT1 with them, in their LPM3.5 state until XIN and XT1 have been
+//! configured again, so XT1 never stops clocking the RTC. After a cold start, `freeze()` waits for XT1
+//! without a timeout.
+//! (In LPM3.5 the RTC runs from XT1CLK or VLOCLK: SLAU445I 15.2.2, p. 417. "Any exit from LPMx.5 causes a
+//! BOR", and the I/Os stay locked until LOCKLPM5 is cleared: SLAU445I 1.4.3.2, p. 42. XIN and XT1 are
+//! configured before that: SLAU445I 1.4.3.3 steps 3 and 4, p. 42. The backup memory is retained in LPM3.5:
+//! SLASEO7C 9.10.10, p. 61. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 32.768 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
-//! Switch the generator on before the first start.
-//!
-//! When programming with mspdebug you need to unplug and replug the board for the example to
-//! work (see `lpm3_5.rs`).
-//!
-//! Scope: P1.0/LED1 (J3 pin 27). (Header pins: SLAU802 Figure 10, p. 13.)
-//!
-//! What to try:
-//! 1. LED1 toggles every second (a 2 s period). The period tracks the generator: at 16.384 kHz
-//!    it doubles to 4 s, which shows the RTC runs from XT1 during LPM3.5.
-//! 2. Switch the generator off: the RTC stops, so LED1 stops toggling. Switch it back on and
-//!    it carries on.
+//! How to test (function generator, and optionally the scope):
+//! 1. Generator: square wave, 32.768 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on.
+//! 3. Flash this example. After flashing with mspdebug, the board must be unplugged and plugged back in for
+//!    the example to work (see `lpm3_5.rs`): switch the generator output off, unplug the board's USB cable,
+//!    wait a second, plug it back in, and switch the output on again. Keep the output off while the board is
+//!    unplugged: a pin may see at most VCC + 0.3 V (SLASEO7C 8.1, p. 20), and unplugged, VCC is 0 V.
+//! 4. Expected: LED1 toggles every second, a period of 2 s; the CPU sleeps in between. The scope on LED1,
+//!    P1.0 (J3 pin 27), ground clip on GND (J3 pin 22), shows it exactly.
+//! 5. Set the generator to 16.384 kHz: LED1 toggles every 2 s, so the RTC runs from XT1 during LPM3.5.
+//! 6. Set it back to 32.768 kHz, and switch the output off: LED1 stops toggling, because the RTC's XT1CLK
+//!    input has no fail-safe. Switch it back on: LED1 carries on.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

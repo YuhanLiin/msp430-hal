@@ -17,11 +17,12 @@
 //! Table 9-15, p. 59. Header pins: SLAU802 Figure 10, p. 13. S1 is P4.0: SLAU802 Figure 19, p. 25.)
 //!
 //! How to test (scope, three channels; ground clips on GND, J3 pin 22):
-//! - CH1 on P4.3 (J3 pin 24), CH2 on P4.4 (J3 pin 25), CH3 on P6.2 (J4 pin 33). Trigger on CH1, rising.
-//! - CH1: 80 µs high pulses every 200 µs. CH2: 88 µs low pulses, centered on CH1's pulses. Zoom in on the
-//!   edges: CH2 goes low 4 µs before CH1 goes high, and goes high 4 µs after CH1 goes low.
-//! - CH3: a 2.5 kHz square wave, which toggles once per PWM period.
-//! - Press S1 a few times: both pulses widen, and CH1 and CH2 are still never high together.
+//! 1. CH1 on P4.3 (J3 pin 24), CH2 on P4.4 (J3 pin 25), CH3 on P6.2 (J4 pin 33). Trigger on CH1, rising.
+//! 2. Flash this example. CH1: 80 µs high pulses every 200 µs. CH2: 88 µs low pulses, centered on CH1's
+//!    pulses. Zoom in on the edges: CH2 goes low 4 µs before CH1 goes high, and goes high 4 µs after CH1
+//!    goes low.
+//! 3. CH3: a 2.5 kHz square wave, which toggles once per PWM period.
+//! 4. Press S1 a few times: both pulses widen, and CH1 and CH2 are still never high together.
 #![no_main]
 #![no_std]
 
@@ -62,11 +63,12 @@ fn main() -> ! {
     let p6 = Batch::new(periph.p6).split(&pmm);
     let mut s1 = p4.pin0;
 
-    // MCLK = SMCLK = DCOCLKDIV in the 1 MHz range and ACLK from REFO (SELMS = 000b, SELA = 01b:
-    // SLAU445I Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118)
+    // MCLK = DCOCLKDIV in the 8 MHz range, 244 × 32.768 kHz, and SMCLK = MCLK / 8, 999.4 kHz, for the
+    // timer: the 1 MHz range, 32 × 32.768 kHz, is 5 % faster (SLAU445I 3.2.5, p. 104). ACLK from REFO
+    // (SELMS = 000b, SELA = 01b: SLAU445I Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118)
     let (smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
-        .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
-        .smclk_on(SmclkDiv::_1)
+        .mclk_dcoclk(DcoclkFreqSel::_8MHz, MclkDiv::_1)
+        .smclk_on(SmclkDiv::_8)
         .aclk_refoclk()
         .freeze(&mut fram);
 
@@ -90,7 +92,7 @@ fn main() -> ! {
     high_side.disable();
     low_side.disable();
     // The low side is active low: its output is low for its duty cycle (output mode toggle/set instead
-    // of toggle/reset: SLAU445I Table 13-2, p. 376)
+    // of toggle/reset: SLAU445I Table 14-4, p. 401)
     low_side.set_polarity(Polarity::ActiveLow);
     low_side.set_duty_cycle(DUTY + DEAD_TIME).unwrap();
     high_side.set_duty_cycle(DUTY).unwrap();

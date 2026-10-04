@@ -1,3 +1,18 @@
+//! The RTC counter as a timer: LED1 blinks, about 2 s on and 2 s off, timed by the RTC from the VLO.
+//! Pressing S2 toggles LED1 and stops the RTC, which ends the blinking.
+//!
+//! The RTC counts VLOCLK divided by 10, about 1 kHz, from 0 to 2000 and then starts over: about 2 s at the
+//! VLO's typical 10 kHz, but the VLO is only accurate to ±50 %, so anywhere from 1.3 s to 4 s. S2 pulls
+//! P2.3 low, which sets P2IFG.3. The loop then toggles LED1 and stops the RTC (`pause()`, RTCSS = 00b),
+//! and from then on it waits for an overflow that doesn't come, so only S2 toggles LED1.
+//! (VLO: 10 kHz typical, SLASEO7C 8.12.3.5, p. 30; ±50 %, SLASEO7C Table 9-8, p. 50. RTCSS and RTCPS:
+//! SLAU445I Table 15-2, p. 420. RTC predivider: SLAU445I 15.2.2, p. 417. LED1 on P1.0 is green, S2 is
+//! P2.3, and S3 is the reset button: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example. Expected: LED1 is on for about 2 s, off for about 2 s, and so on.
+//! 2. Press S2: LED1 toggles and then stays as it is. Each further press of S2 toggles it.
+//! 3. Press the reset button S3 to start the blinking again.
 #![no_main]
 #![no_std]
 
@@ -13,11 +28,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// LED1 blinks 2 seconds on, 2 off
-// Pressing P2.3 button toggles LED1
-// (LED1 on P1.0 is green, the P2.3 button is S2: SLAU802 Figure 19, p. 25. 2000 ticks of the VLO
-// divided by 10 take 2 s at the VLO's typical 10 kHz: SLASEO7C 8.12.3.5, p. 30; RTC predivider:
-// SLAU445I 15.2.2, p. 417.)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

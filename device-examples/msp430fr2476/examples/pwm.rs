@@ -1,3 +1,20 @@
+//! PWM on two outputs of TB0, with one period and two duty cycles: P4.3 is high for 76 % of each
+//! period, and P5.2 for 2 %.
+//!
+//! TB0 counts SMCLK, 32 × 32768 Hz = 1.049 MHz, from 0 to 5000 in up mode: a period of 5001 counts,
+//! about 4.8 ms, or 210 Hz. Each output is high from the start of a period until the timer reaches its
+//! duty cycle: 3795 counts (about 3.6 ms) for TB0.5 on P4.3, and 100 counts (about 0.1 ms) for TB0.4
+//! on P5.2.
+//! (SMCLK is DCOCLKDIV, (FLLN + 1) × 32768 Hz, with FLLN = 31 in the 1 MHz range: SLAU445I 3.2.5,
+//! p. 104. Up mode: SLAU445I 14.2.3.1, p. 394. Reset/Set mode: SLAU445I Table 14-4, p. 401. TB0.4 and
+//! TB0.5: SLASEO7C Table 9-15, p. 59.)
+//!
+//! How to test (scope, two channels; ground clips on GND, J3 pin 22):
+//! 1. Flash this example.
+//! 2. CH1 on P4.3 (J3 pin 24): about 210 Hz, high for about 3.6 ms of each 4.8 ms period (76 %).
+//! 3. CH2 on P5.2 (J4 pin 40): the same frequency, high for about 0.1 ms of each period (2 %).
+//! (Header pins: SLAU802 Figure 10, p. 13. The LaunchPad has no LEDs on these pins: SLAU802
+//! Figure 19, p. 25.)
 #![no_main]
 #![no_std]
 
@@ -13,10 +30,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// An LED on P4.3 (J3 pin 24) should be bright and an LED on P5.2 (J4 pin 40) dim: their duty cycles
-// are 3795 and 100 out of 5000. This LaunchPad has no LEDs on these pins (SLAU802 Figure 10, p. 13;
-// SLAU802 Figure 19, p. 25). The output is high from the start of each period until the timer
-// reaches the duty cycle (Reset/Set mode: SLAU445I Table 14-4, p. 401).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

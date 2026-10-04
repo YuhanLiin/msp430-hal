@@ -1,33 +1,38 @@
-//! Routes MCLK, SMCLK and ACLK to header pins, to measure the DCO with an oscilloscope or
-//! multimeter.
+//! MCLK, SMCLK and ACLK on header pins, to measure the DCO with the scope. MCLK runs from the DCO, locked
+//! by the FLL to REFO, SMCLK is MCLK / 8, and ACLK is REFO. LED1 lights once the clocks are set up.
 //!
-//! MCLK runs from the DCO, locked by the FLL to REFO. Every DCO frequency except 16 MHz is
-//! trimmed in software at start-up; 16 MHz uses the factory trim. Change `DCO_FREQ` to check
-//! each of them. LED1, which is green, turns on once the clocks are configured (SLAU802 Figure 19,
-//! p. 25). TI recommends the factory trim for the highest DCO range and the software trim for other
-//! frequencies (SLAU445I 3.2.11.1, p. 106).
+//! Change `DCO_FREQ` to check each DCO frequency. Every one except 16 MHz is trimmed in software at
+//! start-up, and 16 MHz uses the factory trim: TI recommends the factory trim for the highest DCO range
+//! and the software trim for the others (SLAU445I 3.2.11.1, p. 106). REFO is only accurate to ±3.5 %
+//! (SLASEO7C 8.12.3.4, p. 30), and MCLK inherits that, but the FLL locks MCLK to a multiple of REFO,
+//! fDCOCLKDIV = (FLLN + 1) × (fFLLREFCLK ÷ n) with n = 1 by default (SLAU445I 3.2.5, p. 104), so
+//! MCLK / ACLK is the FLL multiplier:
 //!
-//! Pins (LP-MSP430FR2476), with the frequencies for `_8MHz`:
-//! - P1.3/MCLK (J1 pin 9): 244 x REFO = 7.995 MHz nominal
-//! - P1.7/SMCLK (J3 pin 23): MCLK / 8 = 999.4 kHz nominal, within a multimeter's 1 MHz range
-//! - P2.2/ACLK (J1 pin 5): REFO, 32.768 kHz nominal
-//! - GND: J2 pin 20 or J3 pin 22
-//!
-//! (Header pins: SLAU802 Figure 10, p. 13. Clock output pins: SLASEO7C Table 9-23, p. 65 and
-//! SLASEO7C Table 9-24, p. 66.)
-//!
-//! REFO is only accurate to ±3.5 % (SLASEO7C 8.12.3.4, p. 30), and MCLK inherits that. The FLL
-//! locks MCLK to an exact multiple of REFO though, fDCOCLKDIV = (FLLN + 1) × (fFLLREFCLK ÷ n) with
-//! n = 1 by default (SLAU445I 3.2.5, p. 104), so MCLK / ACLK is exactly the FLL multiplier:
-//!
-//! | `DCO_FREQ` | multiplier | nominal MCLK |
-//! |------------|------------|--------------|
-//! | `_1MHz`    | 32         | 1.048576 MHz |
-//! | `_2MHz`    | 61         | 1.998848 MHz |
-//! | `_4MHz`    | 122        | 3.997696 MHz |
-//! | `_8MHz`    | 244        | 7.995392 MHz |
+//! | `DCO_FREQ` | multiplier | nominal MCLK  |
+//! |------------|------------|---------------|
+//! | `_1MHz`    | 32         | 1.048576 MHz  |
+//! | `_2MHz`    | 61         | 1.998848 MHz  |
+//! | `_4MHz`    | 122        | 3.997696 MHz  |
+//! | `_8MHz`    | 244        | 7.995392 MHz  |
 //! | `_12MHz`   | 366        | 11.993088 MHz |
 //! | `_16MHz`   | 488        | 15.990784 MHz |
+//!
+//! Measured on an MSP430FR2476, the FLL can settle MCLK slightly above that: up to about 1 % at 1 MHz,
+//! and at most 0.12 % from 8 MHz up.
+//! (MCLK on P1.3, SMCLK on P1.7 and ACLK on P2.2: SLASEO7C Table 9-23, p. 65; SLASEO7C Table 9-24,
+//! p. 66. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test (the scope, and optionally the multimeter):
+//! 1. Flash this example: LED1 lights.
+//! 2. With the probe's ground clip on GND (J2 pin 20 or J3 pin 22), measure with Analysis > Counter.
+//!    For `_8MHz`:
+//!    - P1.3 (J1 pin 9), MCLK: 244 × REFO, 7.995 MHz nominal
+//!    - P1.7 (J3 pin 23), SMCLK: MCLK / 8, 999.4 kHz nominal, at the top of the multimeter's frequency
+//!      range
+//!    - P2.2 (J1 pin 5), ACLK: REFO, 32.768 kHz nominal
+//! 3. Expected: MCLK / ACLK = 244, even when both are a few percent off nominal.
+//! 4. Change `DCO_FREQ`, flash again, and compare with the table.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

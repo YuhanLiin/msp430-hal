@@ -1,24 +1,26 @@
-//! XT1 bypass mode smoke test: an external square wave on XIN drives ACLK.
+//! XT1 in bypass mode: a square wave from the function generator on XIN becomes XT1CLK, and ACLK runs from
+//! it. LED1 turns on once the clocks are set up, and ACLK on P2.2 follows the generator's frequency.
 //!
-//! Wiring (LP-MSP430FR2476, no soldering needed: XIN is routed to the header by default):
-//! - Function generator output -> P2.1/XIN (J2 pin 18), generator ground -> GND (J2 pin 20)
-//! - Generator: square wave, 32.768 kHz, 50 % duty, low 0 V / high 3.3 V (3.3 Vpp, +1.65 V
-//!   offset), output load set to High-Z. Check the levels on the scope *before* connecting:
-//!   a negative or >3.6 V signal can damage the pin.
+//! In bypass mode XT1's oscillator is off, and XIN takes a logic-level clock signal, so no crystal is needed.
+//! The LaunchPad's crystal isn't connected anyway: XIN goes to the header instead. MCLK (about 8 MHz, from
+//! the DCO) and SMCLK (MCLK / 8) don't depend on XT1; they come out on P1.3 and P1.7.
+//! (Bypass mode: SLAU445I 3.2.4, p. 103. The input is a square wave with a 40 % to 60 % duty cycle:
+//! SLASEO7C 8.12.3.1, p. 27. XIN reaches J2 pin 18 through R1, while R2 and R3, which would connect the
+//! crystal Y1, are not fitted: SLAU802 Figure 18, p. 24. Any pin may see –0.3 V to VCC + 0.3 V at most:
+//! SLASEO7C 8.1, p. 20, and the LaunchPad's VCC is 3.3 V: SLAU802 2.3.1, p. 10. LED1 on P1.0 is green:
+//! SLAU802 Figure 19, p. 25.)
 //!
-//! (XIN reaches J2 pin 18 through R1, while R2 and R3, which would connect the crystal Y1, are not
-//! fitted: SLAU802 Figure 18, p. 24. Header pins: SLAU802 Figure 10, p. 13. The bypass input is a
-//! logic-level square wave with a 40 % to 60 % duty cycle: SLASEO7C 8.12.3.1, p. 27. Any pin may see
-//! –0.3 V to VCC + 0.3 V at most: SLASEO7C 8.1, p. 20, and the LaunchPad's VCC is 3.3 V:
-//! SLAU802 2.3.1, p. 10.)
-//!
-//! Scope:
-//! - P2.2/ACLK (J1 pin 5): follows the generator exactly
-//! - P1.3/MCLK (J1 pin 9): 8 MHz from the DCO, independent of the generator
-//! - P1.7/SMCLK (J3 pin 23): MCLK / 8 = 1 MHz
-//!
-//! LED1 turns on once `freeze()` has returned (LED1 on P1.0 is green: SLAU802 Figure 19, p. 25).
-//! Change the generator frequency (e.g. 20 kHz): ACLK should follow while MCLK and SMCLK stay put.
+//! How to test (function generator and the scope):
+//! 1. Generator: square wave, 32.768 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on.
+//! 3. Flash this example. Expected: LED1 turns on.
+//! 4. Scope on ACLK, P2.2 (J1 pin 5), ground clip on GND (J3 pin 22): its counter shows the generator's
+//!    32.768 kHz. With a 10X probe, MCLK on P1.3 (J1 pin 9) shows about 8 MHz, and SMCLK on P1.7 (J3 pin 23)
+//!    about 1 MHz.
+//! 5. Set the generator to 20 kHz: ACLK follows, while MCLK and SMCLK stay the same.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

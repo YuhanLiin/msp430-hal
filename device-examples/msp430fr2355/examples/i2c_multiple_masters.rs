@@ -1,17 +1,23 @@
+//! Two I2C masters on one bus: ten times a second eUSCI_B0, a multi-master, writes a byte to eUSCI_B1
+//! and reads it back. eUSCI_B1, a master that is also a slave, answers in its interrupt, and then, as
+//! master, checks whether a device answers at address 0x09. LED1 lights when the byte came back, and
+//! LED2 when no device answered at 0x09.
+//!
+//! When another master addresses it, eUSCI_B1 stops being a master and works as a slave; after the STOP
+//! its interrupt makes it a master again. Its own address is 26 (0x1A). Both run at 100 kHz from SMCLK,
+//! and eUSCI_B1 has the internal pull-ups on its pins.
+//! (A master addressed as a slave "becomes a slave": SLAU445I Table 24-2, p. 646. The I2C pins of
+//! eUSCI_B0 and eUSCI_B1: SLASEC4D Table 6-14, p. 72. LED1 on P1.0 is red and LED2 on P6.6 green:
+//! SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (two jumper wires):
+//! 1. Connect SDA, P1.2 (J1 pin 10), to P4.6 (J2 pin 15), and SCL, P1.3 (J1 pin 9), to P4.7 (J2 pin 14).
+//!    (Header pins: SLAU680 Figure 10, p. 15.)
+//! 2. Flash this example.
+//! 3. Expected: LED1 and LED2 light and stay on.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
-
-// Demonstrates a blocking multi-master implementation, and a blocking and interrupt-based master-slave.
-// The master sends a byte to the master-slave, then switches to read mode. The master-slave echoes the sent value back to the master.
-// The master-slave then probes the bus looking for a device with address 0x09.
-
-// eUSCI B1 is configured as a master-slave. eUSCI B0 is configured as a master.
-// Connect:
-// P1.2 <--> P4.6
-// P1.3 <--> P4.7
-// (UCB0SDA to UCB1SDA and UCB0SCL to UCB1SCL: SLASEC4D Table 6-14, p. 72. On the BoosterPack header
-// that is pin 10 to pin 15 and pin 9 to pin 14: SLAU680 Figure 10, p. 15.)
 
 // We use UnsafeCell here over RefCell to minimise binary size. Binary size suffers when panics are possible, as they pull in lots of
 // strings and formatting. Debug builds from old compiler versions suffer in particular.
@@ -29,8 +35,6 @@ use msp430_hal::{
 use panic_msp430 as _;
 
 static I2C_MULTI_MASTER: Mutex<UnsafeCell<Option< I2cMasterSlave<EUsciB1> >>> = Mutex::new(UnsafeCell::new(None));
-// Sets the LED on P1.0 if communication is successful, sets the LED on P6.6 if there is no device with address 0x09 on the bus.
-// (LED1, red, on P1.0 and LED2, green, on P6.6: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();

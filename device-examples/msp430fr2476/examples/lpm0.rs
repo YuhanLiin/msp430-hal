@@ -1,3 +1,15 @@
+//! LPM0 and a button interrupt: the CPU sleeps in LPM0, and each press of S2 wakes it to toggle LED1.
+//!
+//! S2 pulls P2.3 low, and the falling edge requests the port 2 interrupt. Its handler is declared with
+//! `wake_cpu`, so the CPU stays awake when it returns: the main loop toggles LED1, waits a moment to debounce
+//! the button, and enters LPM0 again.
+//! (LPM0 turns off the CPU and MCLK: SLAU445I Table 1-2, p. 39. The SR is saved on the stack during an
+//! interrupt, and a handler that changes it there returns to a different operating mode: SLAU445I 1.4.2,
+//! p. 40. LED1 on P1.0 is green, and S2 is on P2.3: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 is off, and each press of S2 toggles it. Between presses it holds still: the CPU sleeps.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
@@ -20,8 +32,6 @@ use panic_msp430 as _;
 
 static P2IV: Mutex<RefCell<Option< PxIV<P2> >>> = Mutex::new(RefCell::new(None));
 
-// P1.0 should toggle when P2.3 is pressed
-// (P1.0 drives LED1, which is green; P2.3 is button S2: SLAU802 Figure 19, p. 25)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

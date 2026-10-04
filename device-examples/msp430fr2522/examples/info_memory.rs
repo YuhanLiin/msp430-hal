@@ -1,3 +1,19 @@
+//! The information memory is FRAM, which keeps its contents without power. Each start toggles a byte in
+//! it between 0 and 1, and an LED on P1.0 shows the byte, so every reset or power-up switches the LED
+//! from on to off, or from off to on.
+//!
+//! The byte is the first one of the information memory, and the LED is on when it is 0.
+//! `InfoMemory::write` lifts the write protection, DFWP, only for the write.
+//! (Information memory: 256 bytes of FRAM, 1800h to 18FFh: SLASEE4C Table 6-19, p. 62. FRAM is
+//! nonvolatile: SLAU445I 6.1, p. 301. DFWP: SLAU445I 1.9.3, p. 45. A low level on RST/NMI resets the
+//! device: SLAU445I 1.2, p. 30. No board document covers the LED: there is none for the MSP430FR25x2.
+//! P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1: SLASEE4C Table 6-15, p. 58.)
+//!
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example. The LED is on or off, depending on what the byte held before.
+//! 3. Reset the device, with RST/NMI low for a moment: the LED toggles.
+//! 4. Switch the power off and on again: the LED toggles again, so the byte kept its value without power.
 #![no_main]
 #![no_std]
 
@@ -6,12 +22,6 @@ use msp430::asm;
 use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
-
-// Use the non-volatile information memory to toggle the red onboard LED.
-// Resetting or power cycling the board toggles the red LED.
-// Information memory: 256 bytes of FRAM at 1800h to 18FFh (SLASEE4C Table 6-19, p. 62). No board document
-// covers the LED (on P1.0 here): there is none for the MSP430FR25x2. P1.0 is a GPIO output, P1SELx = 00
-// and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
 
 #[entry]
 fn main() -> ! {

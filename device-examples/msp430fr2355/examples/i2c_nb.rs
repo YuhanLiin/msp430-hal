@@ -1,18 +1,22 @@
+//! A non-blocking I2C master and a polled I2C slave on the same chip: ten times a second the master
+//! writes the byte 10 to the slave and reads one byte back, and the slave answers with the byte it got.
+//! LED2 lights while the answer is right, and LED1 toggles after each exchange.
+//!
+//! eUSCI_B0 is the master, at 100 kHz from SMCLK, with the internal pull-ups on its pins; eUSCI_B1 is
+//! the slave, at address 0x1A. The non-blocking master interface is lower-level than the blocking
+//! embedded-hal `I2c` trait and needs more care: the code sends each start, schedules the stop and moves
+//! each byte itself.
+//! (The I2C pins of eUSCI_B0 and eUSCI_B1: SLASEC4D Table 6-14, p. 72. LED1 on P1.0 is red and LED2 on
+//! P6.6 green: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (two jumper wires):
+//! 1. Connect SDA, P1.2 (J1 pin 10), to P4.6 (J2 pin 15), and SCL, P1.3 (J1 pin 9), to P4.7 (J2 pin 14).
+//!    (Header pins: SLAU680 Figure 10, p. 15.)
+//! 2. Flash this example.
+//! 3. Expected: LED1 toggles every 100 ms, and LED2 lights. Without the wires nothing acknowledges the
+//!    master, the slave waits forever, and the LEDs don't change.
 #![no_main]
 #![no_std]
-
-// Demonstrates a non-blocking master implementation, and a polling-based slave.
-// The master sends a byte to the slave, then switches to read mode. The slave receives the value and echoes it back to the master.
-
-// The non-blocking master interface is lower-level than the blocking version (the embedded-hal `I2c` trait)
-// and requires more careful usage.
-
-// eUSCI B1 is configured as the slave. eUSCI B0 is configured as the master.
-// Connect:
-// P1.2 <--> P4.6
-// P1.3 <--> P4.7
-// (UCB0SDA to UCB1SDA and UCB0SCL to UCB1SCL: SLASEC4D Table 6-14, p. 72. On the BoosterPack header
-// that is pin 10 to pin 15 and pin 9 to pin 14: SLAU680 Figure 10, p. 15.)
 
 use embedded_hal::{digital::{OutputPin, StatefulOutputPin}, delay::DelayNs};
 use msp430_rt::entry;
@@ -22,8 +26,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// Blink the red LED on P1.0 every time an I2C transaction occurs. Green LED on P6.6 is on if Tx/Rx echo is successful.
-// (LED1, red, on P1.0 and LED2, green, on P6.6: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();

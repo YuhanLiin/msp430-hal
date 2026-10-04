@@ -1,40 +1,38 @@
-//! Tests `ClockConfig::mclk_dcoclk_hz` and the delays of the `SysDelay` it returns. The board
-//! checks itself and reports the results, and an oscilloscope checks them independently.
+//! Tests `ClockConfig::mclk_dcoclk_hz` and the delays of the `SysDelay` it returns. The board checks
+//! itself and reports the results on the backchannel UART, and the scope checks them independently.
 //!
 //! Set `TARGET_HZ` to the MCLK frequency to test, from 1 MHz to 16 MHz. The FLL locks MCLK to the
-//! largest multiple of its 32.768 kHz reference that doesn't exceed it: 5 MHz becomes 152 x
+//! largest multiple of its 32.768 kHz reference that doesn't exceed it: 5 MHz becomes 152 ×
 //! 32.768 kHz = 4.980736 MHz. (MCLK runs from DCOCLKDIV, fDCOCLKDIV = (FLLN + 1) × (fFLLREFCLK ÷ n)
 //! with n = 1 by default: SLAU445I 3.2.5, p. 104. MCLK may be 16 MHz at most: SLASEO7C 8.3, p. 20.)
 //!
-//! ## Self-test
+//! The board measures MCLK against ACLK, which runs from the FLL reference, and times each delay in
+//! MCLK cycles. Green LED2 lights if every check passes, LED1 (also green) if one fails (SLAU802
+//! Figure 19, p. 25).
 //!
-//! The board measures MCLK against ACLK, which runs from the FLL reference, and times each delay
-//! in MCLK cycles. Green LED2 lights if every check passes, LED1 (also green) if one fails
-//! (SLAU802 Figure 19, p. 25). The details go to the backchannel UART at 9600 baud, 8N1. That is
-//! eUSCI_A0, TXD on P1.4 (SLAU802 2.2.4, p. 9; SLAU802 Figure 16, p. 22):
-//! 1. Leave the RXD and TXD jumpers of J101 on (SLAU802 Table 2, p. 8).
-//! 2. Find the COM port of "MSP Application UART1" in the Windows Device Manager, and open it at
-//!    9600 baud in a serial terminal such as PuTTY (connection type Serial) (SLAU802 2.2.4, p. 10).
-//! 3. Press the reset button S3 to run the test again while the terminal is open
-//!    (SLAU802 Figure 19, p. 25).
+//! With `FLL_REF_FROM_XT1` set to `true`, as it is, the FLL locks to a 32.768 kHz signal from the
+//! function generator on XIN instead of REFO. MCLK and the delays then have the generator's accuracy,
+//! so the scope readings match the report within 0.01 %. Set it to `false` to test with REFO, without
+//! the generator. (XIN reaches J2 pin 18 through R1; R2 and R3, which would connect the crystal Y1,
+//! are not fitted: SLAU802 Figure 18, p. 24.)
 //!
-//! ## Oscilloscope
-//!
-//! Use a 10X probe, with its ground clip on the top pin of J5, a GND pin (SLAU802 Figure 1, p. 1;
-//! SLAU802 Figure 18, p. 24). Header pins: SLAU802 Figure 10, p. 13.
-//! 1. P1.3/MCLK (J1 pin 9): open the counter (Analysis > Counter). It shows the MCLK the report
-//!    prints, within the ±3.5 % REFO is specified to (SLASEO7C 8.12.3.4, p. 30).
-//! 2. P1.6 (J1 pin 2): a square wave, high and low for `PULSE_US` each. Measure its +Width: it's
-//!    `PULSE_US` plus a few loop instructions, within REFO's ±3.5 % too.
-//!
-//! ## With a function generator
-//!
-//! Set `FLL_REF_FROM_XT1` to `true` to lock the FLL to a 32.768 kHz signal on XIN instead of REFO.
-//! MCLK and the delays then have the generator's accuracy, so the scope readings match the report
-//! within 0.01 %. Set the generator up as for the XT1 tests: square wave, load HiZ, 0 V to 3.3 V,
-//! 32.768 kHz, checked on the scope before connecting it. Connect it to P2.1/XIN (J2 pin 18), its
-//! ground to J2 pin 20, and switch it on before resetting the board. (XIN reaches J2 pin 18 through
-//! R1; R2 and R3, which would connect the crystal Y1, are not fitted: SLAU802 Figure 18, p. 24.)
+//! How to test (function generator and the scope):
+//! 1. Generator, as for the XT1 tests: square wave, 32.768 kHz, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset),
+//!    output load High-Z. Check the levels on the scope before connecting: a negative or >3.6 V signal
+//!    can damage the pin. Connect it to P2.1/XIN (J2 pin 18), its ground to J2 pin 20, and switch it
+//!    on. (With `FLL_REF_FROM_XT1` set to `false`, skip this step.)
+//! 2. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
+//!    UART1" at 9600 baud (SLAU802 2.2.4, p. 9).
+//! 3. Press the reset button S3 to run the test again while the terminal is open. Expected: every
+//!    check ends in `: PASS`, then comes `ALL PASS`, and LED2 lights green. Without the generator's
+//!    signal the report says `XT1 didn't start, is the generator on? FAIL`.
+//! 4. Scope, with a 10X probe and its ground clip on the top pin of J5, a GND pin (SLAU802 Figure 1,
+//!    p. 1; SLAU802 Figure 18, p. 24):
+//!    - P1.3/MCLK (J1 pin 9): Analysis > Counter shows the MCLK the report prints, within the ±3.5 %
+//!      REFO is specified to (SLASEO7C 8.12.3.4, p. 30), or within 0.01 % with the generator.
+//!    - P1.6 (J1 pin 2): a square wave, high and low for `PULSE_US` each. Measure its +Width: it's
+//!      `PULSE_US` plus a few loop instructions, with the same accuracy.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

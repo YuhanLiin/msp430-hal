@@ -1,3 +1,18 @@
+//! LPM3.5 and an RTC wake-up: the board sleeps in LPM3.5, and the RTC wakes it about once a second. Each
+//! wake-up toggles LED1, whose state is kept in the backup memory.
+//!
+//! The RTC counts VLOCLK, which keeps running in LPM3.5. A wake-up from LPMx.5 is a reset, so the program
+//! starts again from the top: if SYSRSTIV says it woke from LPMx.5, it toggles LED1 and goes back to sleep,
+//! and otherwise it sets up the RTC first. The VLO's frequency isn't exact, so neither is the second.
+//! (The RTC can wake the device from LPM3.5, and "Any exit from LPMx.5 causes a BOR": SLAU445I 1.4.3.2, p. 41
+//! to p. 42. In LPM3.5 the RTC can only count XT1CLK or VLOCLK: SLAU445I 15.2.2, p. 417. The VLO runs at
+//! 10 kHz ±50 %: SLASEC4D Table 6-9, p. 68. The backup memory keeps its 32 bytes during LPM3.5:
+//! SLASEC4D 6.10.10, p. 76. LED1 on P1.0 is red: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test:
+//! 1. Flash this example. After flashing with mspdebug, unplug the board's USB cable, wait a second, and plug
+//!    it back in: the example only works after that. (Uniflash and Code Composer Studio need no replug.)
+//! 2. Expected: LED1 toggles about once a second: on for about a second, off for about a second.
 #![no_main]
 #![no_std]
 
@@ -15,11 +30,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// The RTC will wake the board every second. LED state is stored in and loaded from the backup memory.
-// (The backup memory keeps its 32 bytes during LPM3.5: SLASEC4D 6.10.10, p. 76. LED1, red, is on P1.0:
-// SLAU680 Figure 18, p. 26.)
-// When programming with mspdebug you need to unplug and replug the board for the example to work, for some reason.
-// Programming via Uniflash or Code Composer Studio works fine.
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -79,8 +89,9 @@ fn main() -> ! {
         rtc.set_clk_div(RtcDiv::_1);
         rtc.start(VLOCLK_FREQ_HZ); // Count up to VLOCLK freq -> 1 Hz period
         rtc.enable_interrupts();
-        // Global interrupts are enabled by `enter_lpm3_5()`
-        // ("TI also recommends setting GIE = 1 before entry into LPMx.5": SLAU445I 8.3.3, p. 318)
+        // Interrupts were never enabled, so `enter_lpm3_5()` enters LPM3.5 with GIE clear, as
+        // SLAU445I 1.4.3.1 step 8, p. 41 does. The RTC event still wakes the device (SLAU445I 1.4.3.2,
+        // p. 41).
         // Leaving LPMx.5 requires a full system reset, so this function will never return.
         // ("Any exit from LPMx.5 causes a BOR": SLAU445I 1.4.3.2, p. 42)
         enter_lpm3_5(wdt, rtc, SvsState::Disabled);
@@ -97,10 +108,10 @@ fn init_unused_gpio(p2: P2, p3: P3, p4: P4, p5: P5, p6: P6, pmm: &Pmm) {
 }
 
 // Note: In this case we don't need an ISR when waking from LPMx.5, since power on disables interrupts
-// and we clear the RTC interrupt flag before re-enabling interrupts.
-// (The exit from LPMx.5 is a BOR, SLAU445I 1.4.3.2, p. 42, and after a BOR the "Status register (SR) is
-// reset", which clears GIE: SLAU445I 1.2.1, p. 32.)
+// and this program never enables them; the RTC interrupt flag is cleared before LPM3.5 is entered again.
 // You *can* service the interrupt that causes the wakeup, but this isn't done here.
+// (A BOR resets the SR, GIE included: SLAU445I 1.2.1, p. 32. The wake-up interrupt is serviced once
+// interrupts are enabled: SLAU445I 1.4.3.3 step 7, p. 42.)
 
 // The compiler will emit calls to the abort() compiler intrinsic if debug assertions are
 // enabled (default for dev profile). MSP430 does not actually have meaningful abort() support

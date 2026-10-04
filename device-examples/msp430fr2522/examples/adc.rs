@@ -1,3 +1,24 @@
+//! A polled ADC reading: an LED on P1.0 is on while the voltage on P1.1 is between 1.0 V and 2.0 V, and off
+//! otherwise.
+//!
+//! The ADC converts P1.1, input A1, again and again, with 8-bit results against AVCC, the supply, and
+//! `read_voltage_mv()` turns each result into millivolts, taking the supply to be 3.3 V.
+//! (A1 is P1.1, enabled by ADCPCTL1: SLASEE4C Table 6-13, p. 55; SLASEE4C Table 6-15, p. 58. AVCC is the
+//! reference after reset: SLAU445I Table 21-8, p. 567. P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1:
+//! SLASEE4C Table 6-15, p. 58. No board document covers the LED: there is none for the MSP430FR25x2.)
+//!
+//! How to test (an LED and a resistor, and the function generator or a jumper wire):
+//! 1. Power the MSP430FR2522 from 3.3 V, as the code assumes, and connect an LED with a series resistor
+//!    (about 1 kΩ) from P1.0 to GND.
+//! 2. Generator: the DC waveform, Offset 1.500 V, output load High-Z. Check the voltage with the multimeter
+//!    first: 0 V to 3.3 V only (the analog input range: SLASEE4C Table 5-20, p. 38). Connect it to P1.1,
+//!    its ground to GND.
+//! 3. Flash this example: the LED is on.
+//! 4. Set the offset to 0.5 V, and then to 2.5 V: the LED is off at both. It's on from about 1.0 V to
+//!    2.0 V.
+//!
+//! Without the generator, a jumper wire from P1.1 to GND or to 3.3 V turns the LED off, and a potentiometer
+//! of about 10 kΩ between 3.3 V and GND, its wiper on P1.1, turns it on in the middle of its range.
 #![no_main]
 #![no_std]
 
@@ -12,10 +33,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// If pin 1.1 is between 1V and 2V, the LED on pin 1.0 should light up.
-// No board document covers this LED: there is none for the MSP430FR25x2. P1.1 is ADC input A1
-// (SLASEE4C Table 6-13, p. 55); P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1
-// (SLASEE4C Table 6-15, p. 58).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog. The watchdog runs from every PUC and must be halted, here

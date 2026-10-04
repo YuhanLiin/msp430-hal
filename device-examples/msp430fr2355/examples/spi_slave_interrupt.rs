@@ -1,21 +1,24 @@
+//! An SPI slave that answers in its receive interrupt, with a master on the same chip: once a second
+//! eUSCI_B1, the master, sends 12, 14 and 255, and eUSCI_A0, the slave, answers each byte with that byte
+//! plus one, during the next byte. LED2 lights while the answers are right, and LED1 toggles after each
+//! transfer.
+//!
+//! The master clocks four bytes (the fourth is 0) and reads four back; the last three must be 13, 15 and
+//! 0. P4.4, a GPIO, drives the slave's STE, which is low during the transfer: only then does the slave
+//! drive MISO. Both use SPI mode 0, MSB first, and the master runs at 10 kHz from SMCLK.
+//! (The SPI pins: SLASEC4D Table 6-14, p. 72. STE in 4-pin slave mode: SLAU445I 23.3.4.1, p. 609. LED1
+//! on P1.0 is red and LED2 on P6.6 green: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (four jumper wires):
+//! 1. Connect MOSI, P1.7 (J1 pin 4), to P4.6 (J2 pin 15); MISO, P1.6 (J1 pin 3), to P4.7 (J2 pin 14);
+//!    SCLK, P1.5 (J1 pin 2), to P4.5 (J1 pin 7); and STE, P1.4 (J3 pin 23), to P4.4 (J2 pin 13).
+//!    (Header pins: SLAU680 Figure 10, p. 15.)
+//! 2. Flash this example.
+//! 3. Expected: LED1 toggles every second, and LED2 lights and stays on. Without the wires LED2 stays
+//!    off.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
-
-// This example demonstrates an SPI slave using interrupts.
-// Another eUSCI peripheral is configured as an SPI master to drive the bus.
-// P6.6 (green LED) should turn on and stay on
-// P1.0 (red LED) should blink with each sent SPI transaction
-// (LED2, green, on P6.6 and LED1, red, on P1.0: SLAU680 Figure 18, p. 26)
-
-// Connect:
-// P1.7 <--> P4.6,
-// P1.6 <--> P4.7,
-// P1.5 <--> P4.5,
-// P1.4 <--> P4.4
-// (UCA0SIMO, UCA0SOMI, UCA0CLK and UCA0STE to UCB1SIMO, UCB1SOMI, UCB1CLK and P4.4, which drives STE as a
-// GPIO: SLASEC4D Table 6-14, p. 72. On the BoosterPack header that is pin 4 to pin 15, pin 3 to pin 14,
-// pin 2 to pin 7 and pin 23 to pin 13: SLAU680 Figure 10, p. 15.)
 
 use core::cell::RefCell;
 

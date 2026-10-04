@@ -1,9 +1,20 @@
+//! LPM4.5 and a button wake-up: the board sleeps in LPM4.5 until S2 is pressed, and then LED1 flashes.
+//!
+//! LPM4.5 stops every clock, so only an edge on a wake-up pin, the RST pin or a power cycle ends it. The
+//! wake-up is a reset: the program starts again from the top, sees in SYSRSTIV that it woke from LPMx.5, and
+//! flashes LED1 instead of going back to sleep.
+//! (What ends LPMx.5, and "Any exit from LPMx.5 causes a BOR": SLAU445I 1.4.3.2, p. 41 to p. 42. P1 to P4
+//! have "LPM3.5, LPM4 and LPM4.5 wake-up input capability": SLASEC4D 6.10.3, p. 69. S2 is on P2.3, and LED1
+//! on P1.0 is red: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test:
+//! 1. Flash this example. After flashing with mspdebug, unplug the board's USB cable, wait a second, and plug
+//!    it back in: the example only works after that.
+//! 2. Expected: LED1 stays off while the board sleeps.
+//! 3. Press S2: LED1 flashes, and keeps flashing.
+//! 4. Press S3 (reset): LED1 goes off, and the board sleeps until the next press of S2.
 #![no_main]
 #![no_std]
-
-// This examples enters LPM4.5, then when a button on P2.3 is pressed the system wakes and flashes the red LED.
-// (Button S2 on P2.3 and LED1, red, on P1.0: SLAU680 Figure 18, p. 26. P1 to P4 have "LPM3.5, LPM4 and
-// LPM4.5 wake-up input capability": SLASEC4D 6.10.3, p. 69.)
 
 use embedded_hal::digital::*;
 use msp430::asm::nop;
@@ -60,8 +71,8 @@ fn main() -> ! {
         let mut button = port2.pin3;
         button.select_falling_edge_trigger().enable_interrupts();
 
-        // And enter LPM4.5. Global interrupts are enabled before LPM4.5 is entered.
-        // ("TI also recommends setting GIE = 1 before entry into LPMx.5": SLAU445I 8.3.3, p. 318)
+        // And enter LPM4.5. Interrupts were never enabled, so GIE stays clear, as in
+        // SLAU445I 1.4.3.1 step 8, p. 41; the P2.3 edge wakes the device anyway (SLAU445I 1.4.3.2, p. 41).
         enter_lpm4_5(wdt, periph.rtc, SvsState::Disabled);
     }
 }
@@ -75,9 +86,9 @@ fn init_unused_gpio(p3: P3, p4: P4, p5: P5, p6: P6, pmm: &Pmm) {
 }
 
 // Note: In this case we don't need an ISR when waking from LPMx.5, since power on disables interrupts.
-// (The exit from LPMx.5 is a BOR, SLAU445I 1.4.3.2, p. 42, and after a BOR the "Status register (SR) is
-// reset", which clears GIE: SLAU445I 1.2.1, p. 32.)
 // You *can* service the interrupt that causes the wakeup, but this isn't done here.
+// (Any exit from LPMx.5 is a BOR: SLAU445I 1.4.3.2, p. 42, and a BOR resets the SR, GIE included:
+// SLAU445I 1.2.1, p. 32.)
 
 // The compiler will emit calls to the abort() compiler intrinsic if debug assertions are
 // enabled (default for dev profile). MSP430 does not actually have meaningful abort() support

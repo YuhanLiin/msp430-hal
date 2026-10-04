@@ -12,8 +12,9 @@
 //!
 //! How to test (scope):
 //! 1. Probe P4.3 (J3 pin 24), ground clip on GND (J3 pin 22). Trigger on the rising edge, 500 µs/div.
-//! 2. With `USE_PERIOD_INTERRUPT = true`: the high pulses alternate between 250 µs and 750 µs. Turn on
-//!    the scope's persistence (Display > Persist): only these two pulse widths ever appear.
+//! 2. Flash this example, with `USE_PERIOD_INTERRUPT = true`: the high pulses alternate between 250 µs
+//!    and 750 µs. Turn on the scope's persistence (Display > Persist): only these two pulse widths ever
+//!    appear.
 //! 3. Set `USE_PERIOD_INTERRUPT = false` and flash again: the duty cycle now changes every 1.3 ms, at
 //!    random points of a period. The pulses are still only 250 µs or 750 µs wide, but no longer strictly
 //!    alternate: sometimes the same width comes twice. (Measured on an MSP430FR2476, with changes at

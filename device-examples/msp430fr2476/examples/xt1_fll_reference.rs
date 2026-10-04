@@ -1,29 +1,29 @@
-//! XT1 as the FLL reference: the DCO is locked to the external signal on XIN instead of REFO.
-//! (The FLL reference can be XT1CLK or REFOCLK, selected by SELREF: SLAU445I 3.2.5, p. 104)
+//! XT1 as the FLL reference: the FLL locks the DCO to the generator's signal on XIN instead of REFO, so MCLK
+//! on P1.3 runs at 244 times the generator's frequency and follows it.
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 32.768 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
+//! LED1 shows an XT1 fault, which makes the FLL fall back to REFO, and the blue part of LED2 shows that the
+//! FLL is unlocked: the DCO can't follow the reference any more. ACLK on P2.2 runs from REFO, as a fixed
+//! reference. The HAL sets no FRAM wait states for this 7.995 MHz MCLK, so the generator must not go above
+//! 32.768 kHz: MCLK would pass the 8 MHz that FRAM allows without them.
+//! (SELREF picks XT1CLK or REFOCLK as the FLL reference, and fDCOCLKDIV = (FLLN + 1) × (fFLLREFCLK ÷ n):
+//! SLAU445I 3.2.5, p. 104. FLLUNLOCK: SLAU445I 3.2.9, p. 105. An XT1 fault switches the FLL reference to
+//! REFO: SLAU445I 3.2.13, p. 109. MCLK up to 8 MHz without FRAM wait states: SLASEO7C 8.3, p. 20. LED1 on
+//! P1.0 is green, the blue part of LED2 is P4.7: SLAU802 Figure 19, p. 25.)
 //!
-//! Scope:
-//! - P1.3/MCLK (J1 pin 9): 244 x 32.768 kHz = 7.995 MHz
-//! - P1.7/SMCLK (J3 pin 23): MCLK / 8 = 999.4 kHz, easier to measure precisely
-//! - P2.2/ACLK (J1 pin 5): REFO at 32.768 kHz, as a fixed reference
-//!
+//! How to test (function generator and the scope):
+//! 1. Generator: square wave, 32.768 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on.
+//! 3. Flash this example, and put the scope (10X probe) on MCLK, P1.3 (J1 pin 9), ground clip on GND
+//!    (J3 pin 22). Expected: 244 × 32.768 kHz = 7.995 MHz, and LED1 and LED2 are off. SMCLK on P1.7
+//!    (J3 pin 23) is MCLK / 8, 999.4 kHz, which is easier to measure precisely.
+//! 4. Lower the generator's frequency: MCLK follows, 7.32 MHz at 30 kHz and 6.59 MHz at 27 kHz. Only go down,
+//!    never above 32.768 kHz.
+//! 5. Keep lowering it until LED2 lights blue: the DCO can't go any lower, and the FLL is unlocked.
+//! 6. Set the generator back to 32.768 kHz, and switch its output off: LED1 turns on, and MCLK runs at about
+//!    8 MHz from REFO. Switch the output back on: LED1 turns off, and MCLK is 7.995 MHz again.
 //! (Header pins: SLAU802 Figure 10, p. 13.)
-//!
-//! What to try:
-//! 1. Detune the generator, e.g. to 30 kHz: MCLK should follow proportionally
-//!    (244 x 30 kHz = 7.32 MHz, SMCLK 915 kHz). If the FLL were still referenced to REFO,
-//!    MCLK would not move at all. (fDCOCLKDIV = (FLLN + 1) × (fFLLREFCLK ÷ n): SLAU445I 3.2.5,
-//!    p. 104)
-//! 2. Keep detuning until the FLL can no longer follow: the blue LED2 shows the FLL is unlocked
-//!    (FLLUNLOCK: SLAU445I 3.2.9, p. 105).
-//! 3. Switch the generator off: the FLL reference falls back to REFO, MCLK returns to 7.995 MHz
-//!    and LED1 reports the XT1 fault (SLAU445I 3.2.13, p. 109).
-//! 4. Switch the generator back on: the fault clears and MCLK tracks the generator again
-//!    (SLAU445I 3.2.13, p. 110).
-//!
-//! (LED1 on P1.0 is green, the blue part of LED2 is P4.7: SLAU802 Figure 19, p. 25.)
 #![no_main]
 #![no_std]
 

@@ -1,27 +1,28 @@
-//! The XT1 fault interrupt: an XT1 failure arrives as an interrupt, instead of being polled with
-//! `Xt1clk::is_faulted` as in `xt1_fault_failsafe.rs`. That also works while the program is busy
-//! or asleep.
+//! The XT1 fault as an interrupt: when the signal on XIN stops, the oscillator fault requests the user NMI,
+//! and the red part of LED2 turns on. LED1 blinks meanwhile, to show that the main loop runs.
 //!
-//! The interrupt is the user NMI, which is non-maskable: it can't share data with the rest of the
-//! program through a critical section, so this example uses an atomic flag from `msp430-atomic`.
-//! (An oscillator fault is a user NMI source, and NMIs are not masked by GIE: SLAU445I 1.3.1,
-//! p. 33; SYSUNIV 04h, OFIFG: SLASEO7C Table 9-10, p. 53.)
+//! `xt1_fault_failsafe.rs` polls `Xt1clk::is_faulted`; the interrupt also arrives while the program is busy
+//! or asleep. The user NMI is non-maskable, so it can't share data with the program through a critical
+//! section: the handler sets an atomic flag from `msp430-atomic`. The handler also disables the interrupt,
+//! and the main loop enables it again once XT1 is back, ready for the next fault.
+//! (An oscillator fault is a user NMI source, and NMIs are not masked by GIE: SLAU445I 1.3.1, p. 33.
+//! SYSUNIV 04h, OFIFG: SLASEO7C Table 9-10, p. 53. The fail-safe switches ACLK to REFO: SLAU445I 3.2.13,
+//! p. 109. LED1 on P1.0 is green, the red part of LED2 is P5.1: SLAU802 Figure 19, p. 25.)
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 32.768 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
-//! Switch the generator on *before* resetting the board.
-//!
-//! What to try:
-//! 1. LED1 blinks every 0.5 s: the main loop is running. P2.2/ACLK (J1 pin 5) follows the
-//!    generator.
-//! 2. Switch the generator output off: the interrupt handler records the fault, and red LED2
-//!    turns on at the next blink. The fail-safe has switched ACLK to REFO (32.768 kHz)
-//!    (SLAU445I 3.2.13, p. 109).
-//! 3. Switch the generator back on: at the next blink, the main loop clears the fault, LED2 turns
-//!    off and the interrupt is enabled again for the next fault.
-//!
-//! (LED1 on P1.0 is green, the red part of LED2 is P5.1: SLAU802 Figure 19, p. 25. Header pins:
-//! SLAU802 Figure 10, p. 13. REFO runs at 32.768 kHz: SLASEO7C 8.12.3.4, p. 30.)
+//! How to test (function generator, and optionally the scope):
+//! 1. Generator: square wave, 32.768 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on. Do this
+//!    before flashing: `freeze()` waits for XT1.
+//! 3. Flash this example. Expected: LED1 toggles every 0.5 s, and LED2 is off. The scope on ACLK, P2.2
+//!    (J1 pin 5), ground clip on GND (J3 pin 22), counts the generator's 32.768 kHz.
+//! 4. Switch the generator output off: within half a second LED2 lights red. LED1 keeps toggling, and ACLK
+//!    runs from REFO, at about 32.8 kHz.
+//! 5. Switch the output back on: at the next toggle of LED1, LED2 turns off, and ACLK follows the generator
+//!    again.
+//! 6. Repeat steps 4 and 5: every fault lights LED2 again.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]

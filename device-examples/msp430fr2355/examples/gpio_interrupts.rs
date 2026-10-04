@@ -1,3 +1,18 @@
+//! GPIO interrupts and the watchdog's interval interrupt: LED1 toggles every 3.3 s or so, and each press
+//! of S2 toggles both LED2 and LED1.
+//!
+//! The watchdog, as an interval timer, interrupts every 2^15 ACLK cycles, about 3.3 s with ACLK from the
+//! VLO, and its interrupt toggles LED1. The main loop polls the interrupt flag of S2 (P2IFG.3, with its
+//! interrupt disabled): at each press it toggles LED2 and sets the flag of P2.7 in software, which
+//! requests the port 2 interrupt, and that toggles LED1.
+//! (WDTIS = 100b: SLAU445I Table 12-2, p. 366. The VLO runs at about 10 kHz, within ±50 %: SLASEC4D
+//! Table 6-9, p. 68. Software can set PxIFG: SLAU445I 8.2.6, p. 315. LED1 on P1.0 is red, LED2 on P6.6
+//! is green, and S2 is P2.3: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 toggles every 3.3 s or so (anything from 2.2 s to 6.6 s is right).
+//! 3. Press S2: LED2 toggles, and so does LED1.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
@@ -22,10 +37,6 @@ use panic_msp430 as _;
 static RED_LED: Mutex<RefCell<Option<Pin<P1, Pin0, Output>>>> = Mutex::new(RefCell::new(None));
 static P2IV: Mutex<RefCell<Option<PxIV<P2>>>> = Mutex::new(RefCell::new(None));
 
-// Red LED should blink about 3.3 seconds on, 3.3 seconds off: the WDT interval is 2^15 cycles of ACLK
-// (WDTIS = 100b, SLAU445I Table 12-2, p. 366), which is VLOCLK, 10 kHz typical (SLASEC4D Table 5-8, p. 40)
-// Both green and red LEDs should blink when P2.3 button (S2) is pressed
-// (LED1, red, on P1.0; LED2, green, on P6.6; S2 on P2.3: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();

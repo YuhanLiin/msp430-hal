@@ -1,3 +1,21 @@
+//! LPM0 and a button interrupt: the CPU sleeps in LPM0, and each press of a button on P2.3 wakes it to toggle
+//! an LED on P1.0.
+//!
+//! The button pulls P2.3 low against its internal pullup, and the falling edge requests the port 2 interrupt.
+//! Its handler is declared with `wake_cpu`, so the CPU stays awake when it returns: the main loop toggles the
+//! LED, waits a moment to debounce the button, and enters LPM0 again.
+//! (LPM0 turns off the CPU and MCLK: SLAU445I Table 1-2, p. 39. The SR is saved on the stack during an
+//! interrupt, and a handler that changes it there returns to a different operating mode: SLAU445I 1.4.2,
+//! p. 40. No board document covers the LED or the button: there is none for the MSP430FR25x2. P1.0 and P2.3
+//! are GPIO with PxSELx = 00: SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60. The pullup:
+//! SLAU445I Table 8-1, p. 313.)
+//!
+//! How to test (an LED, a resistor and a push button):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND, and a push button from P2.3 to
+//!    GND. P2.3 only exists on the 20-pin RHL package (SLASEE4C Table 4-2, p. 14).
+//! 2. Flash this example.
+//! 3. Expected: the LED is off, and each press of the button toggles it. Between presses it holds still: the
+//!    CPU sleeps.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
@@ -26,11 +44,6 @@ use panic_msp430 as _;
 
 static P2IV: Mutex<RefCell<Option<PxIV<P2>>>> = Mutex::new(RefCell::new(None));
 
-// P1.0 should toggle when P2.3 is pressed
-// No board document covers the LED or the button: there is none for the MSP430FR25x2. P2.3 only exists on
-// the 20-pin RHL package (SLASEE4C Table 4-2, p. 14). Both pins are GPIO, PxSELx = 00 (SLASEE4C
-// Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60): P1.0 an output, P2.3 an input with its pullup
-// (SLAU445I Table 8-1, p. 313).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();

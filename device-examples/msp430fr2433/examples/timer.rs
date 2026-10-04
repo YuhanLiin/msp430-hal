@@ -1,10 +1,17 @@
-//! A timer on TA2, one of the two Timer_A modules with only two capture/compare registers. TA2
-//! and TA3 aren't connected to any pins, so they have no PWM output or capture pins, and they are
-//! clocked from ACLK or SMCLK (SLASE59F 6.10.8, p. 51; SLASE59F Table 6-13, p. 51; SLASE59F
-//! Table 6-7, p. 46).
+//! A timer and a sub-timer: LED1 blinks, on for 0.5 s and off for 0.5 s, timed by TA2 and its CCR1.
 //!
-//! The red LED on P1.0 (LED1, SLAU739 Figure 18, p. 23) turns on when sub-timer 1 fires halfway
-//! through each 1 s period, and off when the main timer wraps around: 0.5 s off, 0.5 s on.
+//! TA2 is one of the two Timer_A modules with only two capture/compare registers. TA2 and TA3 aren't
+//! connected to any pins, so they have no PWM outputs or capture inputs, and they count ACLK or SMCLK.
+//! Here TA2 counts ACLK from REFO, 32768 Hz, from 0 to 32767 in up mode: a period of 1 s. LED1 goes off
+//! each time the timer wraps around to 0. CCR1 is a sub-timer in compare mode: it fires at count 16384,
+//! halfway through the period, and LED1 goes on.
+//! (TA2 and TA3: SLASE59F 6.10.8, p. 51; SLASE59F Table 6-13, p. 51; SLASE59F Table 6-7, p. 46. REFO:
+//! SLASE59F Table 5-7, p. 25. Up mode: SLAU445I 13.2.3.1, p. 371. Compare mode: SLAU445I 13.2.4.2,
+//! p. 376. LED1 on P1.0 is red: SLAU739 Figure 18, p. 23.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 blinks once a second, on for 0.5 s and off for 0.5 s.
 #![no_main]
 #![no_std]
 

@@ -1,3 +1,22 @@
+//! GPIO interrupts and the watchdog's interval interrupt: an LED on P1.0 toggles every second, and each
+//! press of a button on P2.3 toggles it once more.
+//!
+//! The watchdog, as an interval timer, interrupts every 2^15 ACLK cycles, 1 s with ACLK from REFO, and
+//! its interrupt toggles the LED. The main loop polls the interrupt flag of the button (P2IFG.3, with
+//! its interrupt disabled): at each press it sets the flag of P2.6 in software, which requests the
+//! port 2 interrupt, and that toggles the LED.
+//! (WDTIS = 100b, "1 s at 32.768 kHz": SLAU445I Table 12-2, p. 366. Software can set PxIFG: SLAU445I
+//! 8.2.6, p. 315. P1.0, P2.3 and P2.6 are GPIO with PxSELx = 00: SLASEE4C Table 6-15, p. 58; SLASEE4C
+//! Table 6-16, p. 60. P2.3 and P2.6 only exist on the 20-pin RHL package: SLASEE4C Table 4-2, p. 14. No
+//! board document covers the LED or the button: there is none for the MSP430FR25x2.)
+//!
+//! How to test (an LED, a resistor, and a button or a jumper wire):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND, and a button from P2.3 to
+//!    GND (the internal pullup is on). A wire from P2.3 that you touch to GND works as the button too.
+//!    Leave P2.6 open.
+//! 2. Flash this example.
+//! 3. Expected: the LED toggles every second, on for 1 s and off for 1 s.
+//! 4. Press the button: the LED toggles once more.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
@@ -22,13 +41,6 @@ use panic_msp430 as _;
 static RED_LED: Mutex<RefCell<Option<Pin<P1, Pin0, Output>>>> = Mutex::new(RefCell::new(None));
 static P2IV: Mutex<RefCell<Option<PxIV<P2>>>> = Mutex::new(RefCell::new(None));
 
-// Red LED should blink 1 second on, 1 second off
-// A press of the P2.3 button toggles the red LED too: the main loop sets P2.6's interrupt flag, whose
-// handler toggles it
-// No board document covers the LEDs (the red one on P1.0 here) or the button: there is none for the
-// MSP430FR25x2. P2.3 and P2.6 only exist on the 20-pin RHL package (SLASEE4C Table 4-2, p. 14).
-// All three pins are GPIO, PxSELx = 00 (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60): P1.0 an
-// output, P2.3 an input with its pullup and P2.6 one with its pulldown (SLAU445I Table 8-1, p. 313).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
@@ -45,12 +57,14 @@ fn main() -> ! {
     // Pmm::new clears LOCKLPM5, so the pins take on their configuration (SLAU445I 8.3.1, p. 316)
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
+    // P2.3 with its pullup and P2.6 with its pulldown (PxREN = 1, PxOUT = 1 or 0: SLAU445I Table 8-1,
+    // p. 313)
     let p2 = Batch::new(periph.p2)
         .config_pin3(|p| p.pullup())
         .split(&pmm);
 
     let red_led = p1.pin0.to_output();
-    // Onboard button with interrupt disabled
+    // The button, with its interrupt disabled
     let mut button = p2.pin3;
     // Some random pin with interrupt enabled. IFG will be set manually. (P1 and P2 pins can interrupt:
     // SLASEE4C 6.10.3, p. 51)

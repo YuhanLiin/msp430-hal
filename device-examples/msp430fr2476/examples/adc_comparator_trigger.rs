@@ -14,10 +14,11 @@
 //! 3. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
 //!    UART1" at 9600 baud (SLAU802 2.2.4, p. 9).
 //! 4. Expected: `10 conversions, average 1200 mV` once a second, give or take a few tens of millivolts:
-//!    the 1.2 V reference is typical, and the input moves on a little during the sampling. Change the
-//!    frequency and the count follows. Change the offset between 1.0 V and 2.0 V: the average stays near
-//!    1.2 V. At an offset of 2.3 V the sine stays above 1.2 V (1.3 V to 3.3 V), and the count drops to 0.
-//!    Never let the signal go below 0 V or above 3.3 V.
+//!    the 1.2 V reference is typical, and the input moves on a little during the sampling. The count can
+//!    also be 11: each one covers a little more than a second, the 1000 waits of 1 ms plus the time the
+//!    loop and the printing take. Change the frequency and the count follows. Change the offset between
+//!    1.0 V and 2.0 V: the average stays near 1.2 V. At an offset of 2.3 V the sine stays above 1.2 V
+//!    (1.3 V to 3.3 V), and the count drops to 0. Never let the signal go below 0 V or above 3.3 V.
 //! (The low-power 1.2 V reference, VeCOMP,LP: 1.20 V typical: SLASEO7C 8.12.5.1, p. 33.)
 #![no_main]
 #![no_std]
@@ -119,7 +120,7 @@ fn main() -> ! {
     );
 
     loop {
-        // Collect the results of one second, in steps of 1 ms
+        // Collect the results of about one second, in steps of 1 ms
         let (mut conversions, mut sum) = (0u16, 0u32);
         for _ in 0..1000 {
             if let Ok(count) = adc.result() {

@@ -1,3 +1,17 @@
+//! An echo through a second UART: each character from the PC goes out on eUSCI_A1, which runs in
+//! loopback mode, and what eUSCI_A1 receives goes back to the PC on the backchannel UART.
+//!
+//! The backchannel UART, eUSCI_A0, runs at 19200 baud, 8 data bits, no parity and two stop bits. eUSCI_A1
+//! runs at 20000 baud with even parity, and its loopback mode feeds its TXD back to its receiver, so it
+//! needs no wires. SMCLK clocks both, at about 2 MHz. A character that arrives with an error comes back
+//! as `!` (from the PC) or `?` (in the loopback). LED1 lights once both UARTs are set up.
+//! (The backchannel UART is eUSCI_A0: SLAU802 2.2.4, p. 9. Loopback, where "UCAxTXD is internally fed
+//! back to the receiver": SLAU445I 22.4.5, p. 596. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example, with the TXD and RXD jumpers of J101 on, and open the COM port of "MSP
+//!    Application UART1" at 19200 baud, two stop bits (SLAU802 2.2.4, p. 9).
+//! 2. Expected: LED1 lights, and each character you type comes back (with the terminal's local echo off).
 #![no_main]
 #![no_std]
 
@@ -39,14 +53,6 @@ where
     .split(tx, rx)
 }
 
-// Echoes serial input on UART1 by roundtripping to UART0
-// Only UART1 settings matter for the host
-// UART0 is eUSCI_A0 in loopback mode, where its TXD "is internally fed back to the receiver"
-// (SLAU445I 22.4.5, p. 596). UART1 is eUSCI_A1 on P2.6 (TXD) and P2.5 (RXD), J1 pins 4 and 3
-// (SLAU802 Figure 10, p. 13). The backchannel UART of this LaunchPad is eUSCI_A0, not UART1
-// (SLAU802 2.2.4, p. 9). To reach UART1 from the PC, pull the TXD and RXD jumpers off J101 and wire
-// their eZ-FET side, the pins nearer the USB connector, to J1 pin 4 (TXD) and J1 pin 3 (RXD)
-// (SLAU802 Table 2, p. 8; SLAU802 Figure 16, p. 22; SLAU802 Figure 1, p. 1).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();
@@ -69,35 +75,37 @@ fn main() -> ! {
     let mut led = p1.pin0.to_output();
     led.set_low().ok();
 
-    // UART0: P1.4 = UCA0TXD and P1.5 = UCA0RXD with P1SEL = 01 (SLASEO7C Table 9-23, p. 65)
+    // UART0, the backchannel UART: P1.4 = UCA0TXD and P1.5 = UCA0RXD with P1SEL = 01 (SLASEO7C
+    // Table 9-23, p. 65)
     let (mut tx0, mut rx0) = setup_uart::<_, DefaultMapping>(
         periph.e_usci_a0,
         p1.pin4.to_alternate1().into(),
         p1.pin5.to_alternate1().into(),
-        Parity::EvenParity,
-        Loopback::Loopback,
-        20000,
-        &smclk,
-    );
-
-    // UART1: P2.6 = UCA1TXD and P2.5 = UCA1RXD with P2SEL = 01 (SLASEO7C Table 9-24, p. 66)
-    let (mut tx1, mut rx1) = setup_uart(
-        periph.e_usci_a1,
-        p2.pin6.to_alternate1().into(),
-        p2.pin5.to_alternate1().into(),
         Parity::NoParity,
         Loopback::NoLoop,
         19200,
         &smclk,
     );
 
+    // UART1, in loopback mode: P2.6 = UCA1TXD and P2.5 = UCA1RXD with P2SEL = 01 (SLASEO7C Table 9-24,
+    // p. 66)
+    let (mut tx1, mut rx1) = setup_uart(
+        periph.e_usci_a1,
+        p2.pin6.to_alternate1().into(),
+        p2.pin5.to_alternate1().into(),
+        Parity::EvenParity,
+        Loopback::Loopback,
+        20000,
+        &smclk,
+    );
+
     led.set_high().ok();
 
     loop {
-        let ch = block!(rx1.read()).unwrap_or(b'!');
-        block!(tx0.write(ch)).ok();
-        let ch = block!(rx0.read()).unwrap_or(b'?');
+        let ch = block!(rx0.read()).unwrap_or(b'!');
         block!(tx1.write(ch)).ok();
+        let ch = block!(rx1.read()).unwrap_or(b'?');
+        block!(tx0.write(ch)).ok();
     }
 }
 

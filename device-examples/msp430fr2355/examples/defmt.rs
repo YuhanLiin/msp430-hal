@@ -1,3 +1,22 @@
+//! defmt logging over the backchannel UART: once a second the example logs `Hello!` with
+//! `defmt::println!`, and defmt-print on the PC shows it.
+//!
+//! defmt-serial sends defmt's frames on eUSCI_A1's TXD, P4.3, at 9600 baud, 8 data bits, no parity and
+//! one stop bit, clocked by ACLK from REFO. The frames are binary, so a terminal shows them as garbage:
+//! defmt-print decodes them with this example's ELF file, which holds the strings. defmt also needs its
+//! linker script, defmt.x, which this crate's .cargo/config.toml adds. LED1 lights once the UART is set
+//! up.
+//! (The backchannel UART is eUSCI_A1: SLAU680 2.2.4, p. 11. UCA1TXD is P4.3: SLASEC4D Table 6-14, p. 72.
+//! LED1 on P1.0 is red: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (defmt-print on the PC):
+//! 1. Flash this example, with the TXD jumper of J101 on. Expected: LED1 lights.
+//! 2. Feed the bytes of the COM port of "MSP Application UART1" to defmt-print, at 9600 baud (SLAU680
+//!    2.2.4, p. 11). In a shell, from this crate's folder, with `<port>` the COM port's device file (in
+//!    Git Bash, COMn is `/dev/ttyS<n-1>`):
+//!    `stty -F <port> 9600 raw`
+//!    `cat <port> | defmt-print -w -e ./target/msp430-none-elf/debug/examples/defmt`
+//! 3. Expected: `Hello!` once a second.
 #![no_main]
 #![no_std]
 
@@ -12,21 +31,13 @@ use msp430_hal::{
     serial::*, 
     watchdog::Wdt
 };
-use msp430fr2355::EUsciA0;
+use msp430fr2355::EUsciA1;
 use panic_msp430 as _;
 use static_cell::StaticCell;
 
-// Configure UART, then print "Hello!" over eUSCI_A0 using defmt once per second.
-// eUSCI_A0's TXD is P1.7, pin 4 of the BoosterPack header (SLAU680 Figure 10, p. 15). The LaunchPad's
-// own backchannel UART is eUSCI_A1 (SLAU680 2.2.4, p. 11), so this needs a separate adapter.
-
-// Messages can be received using (a serial to USB adapter and) `defmt-print`, e.g.:
-// stty -F /dev/ttyUSB0 9600 raw; cat /dev/ttyUSB0 | defmt-print -w -e ./target/msp430-none-elf/debug/examples/defmt
-// Note: Using defmt also requires adding the defmt linker script to .cargo/config.toml
-
 // Once configured, our UART peripheral will live here.
 // This allows for printing from anywhere, including interrupts and panics.
-static SERIAL: StaticCell<Tx<EUsciA0>> = StaticCell::new();
+static SERIAL: StaticCell<Tx<EUsciA1>> = StaticCell::new();
 
 #[entry]
 fn main() -> ! {
@@ -36,6 +47,7 @@ fn main() -> ! {
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
+    let p4 = Batch::new(periph.p4).split(&pmm);
     let mut led = p1.pin0.to_output();
     led.set_low().ok();
 
@@ -46,7 +58,7 @@ fn main() -> ! {
         .freeze(&mut fram);
 
     let tx = SerialConfig::new(
-        periph.e_usci_a0,
+        periph.e_usci_a1,
         BitOrder::LsbFirst,
         BitCount::EightBits,
         StopBits::OneStopBit,
@@ -55,7 +67,7 @@ fn main() -> ! {
         9600,
     )
     .use_aclk(&aclk)
-    .tx_only(p1.pin7.to_alternate1()); // UCA0TXD, P1SELx = 01 (SLASEC4D Table 6-63, p. 96)
+    .tx_only(p4.pin3.to_alternate1()); // UCA1TXD, P4SELx = 01 (SLASEC4D Table 6-66, p. 102)
 
     // Tell defmt to use our serial peripheral
     defmt_serial(SERIAL.init(tx));

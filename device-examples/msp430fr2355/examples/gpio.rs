@@ -1,3 +1,11 @@
+//! A GPIO input and output: LED2 lights while S2 is held down.
+//!
+//! The program polls P2.3, which S2 pulls low, and drives P6.6, LED2, high while it reads low.
+//! (S2 on P2.3, and LED2 on P6.6 is green: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED2 is off, and lights while S2 is pressed.
 #![no_main]
 #![no_std]
 
@@ -6,8 +14,6 @@ use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
 
-// Green onboard LED should go on when P2.3 button is pressed
-// (LED2, green, on P6.6 and button S2 on P2.3: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();

@@ -1,15 +1,19 @@
-//! A timer clocked from the VLO, the internal very-low-power oscillator.
+//! A timer clocked from the VLO, the internal very-low-power oscillator: an LED on P1.0 toggles every
+//! 10000 VLO cycles, about once a second.
 //!
-//! The red LED on P1.0 toggles every 10000 VLO cycles. The VLO runs at about 10 kHz but is only
-//! accurate to ±50 % (data sheet: SLASEE4C Table 6-8, p. 49, "10 kHz ±50%"), so that is anywhere
-//! from 0.7 s to 2 s. With a scope on P1.0, the VLO frequency is 20000 divided by the period of the
-//! LED signal. No board document covers the LED: there is none for the MSP430FR25x2. P1.0 is a GPIO
-//! output, P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
-//!
-//! The VLO needs no clock configuration: it starts when the timer requests it
+//! The VLO needs no clock configuration: it starts when the timer requests it. On the MSP430FR25x2, only
+//! TA0 can be clocked from the VLO. The VLO runs at about 10 kHz but is only accurate to ±50 %, so a
+//! toggle can come anywhere from every 0.7 s to every 2 s.
 //! (SLAU445I 3.2.2, p. 102: VLOCLK is active when "At least one peripheral requests VLO as clock
-//! source"). On the MSP430FR25x2, only TA0 can be clocked from the VLO (SLASEE4C Table 6-8, p. 49:
-//! VLOCLK is TASSEL = 11b for TA0 and not available for TA1; SLASEE4C Figure 6-2, p. 54).
+//! source". VLOCLK "10 kHz ±50%", TASSEL = 11b for TA0 and not available for TA1: SLASEE4C Table 6-8,
+//! p. 49; SLASEE4C Figure 6-2, p. 54. P1.0 is a GPIO output with P1SELx = 00 and P1DIR = 1: SLASEE4C
+//! Table 6-15, p. 58. No board document covers the LED: there is none for the MSP430FR25x2.)
+//!
+//! How to test (an LED and a resistor, optionally the scope):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED toggles about once a second.
+//! 4. To measure the VLO, probe P1.0: the VLO frequency is 20000 divided by the period of the signal.
 #![no_main]
 #![no_std]
 

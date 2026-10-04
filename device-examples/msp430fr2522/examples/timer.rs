@@ -1,3 +1,18 @@
+//! A timer and a sub-timer: an LED on P1.0 blinks, on for 0.5 s and off for 0.5 s, timed by TA0 and its
+//! CCR2.
+//!
+//! TA0 counts ACLK from REFO, 32768 Hz, divided by 8 and by 4: 1024 Hz. In up mode it counts from 0 to
+//! 1024, a period of 1 s, and the LED goes off each time the timer wraps around to 0. CCR2 is a sub-timer
+//! in compare mode: it fires at count 512, halfway through the period, and the LED goes on.
+//! (REFO: SLASEE4C Table 5-7, p. 27. ID and TAIDEX: SLAU445I 13.2.1.1, p. 370. Up mode: SLAU445I
+//! 13.2.3.1, p. 371. Compare mode: SLAU445I 13.2.4.2, p. 376. P1.0 is a GPIO output with P1SELx = 00
+//! and P1DIR = 1: SLASEE4C Table 6-15, p. 58. No board document covers the LED: there is none for the
+//! MSP430FR25x2.)
+//!
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED blinks once a second, on for 0.5 s and off for 0.5 s.
 #![no_main]
 #![no_std]
 
@@ -15,8 +30,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// 0.5 second on, 0.5 second off
-// on P1.0, a GPIO output, P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();

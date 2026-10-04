@@ -1,15 +1,19 @@
-//! A timer clocked from the VLO, the internal very-low-power oscillator.
+//! A timer clocked from the VLO, the internal very-low-power oscillator: LED1 toggles every 10000 VLO
+//! cycles, about once a second.
 //!
-//! LED1 toggles every 10000 VLO cycles. The VLO runs at about 10 kHz but is only accurate to
-//! ±50 % (SLASEO7C Table 9-8, p. 50: VLOCLK "10 kHz ±50%"), so that is anywhere from 0.7 s to 2 s.
-//! The VLO of the LP-MSP430FR2476 used to test this ran at 8.0 kHz: a toggle every 1.25 s. With a
-//! scope on P1.0 (J3 pin 27), the VLO frequency is 20000 divided by the period of the LED signal.
-//! (LED1 on P1.0 is green: SLAU802 Figure 19, p. 25. J3 pin 27: SLAU802 Figure 10, p. 13.)
+//! The VLO needs no clock configuration: it starts when the timer requests it. On the MSP430FR247x, TA0
+//! and TA2 can be clocked from the VLO, which is their INCLK. The VLO runs at about 10 kHz but is only
+//! accurate to ±50 %, so a toggle can come anywhere from every 0.7 s to every 2 s.
+//! (SLAU445I 3.2.2, p. 102: VLOCLK is active when "At least one peripheral requests VLO as clock
+//! source". INCLK: SLASEO7C Table 9-12, p. 55; SLASEO7C Table 9-14, p. 58. VLOCLK "10 kHz ±50%":
+//! SLASEO7C Table 9-8, p. 50. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
 //!
-//! The VLO needs no clock configuration: it starts when the timer requests it (SLAU445I 3.2.2,
-//! p. 102: VLOCLK is active when "At least one peripheral requests VLO as clock source"). On the
-//! MSP430FR247x, TA0 and TA2 can be clocked from the VLO (it is their INCLK: SLASEO7C Table 9-12,
-//! p. 55; SLASEO7C Table 9-14, p. 58).
+//! How to test (optionally the scope):
+//! 1. Flash this example.
+//! 2. Expected: LED1 toggles about once a second. The VLO of the LP-MSP430FR2476 used to test this ran
+//!    at 8.0 kHz: a toggle every 1.25 s.
+//! 3. To measure the VLO, probe P1.0 (J3 pin 27), ground clip on GND (J3 pin 22): the VLO frequency is
+//!    20000 divided by the period of the signal. (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

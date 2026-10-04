@@ -1,3 +1,18 @@
+//! LPM3.5 and an RTC wake-up: the board sleeps in LPM3.5, and the RTC wakes it about once a second. Each
+//! wake-up toggles LED1, whose state is kept in the backup memory.
+//!
+//! The RTC counts VLOCLK, which keeps running in LPM3.5. A wake-up from LPMx.5 is a reset, so the program
+//! starts again from the top: if SYSRSTIV says it woke from LPMx.5, it toggles LED1 and goes back to sleep,
+//! and otherwise it sets up the RTC first. The VLO's frequency isn't exact, so neither is the second.
+//! (The RTC can wake the device from LPM3.5, and "Any exit from LPMx.5 causes a BOR": SLAU445I 1.4.3.2, p. 41
+//! to p. 42. In LPM3.5 the RTC can only count XT1CLK or VLOCLK: SLAU445I 15.2.2, p. 417. The VLO runs at
+//! 10 kHz ±50 %: SLASEO7C Table 9-8, p. 50. The backup memory is retained in LPM3.5: SLASEO7C 9.10.10, p. 61.
+//! LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example. After flashing with mspdebug, unplug the board's USB cable, wait a second, and plug
+//!    it back in: the example only works after that. (Uniflash and Code Composer Studio need no replug.)
+//! 2. Expected: LED1 toggles about once a second: on for about a second, off for about a second.
 #![no_main]
 #![no_std]
 
@@ -15,11 +30,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// The RTC will wake the board every second. LED state is stored in and loaded from the backup memory.
-// When programming with mspdebug you need to unplug and replug the board for the example to work, for some reason.
-// Programming via Uniflash or Code Composer Studio works fine.
-// (The RTC can wake the device from LPM3.5: SLAU445I 1.4.3.2, p. 41. The backup memory is retained in
-// LPM3.5: SLASEO7C 9.10.10, p. 61. The LED is LED1 on P1.0, which is green: SLAU802 Figure 19, p. 25.)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

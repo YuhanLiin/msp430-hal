@@ -1,3 +1,30 @@
+//! Timer captures, polled: TB0 captures each falling edge on P1.6, and the backchannel UART prints the
+//! time since the edge before, in VLO cycles.
+//!
+//! P1.6 is TB0.CCI1A, input A of TB0's CCR1, which captures TB0's count at each falling edge. TB0
+//! counts ACLK from the VLO, typically 10 kHz, so a second is about 10000 counts, 0x2710; the count
+//! wraps around after 65536 counts, about 6.5 s. Each capture also turns LED1 on. The LaunchPad's
+//! buttons, S1 on P4.1 and S2 on P2.3, aren't capture inputs, so the edges come from the function
+//! generator or a jumper wire.
+//! (TB0.CCI1A on P1.6: SLASEC4D Table 6-16, p. 73. Captures: SLAU445I 14.2.4.1, p. 398. VLO: SLASEC4D
+//! Table 5-8, p. 40. Capture inputs: SLASEC4D Tables 6-16 to 6-19, p. 73 to p. 75. S1, S2, and LED1 on
+//! P1.0, red: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (function generator, or a jumper wire):
+//! 1. Generator: square wave, 1 Hz, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load High-Z. Check the
+//!    levels on the scope before connecting: a negative or >3.6 V signal can damage the pin. Connect it
+//!    to P1.6 (J1 pin 3), its ground to GND (J3 pin 22).
+//! 2. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
+//!    UART1" at 9600 baud (SLAU680 2.2.4, p. 11).
+//! 3. Expected: once a second, a line like `0x2710`: the VLO cycles since the falling edge before, in
+//!    hex, which is the VLO's frequency in Hz. The VLO is only accurate to ±50 % (VLOCLK "10 kHz
+//!    ±50%": SLASEC4D Table 6-9, p. 68), so anything from about `0x1388` to `0x3a98`. The first line
+//!    counts from the start.
+//! 4. Without the generator: put a jumper wire on P1.6 (J1 pin 3), and touch its free end to 3.3 V (J1
+//!    pin 1), then to GND (J2 pin 20). Each touch of GND prints a line. P1.6 has no pull resistor, so it
+//!    floats between touches, and the contact bounces: expect extra lines with small values, or `!`
+//!    when a second edge came before the first was read.
+//! (Header pins: SLAU680 Figure 10, p. 15.)
 #![no_main]
 #![no_std]
 
@@ -17,11 +44,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// Connect push button input to P1.6. When button is pressed, putty should print the # of cycles
-// since the last press. Sometimes we get 2 consecutive readings due to lack of debouncing.
-// P1.6 is pin 3 of the BoosterPack header (SLAU680 Figure 10, p. 15). The output goes to the
-// backchannel UART, "the UART on eUSCI_A1" (SLAU680 2.2.4, p. 11), whose TXD is P4.3 (SLAU680
-// Figure 18, p. 26).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -73,6 +95,7 @@ fn main() -> ! {
             Err(OverCapture(_)) => {
                 p1.pin0.set_high().unwrap();
                 write(&mut tx, '!');
+                write(&mut tx, '\r');
                 write(&mut tx, '\n');
             }
         }
@@ -86,6 +109,7 @@ fn print_num<U: SerialUsci>(tx: &mut Tx<U>, num: u16) {
     print_hex(tx, (num >> 8) & 0xF);
     print_hex(tx, (num >> 4) & 0xF);
     print_hex(tx, num & 0xF);
+    write(tx, '\r');
     write(tx, '\n');
 }
 

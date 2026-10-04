@@ -13,9 +13,9 @@
 //! 1. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
 //!    UART1" at 9600 baud (SLAU802 2.2.4, p. 9).
 //! 2. Expected, once a second: `[address 12] Hello`, then `[address 34, not mine]`, and no `World`.
-//! 3. Optional, with the scope: eUSCI_A1's TXD, P2.6 (J1 pin 4), still carries what it sends. Each
-//!    character has 9 bits between start and stop bit: 8 data bits and the address bit, which is 1 for
-//!    the addresses and 0 for the data. (Header pins: SLAU802 Figure 10, p. 13.)
+//! 3. Optional, with the scope, ground on GND (J3 pin 22): eUSCI_A1's TXD, P2.6 (J1 pin 4), still carries
+//!    what it sends. Each character has 9 bits between start and stop bit: 8 data bits and the address
+//!    bit, which is 1 for the addresses and 0 for the data. (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

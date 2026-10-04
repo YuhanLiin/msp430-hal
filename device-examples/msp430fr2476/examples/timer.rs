@@ -1,3 +1,18 @@
+//! A timer and a sub-timer: LED1 blinks, on for 0.5 s and off for 0.5 s, timed by TA0 and its CCR2.
+//!
+//! TA0 counts ACLK from the VLO, typically 10 kHz, divided by 2 and by 5: about 1 kHz. In up mode it
+//! counts from 0 to 1000, a period of about 1 s, and LED1 goes off each time the timer wraps around to
+//! 0. CCR2 is a sub-timer in compare mode: it fires at count 500, halfway through the period, and LED1
+//! goes on.
+//! (VLO: SLASEO7C 8.12.3.5, p. 30. ID and TAIDEX: SLAU445I 13.2.1.1, p. 370. Up mode: SLAU445I
+//! 13.2.3.1, p. 371. Compare mode: SLAU445I 13.2.4.2, p. 376. LED1 on P1.0 is green: SLAU802 Figure 19,
+//! p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 blinks about once a second, on for about 0.5 s and off for about 0.5 s. The VLO is
+//!    only accurate to ±50 %, so each half can last anywhere from 0.33 s to 1 s (VLOCLK "10 kHz ±50%":
+//!    SLASEO7C Table 9-8, p. 50).
 #![no_main]
 #![no_std]
 
@@ -9,9 +24,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// 0.5 second on, 0.5 second off
-// (LED1 on P1.0: SLAU802 Figure 19, p. 25. TA0 counts ACLK from the VLO, typically 10 kHz:
-// SLASEO7C 8.12.3.5, p. 30, divided by 2 and by 5: SLAU445I 13.2.1.1, p. 370.)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

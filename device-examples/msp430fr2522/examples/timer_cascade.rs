@@ -1,15 +1,17 @@
-//! Timer cascading: one timer counts the periods of another.
+//! Timer cascading: one timer counts the periods of another. An LED on P1.0 toggles every 5 s.
 //!
-//! TA0 runs from ACLK (REFO, 32.768 kHz) with a period of 1 s. The CCR2 output of TA0 clocks
-//! TA1, which counts those periods: the red LED on P1.0 toggles every 5 periods, so every 5 s.
-//! TA1 could count up to 65536 s like this, about 18 hours.
+//! TA0 counts ACLK (REFO, 32.768 kHz) with a period of 1 s. The CCR2 output of TA0 clocks TA1, which
+//! counts those periods: the LED toggles every 5 periods, so every 5 s. TA1 could count up to 65536 s
+//! like this, about 18 hours. On the MSP430FR25x2, TA1 can count the periods of TA0.
+//! (REFO: SLASEE4C Table 5-7, p. 27. TA0's CCR2 output is the TASSEL = 11 clock of TA1: SLASEE4C
+//! Figure 6-2, p. 54. Both timers are 16 bits: SLASEE4C 6.10.8, p. 54. P1.0 is a GPIO output with
+//! P1SELx = 00 and P1DIR = 1: SLASEE4C Table 6-15, p. 58. No board document covers the LED: there is
+//! none for the MSP430FR25x2.)
 //!
-//! On the MSP430FR25x2, TA1 can count the periods of TA0.
-//!
-//! REFO: SLASEE4C Table 5-7, p. 27. TA0's CCR2 output is the TASSEL = 11 clock of TA1
-//! (SLASEE4C Figure 6-2, p. 54); both timers are 16 bits (SLASEE4C 6.10.8, p. 54). No board document
-//! covers the LED: there is none for the MSP430FR25x2. P1.0 is a GPIO output, P1SELx = 00 and
-//! P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED is on for 5 s, then off for 5 s.
 #![no_main]
 #![no_std]
 

@@ -1,25 +1,31 @@
-//! XT1 bypass mode as the CPU clock: MCLK and SMCLK both run from the external signal on XIN.
+//! XT1 in bypass mode as the CPU clock: MCLK and SMCLK run from the generator's 32.768 kHz on XIN, and LED1
+//! blinks. When the signal stops, the fail-safe moves them to REFO: the CPU keeps running, and the red part
+//! of LED2 reports the fault.
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 32.768 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
-//! Switch the generator on *before* resetting the board.
+//! The blink comes from `SysDelay`, a delay loop timed for 32.768 kHz, so it follows MCLK: half the
+//! frequency, half the speed. At each blink the main loop clears the sticky fault flag, which moves MCLK back
+//! to XT1 once the signal is back. Bypass mode leaves the start counter off, so that happens as soon as the
+//! signal returns.
+//! (Fail-safe for MCLK and SMCLK: SLAU445I 3.2.13, p. 109. Clearing the flags switches the clocks back once
+//! no fault remains: SLAU445I 3.2.13, p. 110. Start counter, ENSTFCNT1: SLAU445I Table 3-11, p. 121. REFO
+//! runs at 32.768 kHz: SLASEO7C 8.12.3.4, p. 30. LED1 on P1.0 is green, the red part of LED2 is P5.1:
+//! SLAU802 Figure 19, p. 25.)
 //!
-//! Scope: P1.3/MCLK (J1 pin 9) and P1.7/SMCLK (J3 pin 23) both equal the generator frequency.
-//! (Header pins: SLAU802 Figure 10, p. 13. LED1 on P1.0 is green, the red part of LED2 is P5.1:
-//! SLAU802 Figure 19, p. 25. REFO runs at 32.768 kHz: SLASEO7C 8.12.3.4, p. 30.)
-//!
-//! What to try:
-//! 1. LED1 blinks roughly 0.5 s on / 0.5 s off (`SysDelay` is a nop loop, so it is coarse
-//!    at 32 kHz). The delay is calculated from the configured 32.768 kHz.
-//! 2. Set the generator to 16.384 kHz: MCLK follows and the blink becomes exactly twice as slow.
-//! 3. Switch the generator output off: the fail-safe moves MCLK to REFO (32.768 kHz), so the CPU
-//!    keeps running, the blink returns to its original speed and red LED2 reports the XT1 fault
-//!    (SLAU445I 3.2.13, p. 109).
-//! 4. Switch the generator back on: the loop clears the fault flag at the next blink, LED2
-//!    turns off and MCLK follows the generator again. Bypass mode leaves the start counter off,
-//!    so XT1 counts as healthy as soon as the signal is back. (Once no fault remains, clearing the
-//!    flags switches the clocks back: SLAU445I 3.2.13, p. 110. Start counter, ENSTFCNT1:
-//!    SLAU445I Table 3-11, p. 121.)
+//! How to test (function generator, and optionally the scope):
+//! 1. Generator: square wave, 32.768 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on. Do this
+//!    before flashing: `freeze()` waits for XT1.
+//! 3. Flash this example. Expected: LED1 blinks, roughly 0.5 s on and 0.5 s off (a delay loop is coarse at
+//!    32 kHz). The scope on MCLK, P1.3 (J1 pin 9), ground clip on GND (J3 pin 22), counts 32.768 kHz, and so
+//!    does SMCLK on P1.7 (J3 pin 23).
+//! 4. Set the generator to 16.384 kHz: MCLK follows, and LED1 blinks exactly half as fast.
+//! 5. Switch the generator output off: LED1 keeps blinking, at the first speed again, because the CPU now
+//!    runs from REFO, and LED2 lights red.
+//! 6. Switch the output back on (still 16.384 kHz): at the next blink LED2 turns off, and LED1 slows down
+//!    again.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

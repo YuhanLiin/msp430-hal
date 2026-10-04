@@ -1,3 +1,17 @@
+//! An echo through a second UART: each character from the PC goes out on eUSCI_A0, which runs in
+//! loopback mode, and what eUSCI_A0 receives goes back to the PC on the backchannel UART.
+//!
+//! The backchannel UART, eUSCI_A1, runs at 19200 baud, 8 data bits, no parity and two stop bits. eUSCI_A0
+//! runs at 20000 baud with even parity, and its loopback mode feeds its TXD back to its receiver, so it
+//! needs no wires. SMCLK clocks both, at about 2 MHz. A character that arrives with an error comes back
+//! as `!` (from the PC) or `?` (in the loopback). LED1 lights once both UARTs are set up.
+//! (The backchannel UART is eUSCI_A1: SLAU680 2.2.4, p. 11. Loopback, where "UCAxTXD is internally fed
+//! back to the receiver": SLAU445I 22.4.5, p. 596. LED1 on P1.0 is red: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test:
+//! 1. Flash this example, with the TXD and RXD jumpers of J101 on, and open the COM port of "MSP
+//!    Application UART1" at 19200 baud, two stop bits (SLAU680 2.2.4, p. 11).
+//! 2. Expected: LED1 lights, and each character you type comes back (with the terminal's local echo off).
 #![no_main]
 #![no_std]
 
@@ -36,10 +50,6 @@ where
     .split(tx, rx)
 }
 
-// Echoes serial input on UART1 by roundtripping to UART0
-// Only UART1 settings matter for the host
-// (UART1, eUSCI_A1, is the backchannel UART to the host: SLAU680 2.2.4, p. 11. UART0 runs in loopback
-// mode, in which "UCAxTXD is internally fed back to the receiver": SLAU445I 22.4.5, p. 596.)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();

@@ -1,9 +1,9 @@
 //! An SPI master whose eUSCI drives the slave's enable signal on STE, with 7-bit characters.
 //!
-//! eUSCI_A1 sends 55h and AAh at 100 kHz, ten times a second. STE goes low while the characters go out,
-//! as the enable signal of a single slave. With 7-bit characters the top bit of each byte isn't sent, so
-//! AAh goes out as 2Ah. With MOSI looped back to MISO, the master reads back what it sent: 55h and 2Ah.
-//! The backchannel UART prints that.
+//! eUSCI_A1 sends 55h and AAh at 100 kHz, about eight times a second. STE goes low while the characters
+//! go out, as the enable signal of a single slave. With 7-bit characters the top bit of each byte isn't
+//! sent, so AAh goes out as 2Ah. With MOSI looped back to MISO, the master reads back what it sent: 55h
+//! and 2Ah. The backchannel UART prints that.
 //! (STE as the slave enable, UCSTEM = 1: SLAU445I 23.3.3.2, p. 608. 7-bit characters, UC7BIT: SLAU445I
 //! 23.3.2, p. 607. eUSCI_A1's pins: SLASEO7C Table 9-11, p. 54. Header pins: SLAU802 Figure 10, p. 13.)
 //!

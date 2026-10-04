@@ -1,7 +1,28 @@
+//! An I2C master with the blocking `I2c` interface of embedded-hal: once a second it runs five
+//! transactions with a device at address 0x68, and an LED on P2.0 lights while they all succeed.
+//!
+//! eUSCI_B0 is the only master on the bus, at 100 kHz from SMCLK, with the internal pull-ups of SDA and
+//! SCL on. The transactions: a write of no bytes, which checks that the device answers; a write of A0h
+//! 03h; a read of one byte; a write and a read with a repeated start in between; and that again with
+//! `transaction`. An LED on P1.0 toggles every second. There's no LaunchPad for the MSP430FR25x2.
+//! (eUSCI_B0's I2C pins, with USCIBRMP = 0: SLASEE4C Table 6-11, p. 53. SDA and SCL need pull-ups, but
+//! "must not be pulled up above the device VCC level": SLAU445I 24.3, p. 629. The internal ones are
+//! 20 kΩ to 50 kΩ: SLASEE4C Table 5-10, p. 29. P2.0 is also XOUT: SLASEE4C Table 6-16, p. 60.)
+//!
+//! How to test (an I2C device at address 0x68, two LEDs and resistors, and optionally the scope):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND, and another from P2.0 to GND.
+//!    P2.0 must have no crystal on it.
+//! 2. Connect the device: SDA to P1.2, SCL to P1.3, its supply to 3.3 V and its ground to GND. The
+//!    internal pull-ups may be too weak: if the device's board has none, add resistors from SDA and SCL to
+//!    3.3 V.
+//! 3. Flash this example.
+//! 4. Expected: the LED on P1.0 toggles every second, and the one on P2.0 lights. Without the device it
+//!    stays off, as nothing acknowledges the address.
+//! 5. Scope, ground on GND, 500 µs/div, trigger on CH1 falling: CH1 on SDA, CH2 on SCL. Five short
+//!    transactions each second, each starting with the address. The scope's I2C decoder
+//!    (Analysis > Decode) shows them as bytes.
 #![no_main]
 #![no_std]
-
-// An I2C master using the blocking interface.
 
 use embedded_hal::{
     delay::DelayNs,

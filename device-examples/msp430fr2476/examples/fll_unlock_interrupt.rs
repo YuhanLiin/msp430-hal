@@ -11,7 +11,8 @@
 //!
 //! LED1 (green) is on while the program runs. After an unlock, LED2 lights for half a second: blue if the
 //! DCO was too slow, red if it was too fast, both if it was both.
-//! (LED1 is P1.0; the red part of LED2 is P5.1 and the blue part P4.7: SLAU802 Figure 19, p. 25.)
+//! (LED1 is P1.0; the red part of LED2 is P5.1 and the blue part P4.7: SLAU802 Figure 19, p. 25. Header
+//! pins: SLAU802 Figure 10, p. 13.)
 //!
 //! How to test (function generator):
 //! 1. Generator: square wave, 32.768 kHz, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), 50 % duty, output load

@@ -1,9 +1,23 @@
+//! An SPI master with the blocking `SpiBus` interface of embedded-hal and a GPIO as the chip select:
+//! once a second it sends five bytes, 12h 00h 00h 34h 56h, with the chip select low.
+//!
+//! eUSCI_A0, on its remapped pins, is a 3-pin master in SPI mode 0 (the clock idles low, and data is
+//! captured on its rising edges), MSB first, at 500 kHz from SMCLK. `write` sends 12h, `read` sends 00h
+//! twice to read two bytes, and `transfer` sends 34h and 56h. With more than one slave, "the software
+//! needs to use general-purpose I/O pins instead to generate STE signals", so P1.3 is the chip select.
+//! There's no LaunchPad for the MSP430FR25x2.
+//! (eUSCI_A0's remapped pins, USCIARMP = 1: SLASEE4C Table 6-11, p. 53. SPI mode 0: SLAU445I Table 23-3,
+//! p. 613. GPIO chip selects: SLAU445I 23.3.3.2, p. 608. P2.0 and P2.1 are also XOUT and XIN: SLASEE4C
+//! Table 6-16, p. 60.)
+//!
+//! How to test (the scope):
+//! 1. P2.0 and P2.1 must have no crystal on them. Flash this example.
+//! 2. Scope, ground on GND, 50 µs/div, trigger on CH3 falling: CH1 on SCLK, P1.6, CH2 on MOSI, P2.0, CH3
+//!    on the chip select, P1.3. Expected once a second: the chip select low for 40 clock pulses, while
+//!    MOSI sends 12h, 00h, 00h, 34h and 56h, MSB first. The scope's SPI decoder (Analysis > Decode) shows
+//!    them as bytes.
 #![no_main]
 #![no_std]
-
-// This example uses the SpiBus embedded-hal interface, with a software controlled CS pin.
-// The CS pin is a GPIO output, as the user's guide suggests for slave selects the eUSCI's STE can't make
-// (SLAU445I 23.3.3.2, p. 608: "use general-purpose I/O pins instead to generate STE signals").
 
 use embedded_hal::{delay::DelayNs, digital::OutputPin, spi::MODE_0};
 use msp430_rt::entry;

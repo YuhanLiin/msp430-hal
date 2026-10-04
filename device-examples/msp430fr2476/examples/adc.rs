@@ -1,3 +1,20 @@
+//! A polled ADC reading: LED1 is on while the voltage on P4.3 is between 1.0 V and 2.0 V, and off otherwise.
+//!
+//! The ADC converts P4.3, input A8, again and again, with 8-bit results against AVCC, the LaunchPad's
+//! 3.3 V supply, and `read_voltage_mv()` turns each result into millivolts.
+//! (A8 is P4.3: SLASEO7C Table 9-19, p. 62. AVCC is the reference after reset: SLAU445I Table 21-8, p. 567.
+//! The supply: SLAU802 2.3.1, p. 10. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test (function generator, or a jumper wire):
+//! 1. Generator: the DC waveform, Offset 1.500 V, output load High-Z. Check the voltage with the multimeter
+//!    first: 0 V to 3.3 V only (the analog input range: SLASEO7C 8.12.8.1, p. 40). Connect it to P4.3
+//!    (J3 pin 24), its ground to GND (J3 pin 22).
+//! 2. Flash this example: LED1 is on.
+//! 3. Set the offset to 0.5 V, and then to 2.5 V: LED1 is off at both. It's on from about 1.0 V to 2.0 V.
+//!
+//! Without the generator, a jumper wire from P4.3 to GND (J3 pin 22) or to 3.3 V (J1 pin 1) turns LED1
+//! off, and a potentiometer of about 10 kΩ between 3.3 V and GND, its wiper on P4.3, turns it on in the
+//! middle of its range. (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 
@@ -12,10 +29,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// If pin 4.3 is between 1V and 2V, the LED on pin 1.0 should light up.
-// LED1 is on P1.0 (SLAU802 Figure 19, p. 25). P4.3 is J3 pin 24 (SLAU802 Figure 10, p. 13), an analog
-// header pin wired to nothing else on the LaunchPad (net P4.3_A8: SLAU802 Figure 18, p. 24). P1.1 is
-// not used, because the TMP235 temperature sensor drives it (SLAU802 2.2.5.1, p. 10).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog

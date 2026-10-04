@@ -1,3 +1,18 @@
+//! PWM on LED2: it fades from off to full brightness and back, over and over, about once a second.
+//!
+//! TA0 counts SMCLK, 32 × 32768 Hz = 1.049 MHz, from 0 to 5000 in up mode: a PWM period of 5001 counts,
+//! about 4.8 ms, or 210 Hz. TA0.1 drives P1.1, which is LED2, with a duty cycle that steps from 0 % to
+//! 100 % and back down, 1 % about every 5 ms.
+//! (SMCLK is DCOCLKDIV, (FLLN + 1) × 32768 Hz, with FLLN = 31 in the 1 MHz range: SLAU445I 3.2.5,
+//! p. 104. Up mode: SLAU445I 13.2.3.1, p. 371. TA0.1 on P1.1: SLASE59F Table 6-17, p. 55. LED2 on P1.1
+//! is green: SLAU739 Figure 18, p. 23.)
+//!
+//! How to test (optionally the scope):
+//! 1. Flash this example.
+//! 2. Expected: LED2 (green) brightens and dims smoothly, about once a second.
+//! 3. With the scope on P1.1 (J2 pin 19), ground clip on GND (J2 pin 20): about 210 Hz, high for a part
+//!    of each 4.8 ms period that grows from none of it to all of it, and shrinks back.
+//! (Header pins: SLAU739 Figure 18, p. 23.)
 #![no_main]
 #![no_std]
 
@@ -13,7 +28,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// P1.1 LED should breathe from 0 to 100% brightness (green LED2, SLAU739 Figure 18, p. 23)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2433::Peripherals::take().unwrap();

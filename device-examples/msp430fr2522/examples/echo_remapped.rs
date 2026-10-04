@@ -1,3 +1,21 @@
+//! eUSCI_A0 on its default and its remapped pins: the example prints `HELLO DEFAULT` on P1.4, then moves
+//! eUSCI_A0 to P2.0 (TXD) and P2.1 (RXD), prints `HELLO REMAPPED` there, and sends back every character
+//! it receives.
+//!
+//! USCIARMP = 0 selects the default pins, P1.4 and P1.5, and USCIARMP = 1 the remapped ones. Both run at
+//! 9600 baud, 8 data bits, no parity and one stop bit, clocked by ACLK from REFO. An LED on P1.0 lights
+//! once the remapped UART is set up. There's no LaunchPad for the MSP430FR25x2, so the PC needs a
+//! USB-to-UART adapter.
+//! (The pins: SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58. P2.0 and P2.1 are also XOUT and
+//! XIN: SLASEE4C Table 6-16, p. 60.)
+//!
+//! How to test (a 3.3-V USB-to-UART adapter, an LED and a resistor):
+//! 1. Connect the LED with a series resistor (about 1 kΩ) from P1.0 to GND, the adapter's GND to GND, and
+//!    its RX to P1.4. P2.0 and P2.1 must have no crystal on them.
+//! 2. Flash this example, and open the adapter's COM port at 9600 baud. Expected: `HELLO DEFAULT`, and
+//!    the LED lights.
+//! 3. Move the adapter's RX to P2.0, connect its TX to P2.1, and flash the example again. Expected:
+//!    `HELLO REMAPPED`, and each character you type comes back (with the terminal's local echo off).
 #![no_main]
 #![no_std]
 
@@ -21,9 +39,6 @@ use panic_msp430 as _;
 #[cfg(not(debug_assertions))]
 use panic_never as _;
 
-// Prints "HELLO" when started then echos on eUSCI_A0, the only UART of this device
-// (SLASEE4C 6.10.7, p. 53)
-// Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
     if let Some(periph) = msp430fr25x2::Peripherals::take() {

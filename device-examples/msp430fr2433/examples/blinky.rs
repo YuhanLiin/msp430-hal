@@ -1,3 +1,12 @@
+//! LED1 blinks, on for 0.1 s and off for 0.1 s: a GPIO output, timed by the delay of the clock system.
+//!
+//! The program toggles P1.0 and waits 100 ms with the delay that `ClockConfig::freeze()` returns, which
+//! counts cycles of MCLK, about 8 MHz from the DCO.
+//! (LED1 on P1.0 is red: SLAU739 Figure 18, p. 23.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 blinks, on for 0.1 s and off for 0.1 s.
 #![no_main]
 #![no_std]
 
@@ -12,7 +21,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// Red onboard LED should blink at a steady period (LED1 on P1.0, SLAU739 Figure 18, p. 23).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog

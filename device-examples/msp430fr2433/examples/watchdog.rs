@@ -1,3 +1,17 @@
+//! The watchdog, set to an interval of about a second, resets the device, and each start blinks LED1: on
+//! for 250 ms, then off until the reset.
+//!
+//! The program sets the watchdog to count 8192 cycles of the VLO, which runs at 10 kHz ±50 %: 0.82 s
+//! typically, 0.55 s to 1.64 s. It never feeds the watchdog. To find out in code that the watchdog caused
+//! a reset, use `Pmm::take_reset_cause()`: it returns `WatchdogTimeout`.
+//! (WDTSSEL = 10b, VLOCLK: SLASE59F Table 6-8, p. 47. WDTIS = 101b, 2^13 cycles: SLAU445I Table 12-2,
+//! p. 366. VLO: SLASE59F Table 6-7, p. 46. Watchdog time-out, SYSRSTIV 16h: SLASE59F Table 6-9, p. 48.
+//! LED1 on P1.0 is red: SLAU739 Figure 18, p. 23.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 blinks about once a second: on for 250 ms, then off until the watchdog resets the
+//!    device.
 #![no_main]
 #![no_std]
 
@@ -11,11 +25,6 @@ use msp430_hal::{
     watchdog::{Wdt, WdtClkPeriods},
 };
 use panic_msp430 as _;
-
-// The LED on P1.0 (red LED1, SLAU739 Figure 18, p. 23) should flash once per watchdog reset, about once
-// per second: each start switches it on for 250 ms, switches it off, and waits for the watchdog to reset
-// the device. Every start sets the LED itself, because P1OUT has no defined value after a reset
-// (SLAU445I Table 8-10, p. 334: the reset value of PxOUT is "Undefined").
 
 #[entry]
 fn main() -> ! {
@@ -43,7 +52,9 @@ fn main() -> ! {
     // 0.82 s typically.
     wdt.set_vloclk().set_interval_and_start(WdtClkPeriods::_8192);
 
-    // On for 250 ms, well inside the shortest interval, then off until the reset
+    // On for 250 ms, well inside the shortest interval, then off until the reset. Every start sets the LED
+    // itself, because P1OUT has no defined value after a reset (SLAU445I Table 8-10, p. 334: the reset
+    // value of PxOUT is "Undefined").
     red_led.set_high().ok();
     delay.delay_ms(250);
     red_led.set_low().ok();

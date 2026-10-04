@@ -1,23 +1,27 @@
-//! `try_freeze`: give up on XT1 after a timeout and fall back to the internal oscillators.
+//! `try_freeze` with a timeout: if XT1 hasn't started within 1 s, the example falls back to the internal
+//! oscillators. LED2 lights green when XT1 started, and LED1 turns on when the example gave up on it.
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 20 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`). The
-//! generator runs at 20 kHz so ACLK from XT1 is easy to tell apart from REFO (32.768 kHz).
+//! ACLK comes out on P2.2: from XT1 it runs at the generator's 20 kHz, after the fallback from REFO at
+//! 32.768 kHz, so the two are easy to tell apart.
+//! (While XT1 has no signal, its fault flag XT1OFFG keeps being set again: SLAU445I 3.2.13, p. 109. REFO runs
+//! at 32.768 kHz ±3.5 %: SLASEO7C 8.12.3.4, p. 30. LED1 on P1.0 is green, the green part of LED2 is P5.0, and
+//! the reset button S3 pulls RST/SBWTDIO low: SLAU802 Figure 19, p. 25.)
 //!
-//! Scope: CH1 on RST (J2 pin 16), CH2 on P1.0/LED1 (J3 pin 27), CH3 on P2.2/ACLK (J1 pin 5).
-//! Trigger on the rising edge of RST, when the reset button is released.
-//! (Header pins: SLAU802 Figure 10, p. 13. The reset button S3 pulls RST low, R11 pulls it up:
-//! SLAU802 Figure 19, p. 25.)
-//!
-//! What to try:
-//! 1. Generator on, reset the board: XT1 starts, green LED2 turns on and ACLK is 20 kHz.
-//! 2. Generator off, reset the board: about 1 s later `try_freeze` gives up, the fallback
-//!    configuration runs ACLK from REFO (32.768 kHz) and LED1 turns on. Measure the time
-//!    from reset to LED1 to check the timeout.
-//! 3. Generator off, reset, and switch the generator on within the second: XT1 still starts.
-//!
-//! (LED1 on P1.0 is green as well; the green part of LED2 is P5.0: SLAU802 Figure 19, p. 25.
-//! REFO runs at 32.768 kHz: SLASEO7C 8.12.3.4, p. 30.)
+//! How to test (function generator, and optionally the scope):
+//! 1. Generator: square wave, 20 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on.
+//! 3. Flash this example. Expected: LED2 lights green. The scope on ACLK, P2.2 (J1 pin 5), ground clip on GND
+//!    (J3 pin 22), counts 20 kHz.
+//! 4. Switch the generator output off and press S3 (reset). Expected: about 1 s later LED1 turns on (LED2
+//!    stays off), and ACLK counts about 32.8 kHz, from REFO.
+//! 5. With the output off, press S3 and switch the output on within half a second: LED2 lights green instead,
+//!    since XT1 started before the timeout.
+//! 6. To time the timeout: probes on RST (J2 pin 16) and on LED1, P1.0 (J3 pin 27), single-shot trigger on
+//!    RST's rising edge, 200 ms/div. With the output off, press and release S3: LED1 rises about 1 s after
+//!    RST. Take the probe off RST before flashing again: RST is also the Spy-Bi-Wire data line.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

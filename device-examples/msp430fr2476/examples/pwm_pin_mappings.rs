@@ -12,11 +12,10 @@
 //! pins: SLAU802 Figure 10, p. 13. S1 is P4.0: SLAU802 Figure 19, p. 25.)
 //!
 //! How to test (scope, four channels; ground clips on GND, J3 pin 22):
-//! - CH1 on P5.7 (J3 pin 29): 1 kHz, high for 250 µs of each 1 ms
-//! - CH2 on P6.0 (J4 pin 36): 1 kHz, high for 750 µs
-//! - CH3 on P3.7 (J3 pin 30): 500 Hz, high for 500 µs of each 2 ms. Press S1: it stays low. Press again:
-//!   the PWM is back.
-//! - CH4 on P4.1 (J4 pin 32): a 250 Hz square wave, 2 ms high and 2 ms low
+//! 1. CH1 on P5.7 (J3 pin 29), CH2 on P6.0 (J4 pin 36), CH3 on P3.7 (J3 pin 30), CH4 on P4.1 (J4 pin 32).
+//! 2. Flash this example. CH1: 1 kHz, high for 250 µs of each 1 ms. CH2: 1 kHz, high for 750 µs. CH3:
+//!    500 Hz, high for 500 µs of each 2 ms. CH4: a 250 Hz square wave, 2 ms high and 2 ms low.
+//! 3. Press S1: CH3 stays low. Press again: the PWM is back.
 #![no_main]
 #![no_std]
 
@@ -52,11 +51,12 @@ fn main() -> ! {
     let p6 = Batch::new(periph.p6).split(&pmm);
     let mut s1 = p4.pin0;
 
-    // MCLK = SMCLK = DCOCLKDIV in the 1 MHz range and ACLK from REFO (SELMS = 000b, SELA = 01b:
-    // SLAU445I Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118)
+    // MCLK = DCOCLKDIV in the 8 MHz range, 244 × 32.768 kHz, and SMCLK = MCLK / 8, 999.4 kHz, for the
+    // timers: the 1 MHz range, 32 × 32.768 kHz, is 5 % faster (SLAU445I 3.2.5, p. 104). ACLK from REFO
+    // (SELMS = 000b, SELA = 01b: SLAU445I Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118)
     let (smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
-        .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
-        .smclk_on(SmclkDiv::_1)
+        .mclk_dcoclk(DcoclkFreqSel::_8MHz, MclkDiv::_1)
+        .smclk_on(SmclkDiv::_8)
         .aclk_refoclk()
         .freeze(&mut fram);
 

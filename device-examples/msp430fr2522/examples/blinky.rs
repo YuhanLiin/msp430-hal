@@ -1,3 +1,15 @@
+//! An LED on P1.0 blinks, on for 0.5 s and off for 0.5 s: a GPIO output, timed by the delay of the clock
+//! system.
+//!
+//! The program toggles P1.0 and waits 500 ms with the delay that `ClockConfig::freeze()` returns, which
+//! counts cycles of MCLK, about 8 MHz from the DCO.
+//! (P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1: SLASEE4C Table 6-15, p. 58. No board document
+//! covers the LED: there is none for the MSP430FR25x2.)
+//!
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED blinks, on for 0.5 s and off for 0.5 s.
 #![no_main]
 #![no_std]
 
@@ -12,9 +24,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// Red onboard LED should blink at a steady period.
-// No board document covers this LED (on P1.0 here): there is none for the MSP430FR25x2. P1.0 is a GPIO
-// output, P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog. The watchdog runs from every PUC and must be halted, here

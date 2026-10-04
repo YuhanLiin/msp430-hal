@@ -1,11 +1,25 @@
+//! A pin in an alternate function: P1.2 outputs SMCLK, a square wave of about 1 MHz, instead of being a
+//! GPIO.
+//!
+//! P1.2 with P1SELx = 10 and P1DIR = 1 is SMCLK. The program doesn't set the clocks up, so SMCLK keeps
+//! its reset setting: DCOCLKDIV, locked by the FLL to 32 times REFO's 32.768 kHz, 1.048576 MHz.
+//! (SMCLK on P1.2: SLASEE4C Table 6-15, p. 58. After a reset SMCLK uses DCOCLKDIV, "locked by the FLL
+//! and referenced by REFO if XT1 is not available": SLAU445I 3.2, p. 102. fDCOCLKDIV = (FLLN + 1) ×
+//! (fFLLREFCLK ÷ n), with FLLN = 31 and n = 1 after a reset: SLAU445I 3.2.5, p. 104; SLAU445I
+//! Table 3-6, p. 115; SLAU445I Table 3-7, p. 116.)
+//!
+//! How to test (the scope, or an LED and a resistor):
+//! 1. Flash this example.
+//! 2. Put the probe on P1.2, with its ground clip on GND.
+//! 3. Expected: a square wave of about 1.05 MHz; Analysis > Counter measures it. REFO is accurate to
+//!    ±3.5 % (SLASEE4C Table 5-7, p. 27), so anything from 1.01 MHz to 1.09 MHz is right.
+//! 4. Without the scope: an LED with a series resistor (about 1 kΩ) from P1.2 to GND lights.
 #![no_main]
 #![no_std]
 
 use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
-
-// Alternate GPIO mode demonstration: SMCLK on P1.2
 
 #[entry]
 fn main() -> ! {
@@ -18,9 +32,7 @@ fn main() -> ! {
     let p1 = Batch::new(periph.p1).split(&pmm);
 
     // Output SMCLK on P1.2: P1SELx = 10 with P1DIR = 1 (SLASEE4C Table 6-15, p. 58). (P1.7 has no SMCLK
-    // function on this device: its alternate function 1 is UCA0STE, same table.) After a reset "The FLL
-    // stabilizes MCLK and SMCLK to 1 MHz" (SLAU445I 3.2, p. 102), so expect a 1 MHz square wave on P1.2,
-    // or an LED there to light up (no board document covers one: there is none for the MSP430FR25x2).
+    // function on this device: its alternate function 1 is UCA0STE, same table.)
     p1.pin2.to_output().to_alternate2();
 
     loop {

@@ -1,3 +1,12 @@
+//! A GPIO input and output: the green part of LED2 lights while S2 is held down.
+//!
+//! The program polls P2.3, which S2 pulls low, and drives P5.0, the green part of LED2, high while it
+//! reads low.
+//! (S2 on P2.3, pulled up by R10, 47 kΩ, and LED2's green part on P5.0: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: the green part of LED2 is off, and lights while S2 is pressed.
 #![no_main]
 #![no_std]
 
@@ -6,8 +15,6 @@ use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
 
-// The green part of LED2 should go on when button S2 (P2.3) is pressed
-// (LED2's green part is P5.0; S2 pulls P2.3 low, against a 47 kΩ pullup: SLAU802 Figure 19, p. 25)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();

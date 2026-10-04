@@ -1,9 +1,20 @@
+//! LPM4.5 and a button wake-up: the board sleeps in LPM4.5 until S2 is pressed, and then LED1 flashes.
+//!
+//! LPM4.5 stops every clock, so only an edge on a wake-up pin, the RST pin or a power cycle ends it. The
+//! wake-up is a reset: the program starts again from the top, sees in SYSRSTIV that it woke from LPMx.5, and
+//! flashes LED1 instead of going back to sleep.
+//! (What ends LPMx.5, and "Any exit from LPMx.5 causes a BOR": SLAU445I 1.4.3.2, p. 41 to p. 42. P2.3 has
+//! "wake from LPMx.5": SLASEO7C Table 7-2, p. 16. S2 is on P2.3, and LED1 on P1.0 is green:
+//! SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example. After flashing with mspdebug, unplug the board's USB cable, wait a second, and plug
+//!    it back in: the example only works after that.
+//! 2. Expected: LED1 stays off while the board sleeps.
+//! 3. Press S2: LED1 flashes, and keeps flashing.
+//! 4. Press S3 (reset): LED1 goes off, and the board sleeps until the next press of S2.
 #![no_main]
 #![no_std]
-
-// This examples enters LPM4.5, then when a button on P2.3 is pressed the system wakes and flashes LED1.
-// (The button on P2.3 is S2; LED1 on P1.0 is green: SLAU802 Figure 19, p. 25. An I/O wakes the device
-// from LPM4.5: SLAU445I 1.4.3.2, p. 41, and P2.3 has "wake from LPMx.5": SLASEO7C Table 7-2, p. 16.)
 
 use embedded_hal::digital::*;
 use msp430::asm::nop;

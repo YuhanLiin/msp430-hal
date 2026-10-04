@@ -1,3 +1,16 @@
+//! PWM on the three colors of LED2, the RGB LED: each fades up and down, out of step with the others,
+//! so LED2 slowly cycles through mixed colors.
+//!
+//! TB0 counts SMCLK, 32 × 32768 Hz = 1.049 MHz, from 0 to 5000 in up mode, a PWM period of about 4.8 ms.
+//! TB0.3 drives red on P5.1, TB0.2 green on P5.0 and TB0.1 blue on P4.7. Each duty cycle follows a
+//! triangle wave from 0 to 100 % and back, the three a sixth of a cycle apart.
+//! (SMCLK is DCOCLKDIV, (FLLN + 1) × 32768 Hz, with FLLN = 31 in the 1 MHz range: SLAU445I 3.2.5,
+//! p. 104. TB0.1 to TB0.3: SLASEO7C Table 9-15, p. 59. LED2 is red on P5.1, green on P5.0 and blue on
+//! P4.7, through jumper block J8: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED2 changes color slowly and smoothly, over and over, a full cycle every few seconds.
 #![no_main]
 #![no_std]
 
@@ -8,8 +21,6 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// The onboard RGB LED2 should fade through the colours of the rainbow (red on P5.1, green on P5.0, blue
-// on P4.7, through jumper J8: SLAU802 Figure 19, p. 25).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog
@@ -46,7 +57,7 @@ fn main() -> ! {
     let mut green = pwm.pwm2.init(p5.pin0.to_output().to_alternate2());
     let mut blue = pwm.pwm1.init(p4.pin7.to_output().to_alternate2());
 
-    let max = red.max_duty_cycle(); // 5000
+    let max = red.max_duty_cycle(); // 5001: the period, CCR0 + 1
     let mut phase: u16 = 0;
 
     /// Simple triangle waveform generator for PWM duty cycle
@@ -56,13 +67,13 @@ fn main() -> ! {
     }
 
     loop {
-      // Calculate duty cycle for each color with 1/3 cycle phase offsets
+      // Calculate duty cycle for each color, max/3 apart: a sixth of the triangle's period of 2*max
       let red_duty = triangle(phase, max);
       let green_duty = triangle(phase + max/3, max);
       let blue_duty = triangle(phase + 2*max/3, max);
 
-      // On the MSP430FR247x a new duty cycle takes effect at once in up mode, not when the timer
-      // counts to 0 (SLAZ726B TB25)
+      // Each new duty cycle loads when TB0 counts to the old one, so the running period ends with the
+      // old one (CLLD = 11b: SLAU445I Table 14-2, p. 400)
       red.set_duty_cycle(red_duty).unwrap();
       green.set_duty_cycle(green_duty).unwrap();
       blue.set_duty_cycle(blue_duty).unwrap();

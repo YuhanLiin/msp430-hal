@@ -14,9 +14,12 @@
 //! 2. Connect it to P2.2 (J1 pin 5), its ground to GND (J3 pin 22).
 //! 3. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
 //!    UART1" at 9600 baud (SLAU802 2.2.4, p. 9).
-//! 4. Expected: `100 rising, 100 falling edges per second`. Try other frequencies up to about 20 kHz, and
-//!    a sine wave, 1 Vpp around 1.2 V: the 20 mV hysteresis keeps the noise near 1.2 V from adding edges.
-//!    With the generator off, both counts are 0.
+//! 4. Expected: `100 rising, 100 falling edges per second`. Try a sine wave too, 1 Vpp around 1.2 V: the
+//!    20 mV hysteresis keeps the noise near 1.2 V from adding edges. With the generator off, both counts
+//!    are 0.
+//! 5. Try other frequencies. Up to a few hundred hertz the counts match the frequency; higher, they come
+//!    out too high, as the time the interrupts take makes the one-second wait longer: it counts CPU
+//!    cycles (see the `delay` module documentation).
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
@@ -106,8 +109,10 @@ fn main() -> ! {
     unsafe { enable_interrupts() };
 
     loop {
+        // Count the edges of one second, leaving out the time the printing takes
+        with(|cs| EDGES.borrow(cs).set((0, 0)));
         delay.delay_ms(1000);
-        let (rising, falling) = with(|cs| EDGES.borrow(cs).replace((0, 0)));
+        let (rising, falling) = with(|cs| EDGES.borrow(cs).get());
         writeln!(tx, "{} rising, {} falling edges per second\r", rising, falling).ok();
     }
 }

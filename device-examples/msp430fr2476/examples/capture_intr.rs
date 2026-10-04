@@ -1,8 +1,20 @@
+//! A capture input handled in its interrupt: each press of button S1 toggles LED1.
+//!
+//! S1 is on P4.0, which is TA3.CCI1A, input A of TA3's CCR1. S1 pulls P4.0 low when pressed, and a
+//! 47-kΩ resistor on the board, R9, pulls it high again: CCR1 captures each falling edge. Its interrupt
+//! reads TA3IV, which gives the capture, and toggles LED1. The example also shows how to write
+//! panic-free code, with `panic_never` in release builds.
+//! (TA3.CCI1A is P4.0 in the default pin mapping: SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-16,
+//! p. 60. TA3IV: SLAU445I 13.2.6.2, p. 380. S1 on P4.0 with R9, and LED1 on P1.0, green: SLAU802
+//! Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Press S1: LED1 toggles. Press it again: LED1 toggles back.
+//! 3. S1 isn't debounced, so a press can toggle LED1 more than once, and a release can toggle it too.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
-
-// This example also demonstrates how to write panic-free code using panic_never.
 
 use core::cell::UnsafeCell;
 use critical_section::with;
@@ -23,16 +35,13 @@ use panic_msp430 as _;
 use panic_never as _;
 
 // We use UnsafeCell as a panic-free version of RefCell. If you aren't using `panic_never` then RefCell is more ergonomic.
-static CAPTURE: Mutex<UnsafeCell<Option<Capture<msp430fr247x::Ta2, CCR1>>>> =
+static CAPTURE: Mutex<UnsafeCell<Option<Capture<msp430fr247x::Ta3, CCR1>>>> =
     Mutex::new(UnsafeCell::new(None));
-static VECTOR: Mutex<UnsafeCell<Option<TBxIV<msp430fr247x::Ta2, DefaultMapping>>>> =
+static VECTOR: Mutex<UnsafeCell<Option<TBxIV<msp430fr247x::Ta3, DefaultMapping>>>> =
     Mutex::new(UnsafeCell::new(None));
 static LED1: Mutex<UnsafeCell<Option<Pin<P1, Pin0, Output>>>> =
     Mutex::new(UnsafeCell::new(None));
 
-// Connect push button input to P3.3, J4 pin 35 (SLAU802 Figure 10, p. 13). When button is pressed,
-// LED1 (P1.0), which is green, should toggle (SLAU802 Figure 19, p. 25). No debouncing,
-// so sometimes inputs are missed.
 #[entry]
 fn main() -> ! {
     let Some(periph) = msp430fr247x::Peripherals::take() else { loop {} };
@@ -44,7 +53,7 @@ fn main() -> ! {
     let p1 = Batch::new(periph.p1)
         .config_pin0(|p| p.to_output())
         .split(&pmm);
-    let p3 = Batch::new(periph.p3).split(&pmm);
+    let p4 = Batch::new(periph.p4).split(&pmm);
     let led1 = p1.pin0;
 
     with(|cs| unsafe { *LED1.borrow(cs).get() = Some(led1) });
@@ -58,11 +67,12 @@ fn main() -> ! {
         .aclk_vloclk()
         .freeze(&mut fram);
 
-    // TA2 CCR1 input A (CCI1A) is P3.3 with P3SEL = 01 and P3DIR = 0 (SLASEO7C Table 9-14, p. 58;
-    // SLASEO7C Table 9-25, p. 67). ACLK is TASSEL = 01b (SLASEO7C Table 9-8, p. 50). Capture on the
-    // falling edge: CM = 10b, CCIS = 00b (SLAU445I Table 13-6, p. 386).
-    let captures = CaptureParts3::config(periph.ta2, TimerConfig::aclk(&aclk))
-        .config_cap1_input_A(p3.pin3.to_alternate1())
+    // TA3 CCR1 input A (CCI1A) is P4.0, S1, with P4SEL = 01 and P4DIR = 0 (SLASEO7C Table 9-14, p. 58;
+    // SLASEO7C Table 9-26, p. 68), in the default TA3 mapping (TA3RMP = 0: SLASEO7C Table 9-16, p. 60).
+    // ACLK is TASSEL = 01b (SLASEO7C Table 9-8, p. 50). Capture on the falling edge, when S1 is
+    // pressed: CM = 10b, CCIS = 00b (SLAU445I Table 13-6, p. 386).
+    let captures = CaptureParts3::config(periph.ta3, TimerConfig::aclk(&aclk))
+        .config_cap1_input_A(p4.pin0.to_alternate1())
         .config_cap1_trigger(CapTrigger::FallingEdge)
         .commit();
     let mut capture = captures.cap1;
@@ -84,11 +94,11 @@ fn setup_capture<T: CapCmp<C>, C>(capture: &mut Capture<T, C>) {
     capture.enable_interrupts();
 }
 
-// The TA2 CCR1, CCR2 and overflow interrupt vector (FFEEh: SLASEO7C Table 9-2, p. 46). Reading TA2IV
+// The TA3 CCR1, CCR2 and overflow interrupt vector (FFEAh: SLASEO7C Table 9-2, p. 46). Reading TA3IV
 // gives the highest pending source and clears its flag (SLAU445I 13.2.6.2, p. 380; SLAU445I
 // Table 13-8, p. 388).
 #[interrupt]
-fn TIMER2_A1() {
+fn TIMER3_A1() {
     with(|cs| {
         let Some(vector) = unsafe { &mut *VECTOR.borrow(cs).get() }.as_mut() else { return; };
         let Some(capture) = unsafe { &mut *CAPTURE.borrow(cs).get() }.as_mut() else { return; };

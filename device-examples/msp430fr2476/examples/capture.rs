@@ -1,3 +1,23 @@
+//! Timer captures, polled: TA3 captures each press of button S1, and the backchannel UART prints the
+//! time since the press before, in VLO cycles.
+//!
+//! S1 is on P4.0, which is TA3.CCI1A, input A of TA3's CCR1. S1 pulls P4.0 low when pressed, and a
+//! 47-kΩ resistor on the board, R9, pulls it high again: CCR1 captures TA3's count at each falling edge.
+//! TA3 counts ACLK from the VLO, typically 10 kHz, so a second is about 10000 counts, 0x2710; the count
+//! wraps around after 65536 counts, about 6.5 s. Each capture also turns LED1 on.
+//! (TA3.CCI1A is P4.0 in the default pin mapping: SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-16,
+//! p. 60. Captures: SLAU445I 13.2.4.1, p. 374. VLO: SLASEO7C 8.12.3.5, p. 30. S1 on P4.0 with R9, and
+//! LED1 on P1.0, green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example, with the TXD jumper of J101 on, and open the COM port of "MSP Application
+//!    UART1" at 9600 baud (SLAU802 2.2.4, p. 9).
+//! 2. Press S1 about once a second. Expected: a line per press, like `0x2710`: the VLO cycles since the
+//!    press before, in hex. The VLO is only accurate to ±50 % (VLOCLK "10 kHz ±50%": SLASEO7C
+//!    Table 9-8, p. 50), so anything from about `0x1388` to `0x3a98`. The first press counts from the
+//!    start.
+//! 3. S1 isn't debounced, so a press or a release can print an extra line with a small value, or `!`
+//!    when a second edge came before the first was read.
 #![no_main]
 #![no_std]
 
@@ -18,13 +38,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// Connect push button input to P3.3. When button is pressed, putty should print the # of cycles
-// since the last press. Sometimes we get 2 consecutive readings due to lack of debouncing.
-// P3.3 is J4 pin 35 (SLAU802 Figure 10, p. 13), a timer capture header pin wired to nothing else on the
-// LaunchPad (net P3.3_TC: SLAU802 Figure 18, p. 24). P1.1 isn't used, because the TMP235 temperature
-// sensor drives it (SLAU802 2.2.5.1, p. 10). The text goes out on the backchannel UART, eUSCI_A0's TXD
-// on P1.4 (SLAU802 2.2.4, p. 9; SLAU802 Figure 16, p. 22), with the TXD jumper of J101 on (SLAU802
-// Table 2, p. 8).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();
@@ -38,7 +51,7 @@ fn main() -> ! {
     let mut p1 = Batch::new(periph.p1)
         .config_pin0(|p| p.to_output())
         .split(&pmm);
-    let p3 = Batch::new(periph.p3).split(&pmm);
+    let p4 = Batch::new(periph.p4).split(&pmm);
 
     // MCLK = SMCLK = DCOCLKDIV in the 1 MHz range, and ACLK from the VLO (SELMS, SELA: SLAU445I
     // Table 3-8, p. 117; DIVM, DIVS: SLAU445I Table 3-9, p. 118). SLASEO7C 9.10.2, p. 49 lists the VLO
@@ -67,14 +80,14 @@ fn main() -> ! {
     .use_smclk(&smclk)
     .tx_only(p1.pin4.to_alternate1());
 
-    // TA2 counts ACLK, here from the VLO. Its CCR1 input A (CCI1A) is P3.3 with P3SEL = 01 and P3DIR = 0
-    // (SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-25, p. 67), in the default TA2 mapping (TA2RMP = 0:
-    // SLAU445I Table 1-32, p. 83). ACLK is TASSEL = 01b (SLASEO7C Table 9-8, p. 50). A capture on the
-    // falling edge (CM = 10b, CCIS = 00b: SLAU445I Table 13-6, p. 386) copies TA2R into TA2CCR1 and sets
-    // CCIFG (SLAU445I 13.2.4.1, p. 374); a second capture before the first is read sets COV (SLAU445I
-    // 13.2.4.1, p. 375), reported as `OverCapture`.
-    let captures = CaptureParts3::<_, DefaultMapping>::config(periph.ta2, TimerConfig::aclk(&aclk))
-        .config_cap1_input_A(p3.pin3.to_alternate1())
+    // TA3 counts ACLK, here from the VLO. Its CCR1 input A (CCI1A) is P4.0, S1, with P4SEL = 01 and
+    // P4DIR = 0 (SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-26, p. 68), in the default TA3 mapping
+    // (TA3RMP = 0: SLASEO7C Table 9-16, p. 60; SLAU445I Table 1-32, p. 83). ACLK is TASSEL = 01b
+    // (SLASEO7C Table 9-8, p. 50). A capture on the falling edge (CM = 10b, CCIS = 00b: SLAU445I
+    // Table 13-6, p. 386) copies TA3R into TA3CCR1 and sets CCIFG (SLAU445I 13.2.4.1, p. 374); a second
+    // capture before the first is read sets COV (SLAU445I 13.2.4.1, p. 375), reported as `OverCapture`.
+    let captures = CaptureParts3::<_, DefaultMapping>::config(periph.ta3, TimerConfig::aclk(&aclk))
+        .config_cap1_input_A(p4.pin0.to_alternate1())
         .config_cap1_trigger(CapTrigger::FallingEdge)
         .commit();
     let mut capture = captures.cap1;
@@ -91,6 +104,7 @@ fn main() -> ! {
             Err(OverCapture(_)) => {
                 p1.pin0.set_high().unwrap();
                 write(&mut tx, '!');
+                write(&mut tx, '\r');
                 write(&mut tx, '\n');
             }
         }
@@ -104,6 +118,7 @@ fn print_num<U: SerialUsci>(tx: &mut Tx<U>, num: u16) {
     print_hex(tx, (num >> 8) & 0xF);
     print_hex(tx, (num >> 4) & 0xF);
     print_hex(tx, num & 0xF);
+    write(tx, '\r');
     write(tx, '\n');
 }
 

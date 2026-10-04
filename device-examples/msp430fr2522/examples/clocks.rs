@@ -1,3 +1,17 @@
+//! The clock system and the watchdog in both its modes: an LED on P1.0 blinks, on for about 1 s and off
+//! for about 1 s, and each off time ends with a watchdog reset that starts the program again.
+//!
+//! MCLK and SMCLK run from the DCO at about 8 MHz. With the LED on, the watchdog counts 2^23 SMCLK
+//! cycles, 1.05 s, as an interval timer. Then the LED goes off, and the watchdog counts them again in
+//! watchdog mode, which resets the device at the end, so the program starts over.
+//! (Interval timer mode: SLAU445I 12.2.3, p. 363. Watchdog mode resets the device with a PUC: SLAU445I
+//! 12.2.2, p. 363. P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1: SLASEE4C Table 6-15, p. 58. No
+//! board document covers the LED: there is none for the MSP430FR25x2.)
+//!
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED blinks, on for about 1 s and off for about 1 s.
 #![no_main]
 #![no_std]
 
@@ -13,9 +27,6 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// Red LED should blink 1 second on, 1 second off
-// No board document covers this LED (on P1.0 here): there is none for the MSP430FR25x2. P1.0 is a GPIO
-// output, P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
@@ -37,10 +48,9 @@ fn main() -> ! {
         .aclk_refoclk()
         .freeze(&mut fram);
 
-    // 2^23 clock cycles, WDTIS = 010b (SLAU445I Table 12-2, p. 366): 8 MHz / 2^23 = 1.05 s
+    // 2^23 clock cycles, WDTIS = 010b (SLAU445I Table 12-2, p. 366): 2^23 / 8 MHz = 1.05 s
     const DELAY: WdtClkPeriods = WdtClkPeriods::_8192k;
 
-    // blinks should be 1 second on, 1 second off
     // First an interval-mode wait from SMCLK (WDTTMSEL = 1, WDTSSEL = 00: SLAU445I Table 12-2, p. 366),
     // then watchdog mode, whose expiry resets the device and restarts the blink (SLAU445I 12.2.2, p. 363)
     let mut wdt = wdt.to_interval();

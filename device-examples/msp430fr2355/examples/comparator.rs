@@ -1,3 +1,19 @@
+//! The enhanced comparator eCOMP0: LED1 is on while the voltage on P1.1 is below 1.2 V, and off above it.
+//!
+//! eCOMP0 compares its low-power 1.2 V reference, on the V+ input, with P1.1 (COMP0.1) on the V- input. Its
+//! output is high while V+ is higher than V-, so while P1.1 is below 1.2 V. The output isn't routed to a
+//! pin: the loop reads it and copies it to LED1.
+//! (eCOMP0's inputs: SLASEC4D Table 6-23, p. 78. The output: SLAU445I 18.2.1, p. 505. The reference is
+//! 1.20 V typical: SLASEC4D Table 5-10, p. 41. LED1 on P1.0 is red: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test (a jumper wire, and optionally the function generator):
+//! 1. Flash this example.
+//! 2. Connect P1.1 (J3 pin 28) to GND (J3 pin 22) with a jumper wire: LED1 is on. Move the wire to 3.3 V
+//!    (J1 pin 1): LED1 is off. With nothing on P1.1 the input floats, and LED1 can be either.
+//! 3. The generator on P1.1 instead of the wire: the DC waveform, output load High-Z, its ground to GND
+//!    (J3 pin 22). Check the voltage with the multimeter first: 0 V to 3.3 V only (the input range:
+//!    SLASEC4D Table 5-23, p. 53). At an offset of 1.100 V LED1 is on, at 1.300 V it's off.
+//! (Header pins: SLAU680 Figure 10, p. 15.)
 #![no_main]
 #![no_std]
 
@@ -10,11 +26,6 @@ use msp430_hal::{
     watchdog::Wdt,
 };
 use panic_msp430 as _;
-
-// Configure one of the enhanced comparator (eCOMP) modules for use: If P1.1 is less than 1.2V then LED turns on
-// The eCOMP output CPOUT is high when the V+ terminal is higher than the V- terminal (SLAU445I 18.2.1,
-// p. 505), and here V+ is the 1.2 V reference and V- is P1.1. LED1 (red) is on P1.0 (SLAU680
-// Figure 18, p. 26), and P1.1 is pin 28 of the BoosterPack header (SLAU680 Figure 10, p. 15).
 
 #[entry]
 fn main() -> ! {

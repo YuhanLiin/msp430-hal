@@ -92,8 +92,8 @@ fn main() -> ! {
 
     // MODCLK clocks the ADC (ADCSSELx = 00b: SLAU445I Table 21-4, p. 564), with 12-bit results (ADCRES =
     // 10b) in the signed format (ADCDF = 1: SLAU445I Table 21-5, p. 565). 256 ADCCLK cycles of sampling
-    // (ADCSHTx = 1000b: SLAU445I Table 21-3, p. 561), about 67 µs at MODCLK's 3.8 MHz (SLASEO7C Table 9-8,
-    // p. 50), give the sensor's output filter time to charge the ADC, and the CPU time to read each result.
+    // (ADCSHTx = 1000b: SLAU445I Table 21-3, p. 561), about 67 µs at MODCLK's 3.8 MHz (SLASEO7C 8.12.3.6,
+    // p. 30), give the sensor's output filter time to charge the ADC, and the CPU time to read each result.
     let mut config = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,

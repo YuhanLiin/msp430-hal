@@ -1,19 +1,25 @@
+//! An SPI slave that answers in its receive interrupt, with a master on the same chip: once a second
+//! eUSCI_B1, the master, sends 12, 14 and 255, and eUSCI_A0, the slave, answers each byte with that byte
+//! plus one, during the next byte. LED1 lights while the answers are right.
+//!
+//! The master clocks four bytes (the fourth is 0) and reads four back; the last three must be 13, 15 and
+//! 0. P2.7, a GPIO, drives the slave's STE, which is low during the transfer: only then does the slave
+//! drive MISO. Both use SPI mode 0, MSB first, and the master runs at 10 kHz from SMCLK. The slave uses
+//! eUSCI_A0's remapped pins, which leaves the backchannel UART's pins alone.
+//! (The SPI pins: SLASEO7C Table 9-11, p. 54. STE in 4-pin slave mode: SLAU445I 23.3.4.1, p. 609. LED1
+//! on P1.0 is green, and P5.1, P5.0 and P4.7 drive LED2 through J8: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test (four jumper wires):
+//! 1. Take the three jumpers off J8, so that LED2 doesn't load the slave's pins.
+//! 2. Connect MOSI, P3.2 (J2 pin 15), to P5.2 (J4 pin 40); MISO, P3.6 (J2 pin 14), to P5.1 (J4 pin 39);
+//!    SCLK, P3.5 (J1 pin 7), to P5.0 (J4 pin 38); and STE, P2.7 (J2 pin 12), to P4.7 (J4 pin 37).
+//!    (Header pins: SLAU802 Figure 10, p. 13.)
+//! 3. Flash this example.
+//! 4. Expected: LED1 lights and stays on. Without the wires it stays off.
+//! 5. Put the J8 jumpers back.
 #![no_main]
 #![no_std]
 #![feature(abi_msp430_interrupt)]
-
-// This example demonstrates an SPI slave using interrupts.
-// Another eUSCI peripheral is configured as an SPI master to drive the bus.
-// LED1 on P1.0, which is green, should turn on and stay on while the slave's replies are right
-// (SLAU802 Figure 19, p. 25)
-
-// Connect the master (eUSCI_B1) to the slave (eUSCI_A0, remapped) (SLASEO7C Table 9-11, p. 54;
-// header pins: SLAU802 Figure 10, p. 13):
-// P3.2, UCB1SIMO, J2 pin 15 <--> P5.2, UCA0SIMO, J4 pin 40
-// P3.6, UCB1SOMI, J2 pin 14 <--> P5.1, UCA0SOMI, J4 pin 39
-// P3.5, UCB1CLK,  J1 pin 7  <--> P5.0, UCA0CLK,  J4 pin 38
-// P2.7, GPIO,     J2 pin 12 <--> P4.7, UCA0STE,  J4 pin 37
-// P5.0, P5.1 and P4.7 also drive LED2 through J8 (SLAU802 Figure 19, p. 25).
 
 use core::cell::RefCell;
 
@@ -60,9 +66,8 @@ fn main() -> ! {
     let mut ste = p2.pin7.to_output();
     ste.set_high().ok();
 
-    // LED1 on P1.0 is green, whatever the variable name says (SLAU802 Figure 19, p. 25)
+    // LED1 on P1.0, which is green (SLAU802 Figure 19, p. 25)
     let mut led1 = p1.pin0.to_output();
-    // let mut green_led = Batch::new(periph.p6).split(&pmm).pin6.to_output();
 
     // MCLK = SMCLK = DCOCLKDIV in the 8 MHz range (SELMS = 000b: SLAU445I Table 3-8, p. 117; DIVM,
     // DIVS: SLAU445I Table 3-9, p. 118). ACLK from the VLO: SLASEO7C 9.10.2, p. 49; SLAU445I
@@ -114,7 +119,6 @@ fn main() -> ! {
 
         // Green LED on if result matches expected (LED1: SLAU802 Figure 19, p. 25)
         led1.set_state( (recv_buf[1..] == [13, 15, 00]).into() ).ok();
-        // led1.toggle().ok();
 
         delay.delay_ms(1000);
     }

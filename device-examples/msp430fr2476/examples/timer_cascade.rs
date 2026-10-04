@@ -1,14 +1,17 @@
-//! Timer cascading: one timer counts the periods of another.
+//! Timer cascading: one timer counts the periods of another. LED1 toggles every second, and the red
+//! part of LED2 every 5 s.
 //!
-//! TA0 runs from ACLK (REFO, 32.768 kHz) with a period of 1 s, and LED1 toggles every period.
-//! The CCR2 output of TA0 clocks TA1, which counts those periods: red LED2 toggles every
-//! 5 periods, so every 5 s. TA1 could count up to 65536 s like this, about 18 hours.
-//! (LED1 on P1.0 is green, the red part of LED2 is P5.1: SLAU802 Figure 19, p. 25. REFO:
-//! SLASEO7C 8.12.3.4, p. 30.)
+//! TA0 counts ACLK (REFO, 32.768 kHz) with a period of 1 s, and LED1 toggles every period. The CCR2
+//! output of TA0 clocks TA1, which counts those periods: the red part of LED2 toggles every 5 periods,
+//! so every 5 s. TA1 could count up to 65536 s like this, about 18 hours. On the MSP430FR247x, TA1 can
+//! count the periods of TA0, and TA3 those of TA2.
+//! (REFO: SLASEO7C 8.12.3.4, p. 30. The INCLK input of TA1 is the CCR2 output of TA0, and that of TA3
+//! the CCR2 output of TA2: SLASEO7C Table 9-13, p. 56; SLASEO7C Table 9-14, p. 58. LED1 on P1.0 is
+//! green, the red part of LED2 is P5.1: SLAU802 Figure 19, p. 25.)
 //!
-//! On the MSP430FR247x, TA1 can count the periods of TA0, and TA3 those of TA2.
-//! (The INCLK input of TA1 is the CCR2 output of TA0, and that of TA3 the CCR2 output of TA2:
-//! SLASEO7C Table 9-13, p. 56; SLASEO7C Table 9-14, p. 58.)
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 is on for 1 s, then off for 1 s. LED2 is red for 5 s, then off for 5 s.
 #![no_main]
 #![no_std]
 

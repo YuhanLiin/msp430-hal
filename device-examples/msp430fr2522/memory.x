@@ -14,7 +14,3 @@ MEMORY
 
 /* Stack begins at the end of RAM:
    _stack_start = ORIGIN(RAM) + LENGTH(RAM); */
-
-/* TODO: Code (and data?) above 64kB mark, which is supported even without
-   using MSP430X mode. The MSP430FR25x2 has no FRAM above 64kB, only the 1KB BSL2 ROM
-   at FFC00h to FFFFFh (SLASEE4C Table 6-19, p. 62). */

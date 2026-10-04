@@ -1,7 +1,20 @@
+//! An SPI master with the non-blocking `FullDuplex` interface of embedded-hal-nb and a GPIO as the chip
+//! select: once a second it sends two bytes, AAh and FFh, with the chip select low.
+//!
+//! eUSCI_A0 is a 3-pin master in SPI mode 0 (the clock idles low, and data is captured on its rising
+//! edges), MSB first, at 500 kHz from SMCLK. Each `write` of a byte is followed by a `read` of the byte
+//! that came in meanwhile. P1.4, a GPIO, is the chip select.
+//! (eUSCI_A0's SPI pins: SLASEC4D Table 6-14, p. 72. SPI mode 0: SLAU445I Table 23-3, p. 613.)
+//!
+//! How to test (the scope):
+//! 1. Flash this example.
+//! 2. Scope, ground on GND (J3 pin 22), 20 µs/div, trigger on CH3 falling: CH1 on SCLK, P1.5 (J1 pin 2),
+//!    CH2 on MOSI, P1.7 (J1 pin 4), CH3 on the chip select, P1.4 (J3 pin 23). Expected once a second:
+//!    the chip select low for 16 clock pulses, while MOSI sends AAh and FFh (10101010 and 11111111),
+//!    MSB first. The scope's SPI decoder (Analysis > Decode) shows them as bytes.
+//! (Header pins: SLAU680 Figure 10, p. 15.)
 #![no_main]
 #![no_std]
-
-// This example uses the non-blocking interface from embedded-hal-nb, with a software controlled CS pin.
 
 use embedded_hal::{delay::DelayNs, digital::OutputPin, spi::MODE_0};
 use msp430_rt::entry;

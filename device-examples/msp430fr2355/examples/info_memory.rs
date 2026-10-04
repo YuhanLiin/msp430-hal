@@ -1,3 +1,18 @@
+//! The information memory is FRAM, which keeps its contents without power. Each start toggles a byte in
+//! it between 0 and 1, and LED1 shows the byte, so every reset or power-up switches LED1 from on to off,
+//! or from off to on.
+//!
+//! The byte is the first one of the information memory, and LED1 is on when it is 0.
+//! `InfoMemory::write` lifts the write protection, DFWP, only for the write.
+//! (Information memory: 512 bytes of FRAM, 1800h to 19FFh: SLASEC4D Table 6-4, p. 65. FRAM is
+//! nonvolatile: SLAU445I 6.1, p. 301. DFWP: SLAU445I 1.9.3, p. 45. LED1 on P1.0 is red, and S3 is the
+//! reset button: SLAU680 Figure 18, p. 26.)
+//!
+//! How to test:
+//! 1. Flash this example. LED1 is on or off, depending on what the byte held before.
+//! 2. Press the reset button S3: LED1 toggles.
+//! 3. Unplug the USB cable and plug it back in: LED1 toggles again, so the byte kept its value without
+//!    power.
 #![no_main]
 #![no_std]
 
@@ -6,11 +21,6 @@ use msp430::asm;
 use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
-
-// Use the non-volatile information memory to toggle the red onboard LED.
-// Resetting or power cycling the board toggles the red LED.
-// (Information memory is FRAM, 512 bytes from 1800h: SLASEC4D Table 6-4, p. 65. LED1, red, is on P1.0:
-// SLAU680 Figure 18, p. 26.)
 
 #[entry]
 fn main() -> ! {

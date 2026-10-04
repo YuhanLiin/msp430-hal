@@ -1,25 +1,28 @@
-//! RTC clocked from XT1, either directly (XT1CLK) or through ACLK.
+//! The RTC clocked from XT1, directly from XT1CLK or through ACLK: it counts 16384 cycles of the generator's
+//! signal on XIN between toggles of LED1, so at 32.768 kHz LED1 toggles every 0.5 s.
 //!
-//! The RTC counts 16384 XT1 cycles per period and LED1 toggles every period, so with a
-//! 32.768 kHz signal LED1 blinks at 1 Hz (0.5 s on, 0.5 s off).
-//! (LED1 on P1.0 is green: SLAU802 Figure 19, p. 25)
+//! `RTC_FROM_ACLK` picks the path. The fail-safe covers ACLK but not the RTC's own XT1CLK input: without a
+//! signal the RTC stops on XT1CLK, while through ACLK it counts REFO instead. The main loop clears the fault
+//! flag at each toggle, which moves ACLK back to XT1 once the signal is back.
+//! (RTCSS = 10b selects XT1CLK, and 01b SMCLK or ACLK, chosen by RTCCKSEL in SYSCFG2: SLASEO7C 9.10.11,
+//! p. 61; SLASEO7C Table 9-18, p. 61. SLAU445I 3.2.13, p. 109 to p. 110 describes the switch to REFO for
+//! MCLK, SMCLK, ACLK and the FLL reference only. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
 //!
-//! Wiring: function generator -> P2.1/XIN (J2 pin 18), ground -> J2 pin 20. Square wave,
-//! 32.768 kHz, 0 V to 3.3 V, 50 % duty, output load High-Z (see `xt1_bypass_aclk.rs`).
-//!
-//! Scope: P1.0/LED1 (J3 pin 27). (Header pins: SLAU802 Figure 10, p. 13.)
-//!
-//! What to try:
-//! 1. The LED1 period is 1.000 s at 32.768 kHz. At 16.384 kHz it should be 2 s.
-//! 2. Set `RTC_FROM_ACLK` to true and repeat. The result should be identical, but now the RTC
-//!    runs from ACLK (RTCSS plus the SYSCFG2.RTCCKSEL mux). If the mux were wrong the RTC would
-//!    count SMCLK (1 MHz) instead and LED1 would toggle every ~16 ms. (RTCSS = 01 selects SMCLK
-//!    or ACLK, chosen in SYSCFG2, and RTCSS = 10 is XT1CLK: SLASEO7C 9.10.11, p. 61;
-//!    SLASEO7C Table 9-18, p. 61.)
-//! 3. Switch the generator off. Through ACLK the RTC keeps running on REFO (the fail-safe
-//!    covers ACLK). On XT1CLK it should stop, because the fail-safe does not cover the RTC's
-//!    direct XT1CLK input. (SLAU445I 3.2.13, p. 109 to p. 110 describes the switch to REFO for
-//!    MCLK, SMCLK, ACLK and the FLL reference only.)
+//! How to test (function generator, and optionally the scope):
+//! 1. Generator: square wave, 32.768 kHz, duty cycle 50 %, 0 V to 3.3 V (3.3 Vpp, 1.65 V offset), output load
+//!    High-Z. Check the levels, and the frequency's unit (kHz, not Hz), on the scope before connecting: a
+//!    negative or >3.6 V signal can damage the pin.
+//! 2. Connect it to XIN, P2.1 (J2 pin 18), its ground to GND (J2 pin 20), and switch the output on.
+//! 3. Flash this example. Expected: LED1 toggles every 0.5 s, a period of 1 s. The scope on LED1, P1.0
+//!    (J3 pin 27), ground clip on GND (J3 pin 22), shows it exactly.
+//! 4. Set the generator to 16.384 kHz: LED1 toggles every second. Set it back to 32.768 kHz.
+//! 5. Switch the generator output off: LED1 stops, because the fail-safe doesn't cover XT1CLK. Switch it back
+//!    on: LED1 carries on.
+//! 6. Set `RTC_FROM_ACLK` to true and flash again: LED1 toggles the same way, but the RTC counts ACLK
+//!    (RTCSS = 01b, RTCCKSEL = 1). LED1 toggling every 16 ms instead would mean it counts SMCLK, 1 MHz.
+//! 7. Switch the generator output off: LED1 keeps toggling at nearly the same rate, because ACLK falls back
+//!    to REFO. Set `RTC_FROM_ACLK` back to false afterwards.
+//! (Header pins: SLAU802 Figure 10, p. 13.)
 #![no_main]
 #![no_std]
 

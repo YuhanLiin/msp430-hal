@@ -1,3 +1,18 @@
+//! The CRC module and a software CRC compute the CRC-16-CCITT signature of the same 16 words, and LED1
+//! turns on when the two signatures match.
+//!
+//! The CRC module starts from the seed FFFFh. The words go in through CRCDIRB, lower byte first, which
+//! reverses the bits of each byte, and the signature is read from CRCINIRES. The software version works
+//! through the same bytes in the same order.
+//! (Polynomial x^16 + x^12 + x^5 + 1: SLASEO7C 9.10.6, p. 53. Seed, data and result registers: SLAU445I
+//! 11.3, p. 354. Byte order and bit reversal: SLAU445I 11.3.1, p. 354. LED1 on P1.0 is green: SLAU802
+//! Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example.
+//! 2. Expected: LED1 turns on and stays on: the signatures match. If LED1 stays off, they differ.
+//! 3. To see the other case, change the seed given to `calculate_software_sig` from 0xFFFF to 0, and
+//!    flash again: LED1 stays off.
 #![no_main]
 #![no_std]
 

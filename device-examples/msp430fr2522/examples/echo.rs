@@ -1,3 +1,18 @@
+//! An echo on eUSCI_A0: the example prints `HELLO`, then sends back every character it receives.
+//!
+//! eUSCI_A0, the only UART of this device, runs at 9600 baud, 8 data bits, no parity and one stop bit,
+//! clocked by ACLK from REFO. A character that arrives with an error comes back as `!` (parity), `}`
+//! (overrun), `?` (framing) or `#` (break). An LED on P1.0 lights once the UART is set up. There's no
+//! LaunchPad for the MSP430FR25x2, so the PC needs a USB-to-UART adapter.
+//! (eUSCI_A0: SLASEE4C 6.10.7, p. 53. UCA0TXD is P1.4 and UCA0RXD P1.5: SLASEE4C Table 6-11, p. 53;
+//! SLASEE4C Table 6-15, p. 58.)
+//!
+//! How to test (a 3.3-V USB-to-UART adapter, an LED and a resistor):
+//! 1. Connect the LED with a series resistor (about 1 kΩ) from P1.0 to GND, and the adapter: its RX to
+//!    P1.4, its TX to P1.5 and its GND to GND.
+//! 2. Flash this example, and open the adapter's COM port at 9600 baud.
+//! 3. Expected: the LED lights, and the terminal shows `HELLO`. Each character you type comes back (with
+//!    the terminal's local echo off).
 #![no_main]
 #![no_std]
 
@@ -21,9 +36,6 @@ use panic_msp430 as _;
 #[cfg(not(debug_assertions))]
 use panic_never as _;
 
-// Prints "HELLO" when started then echos on eUSCI_A0, the only UART of this device
-// (SLASEE4C 6.10.7, p. 53)
-// Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
     if let Some(periph) = msp430fr25x2::Peripherals::take() {

@@ -1,8 +1,21 @@
+//! An SPI master with the blocking `SpiBus` interface of embedded-hal and a GPIO as the chip select:
+//! once a second it sends five bytes, 12h 00h 00h 34h 56h, with the chip select low, and LED1 toggles.
+//!
+//! eUSCI_A1 is a 3-pin master in SPI mode 0 (the clock idles low, and data is captured on its rising
+//! edges), MSB first, at 500 kHz from SMCLK. `write` sends 12h, `read` sends 00h twice to read two bytes,
+//! and `transfer` sends 34h and 56h. P1.3, a GPIO, is the chip select.
+//! (eUSCI_A1's SPI pins: SLASE59F Table 6-10, p. 49. SPI mode 0: SLAU445I Table 23-3, p. 613. LED1 on
+//! P1.0 is red: SLAU739 Figure 18, p. 23.)
+//!
+//! How to test (the scope):
+//! 1. Flash this example. Expected: LED1 toggles every second.
+//! 2. Scope, ground on GND (J3 pin 22), 50 µs/div, trigger on CH3 falling: CH1 on SCLK, P2.4 (J1 pin 7),
+//!    CH2 on MOSI, P2.6 (J2 pin 15), CH3 on the chip select, P1.3 (J1 pin 9). Expected once a second:
+//!    the chip select low for 40 clock pulses, while MOSI sends 12h, 00h, 00h, 34h and 56h, MSB first.
+//!    The scope's SPI decoder (Analysis > Decode) shows them as bytes.
+//! (Header pins: SLAU739 Figure 18, p. 23.)
 #![no_main]
 #![no_std]
-
-// This example uses the SpiBus embedded-hal interface, with a software controlled CS pin.
-// (CS is P1.3 as a GPIO output, LaunchPad header pin J1.9: SLAU739 Figure 18, p. 23.)
 
 use embedded_hal::{delay::DelayNs, digital::{OutputPin, StatefulOutputPin}, spi::MODE_0};
 use msp430_rt::entry;
@@ -26,18 +39,20 @@ fn main() -> ! {
     let p1 = Batch::new(periph.p1)
         .config_pin0(|p| p.to_output())
         .config_pin3(|p| p.to_output())
-        // P1.4 UCA0SIMO, P1.5 UCA0SOMI, P1.6 UCA0CLK: P1SELx = 01 (SLASE59F Table 6-10, p. 49; SLASE59F
-        // Table 6-17, p. 55)
+        .split(&pmm);
+    // P2.4 UCA1CLK, P2.5 UCA1SOMI, P2.6 UCA1SIMO: P2SELx = 01 (SLASE59F Table 6-10, p. 49; SLASE59F
+    // Table 6-19, p. 58). eUSCI_A0's pins would include P1.4 and P1.5, the backchannel UART's (SLAU739
+    // Figure 18, p. 23).
+    let p2 = Batch::new(periph.p2)
         .config_pin4(|p| p.to_alternate1())
         .config_pin5(|p| p.to_alternate1())
         .config_pin6(|p| p.to_alternate1())
         .split(&pmm);
-    // LaunchPad header pins: SCK J1.5, MISO J1.3, MOSI J1.4, CS J1.9 (SLAU739 Figure 18, p. 23). P1.4 and
-    // P1.5 are also the backchannel UART; opening the TXD and RXD jumpers of J101 frees them (SLAU739
-    // 2.2.3, p. 8).
-    let sck    = p1.pin6;
-    let miso   = p1.pin5;
-    let mosi   = p1.pin4;
+    // LaunchPad header pins: SCK J1 pin 7, MISO J2 pin 14, MOSI J2 pin 15, CS J1 pin 9 (SLAU739
+    // Figure 18, p. 23)
+    let sck    = p2.pin4;
+    let miso   = p2.pin5;
+    let mosi   = p2.pin6;
     let mut cs = p1.pin3;
     cs.set_high();
     let mut red_led = p1.pin0; // Red LED1 (SLAU739 Figure 18, p. 23)
@@ -55,7 +70,7 @@ fn main() -> ! {
     // SPI mode 0 is UCCKPH = 1, UCCKPL = 0, and `true` sends the MSB first, UCMSB = 1; master clocked from
     // SMCLK: UCMST = 1, UCSSELx = 10b (SLAU445I Table 23-3, p. 613). Without STE it runs as a 3-pin master,
     // UCMODEx = 00b (SLAU445I Table 23-3, p. 613; SLAU445I 23.3.3, p. 607).
-    let mut spi = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
+    let mut spi = SpiConfig::new(periph.e_usci_a1, MODE_0, true)
         .to_master_using_smclk(&smclk, 16) // 8MHz / 16 = 500kHz (SLAU445I 23.3.6, Equation 15, p. 609)
         .single_master_bus(miso, mosi, sck);
 

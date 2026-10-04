@@ -1,3 +1,20 @@
+//! The CRC module and a software CRC compute the CRC-16-CCITT signature of the same 16 words, and an LED
+//! on P1.0 turns on when the two signatures match.
+//!
+//! The CRC module starts from the seed FFFFh. The words go in through CRCDIRB, lower byte first, which
+//! reverses the bits of each byte, and the signature is read from CRCINIRES. The software version works
+//! through the same bytes in the same order.
+//! (Polynomial x^16 + x^12 + x^5 + 1: SLASEE4C 6.10.6, p. 53. Seed, data and result registers: SLAU445I
+//! 11.3, p. 354. Byte order and bit reversal: SLAU445I 11.3.1, p. 354. No board document covers the LED:
+//! there is none for the MSP430FR25x2. P1.0 is a GPIO output, P1SELx = 00 and P1DIR = 1: SLASEE4C
+//! Table 6-15, p. 58.)
+//!
+//! How to test (an LED and a resistor):
+//! 1. Connect an LED with a series resistor (about 1 kΩ) from P1.0 to GND.
+//! 2. Flash this example.
+//! 3. Expected: the LED turns on and stays on: the signatures match. If it stays off, they differ.
+//! 4. To see the other case, change the seed given to `calculate_software_sig` from 0xFFFF to 0, and
+//!    flash again: the LED stays off.
 #![no_main]
 #![no_std]
 
@@ -33,8 +50,6 @@ fn main() -> ! {
     let sw_sig = calculate_software_sig(0xFFFF, &crc_input);
 
     // Turn on the LED if the signatures match
-    // No board document covers an LED on P1.0: there is none for the MSP430FR25x2. P1.0 is a GPIO output,
-    // P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
     led.set_state((sw_sig == hw_sig).into()).ok();
 
     loop {
