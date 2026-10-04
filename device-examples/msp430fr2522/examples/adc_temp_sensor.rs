@@ -23,6 +23,7 @@ fn main() -> ! {
     let (mut pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut led = port1.pin0.to_output();
+    led.set_low().ok();
 
     // ADC setup.
     // Temp sensor needs >= 30 us sample time.
@@ -37,9 +38,8 @@ fn main() -> ! {
     .use_modclk()
     .configure(periph.adc);
 
-    let vref = pmm
-        .enable_internal_reference(ReferenceVoltage::_1V5)
-        .unwrap();
+    // The temperature sensor is ADC channel 12
+    let vref = pmm.enable_internal_reference(ReferenceVoltage::_1V5).unwrap();
     let mut t_sense = pmm.enable_internal_temp_sensor(&vref).unwrap();
 
     loop {

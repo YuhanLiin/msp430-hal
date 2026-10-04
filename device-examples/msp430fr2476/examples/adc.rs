@@ -22,8 +22,10 @@ fn main() -> ! {
     // Configure GPIO
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
+    let port4 = Batch::new(periph.p4).split(&pmm);
     let mut led = port1.pin0.to_output();
-    let mut adc_pin = port1.pin1.to_alternate3();
+    // P4.3 = analog input A8 with P4SEL = 11, ADC channel 8
+    let mut adc_pin = port4.pin3.to_alternate3();
 
     // ADC setup
     let mut adc = AdcConfig::new(
