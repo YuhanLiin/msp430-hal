@@ -1,9 +1,11 @@
 //! Information Memory.
-//! [INFO_MEM_SIZE] bytes of non-volatile memory.
+//! [INFO_MEM_SIZE] bytes of non-volatile memory (information FRAM: SLASEC4D Table 6-4, p. 65; SLASE59F
+//! Table 6-23, p. 61; SLASEO7C Table 9-31, p. 73; SLASEE4C Table 6-19, p. 62).
 //!
 //! A single instance of [InfoMemory] is returned by [`Pmm::new()`](crate::pmm::Pmm::new()).
 //!
-//! Because the information memory has write protection, access is managed via a write method.
+//! Because the information memory has write protection, access is managed via a write method (SYSCFG0.DFWP,
+//! SLAU445I 1.9.3, p. 45).
 //!
 //! For convenience there is also a method [`InfoMemory::into_unprotected()`] that disables write protection
 //! and returns the infomation memory directly as an array instead.
@@ -14,7 +16,8 @@ use core::ops::Index;
 use crate::_pac;
 pub use crate::device_specific::INFO_MEM_SIZE;
 
-/// Start address of the information memory
+/// Start address of the information memory (SLAU445I 1.9.1, p. 44; SLASEC4D Table 6-4, p. 65; SLASE59F
+/// Table 6-23, p. 61; SLASEO7C Table 9-31, p. 73; SLASEE4C Table 6-19, p. 62)
 const INFO_MEM_START_ADDR: *mut u8 = 0x1800 as *mut u8;
 const SYSCFG0_PASSWORD: u8 = 0xA5;
 
@@ -32,34 +35,43 @@ impl InfoMemory {
     /// Temporarily grants mutable access to the information memory as an array.
     ///
     /// Write protection is automatically disabled before calling the closure and restored immediately after it returns.
+    /// The closure runs with interrupts disabled, as the user's guide recommends for FRAM writes, so keep it
+    /// short (SLAU445I 1.9.3, p. 45: "completed within as short a time as possible with interrupts disabled").
     #[inline]
     pub fn write<T>(&mut self, f: impl FnOnce(&mut [u8; INFO_MEM_SIZE]) -> T) -> T {
-        Self::disable_write_protect();
-        let ret = f(&mut self.info_mem);
-        Self::enable_write_protect();
-        ret
+        critical_section::with(|_| {
+            Self::disable_write_protect();
+            let ret = f(&mut *self.info_mem);
+            Self::enable_write_protect();
+            ret
+        })
     }
 
-    /// Disable write protection and directly return the info memory as an array.
+    /// Disable write protection and directly return the info memory as an array (clears SYSCFG0.DFWP:
+    /// SLAU445I Table 1-24, p. 75; SLAU445I Table 1-29, p. 80).
     #[inline]
     pub fn into_unprotected(self) -> &'static mut [u8; INFO_MEM_SIZE] {
         Self::disable_write_protect();
         self.info_mem
     }
 
+    // `modify` keeps the program FRAM protection (PFWP and FRWPOA) as it is. The password reads
+    // back as 96h, so it is written again every time, in the same word write as DFWP (SYSCFG0,
+    // SLAU445I Table 1-24, p. 75; SLAU445I Table 1-29, p. 80).
     #[inline(always)]
     fn disable_write_protect() {
         let sys = unsafe { _pac::Sys::steal() };
-        sys.syscfg0().write(|w| unsafe { w
+        sys.syscfg0().modify(|_, w| unsafe { w
             .frwppw().bits(SYSCFG0_PASSWORD)
             .dfwp().clear_bit()
         });
     }
 
+    // DFWP = 1 protects the information FRAM again (SLAU445I Table 1-24, p. 75; SLAU445I Table 1-29, p. 80)
     #[inline(always)]
     fn enable_write_protect() {
         let sys = unsafe { _pac::Sys::steal() };
-        sys.syscfg0().write(|w| unsafe { w
+        sys.syscfg0().modify(|_, w| unsafe { w
             .frwppw().bits(SYSCFG0_PASSWORD)
             .dfwp().set_bit()
         });
