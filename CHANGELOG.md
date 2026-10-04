@@ -43,6 +43,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - A pin in an alternate function can switch directly to another one with `to_alternate1()`, `to_alternate2()` and `to_alternate3()`, without passing through GPIO. Before, these methods existed but couldn't be called on a single pin.
 - Fixed `to_alternate1()`, `to_alternate2()` and `to_alternate3()` not being callable on a pin in an alternate function when its `ToAlternateN` impl only exists for one direction, such as MCLK on P1.3 of the MSP430FR247x. The pin switches directly to the other function, without passing through GPIO.
 - Add the `gpio_alternate_switch` example for the MSP430FR2476.
+- Fixed `Spi::change_mode()` disabling the SPI interrupts.
+- Add the UART multiprocessor formats and automatic baud-rate detection, through `SerialConfig::mode()`, with `Tx::send_address()`, `Tx::send_break()`, `Rx::set_dormant()`, `Rx::read_with_address_flag()` and `Rx::auto_baud_errors()`.
+- Add `SerialConfig::deglitch()` and `SerialConfig::break_interrupts()`, which reports received breaks as the new `RecvError::Break` (breaking for exhaustive matches).
+- Add UART start-bit and transmit-complete interrupts, and `interrupt_source()` on `Tx` and `Rx`. It leaves the receive and transmit flags set, so `read()` and `write()` work after it.
+- Fixed UART `flush()` returning while the last character was still being sent. It now waits until the eUSCI is idle.
+- Add `SpiConfig::seven_bit_characters()`, and `SpiConfig::single_slave_bus()`, where the eUSCI drives the slave's enable signal on STE.
+- Add I2C settings: `clock_low_timeout()`, `byte_counter()` (with an automatic STOP for single masters) and `ack_last_byte()`, and for slaves `general_call()`, three more own addresses (`own_address()`), `address_mask()`, `software_address_ack()` with `I2cRoleSlave::acknowledge_address()`, `early_tx_interrupt()` and `I2cRoleSlave::received_address()`.
+- Fixed `I2cRoleSlave::poll()` panicking when the start flag had been cleared, by reading the interrupt vector say, while a received byte was still unread and the master had started reading. It now reports `OverrunWrite`.
+- I2C `byte_counter()` takes no `auto_stop` for slaves, multi-masters and master-slaves, which can be in slave mode, where the automatic STOP isn't available (breaking).
+- Fixed on the MSP430FR25x2: the remapped eUSCI_B0 pins use alternate function 2. Added the eUSCI_A1 SPI STE pin (P3.1) on the MSP430FR2433.
+- Add the `spi_single_slave`, `uart_auto_baud`, `uart_break_interrupts` and `uart_multiprocessor` examples for the MSP430FR2476.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
