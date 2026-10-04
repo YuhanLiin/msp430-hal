@@ -17,6 +17,8 @@ use panic_msp430 as _;
 use static_cell::StaticCell;
 
 // Configure UART, then print "Hello!" over eUSCI_A0 using defmt once per second.
+// eUSCI_A0's TXD is P1.7, pin 4 of the BoosterPack header (SLAU680 Figure 10, p. 15). The LaunchPad's
+// own backchannel UART is eUSCI_A1 (SLAU680 2.2.4, p. 11), so this needs a separate adapter.
 
 // Messages can be received using (a serial to USB adapter and) `defmt-print`, e.g.:
 // stty -F /dev/ttyUSB0 9600 raw; cat /dev/ttyUSB0 | defmt-print -w -e ./target/msp430-none-elf/debug/examples/defmt
@@ -53,7 +55,7 @@ fn main() -> ! {
         9600,
     )
     .use_aclk(&aclk)
-    .tx_only(p1.pin7.to_alternate1());
+    .tx_only(p1.pin7.to_alternate1()); // UCA0TXD, P1SELx = 01 (SLASEC4D Table 6-63, p. 96)
 
     // Tell defmt to use our serial peripheral
     defmt_serial(SERIAL.init(tx));

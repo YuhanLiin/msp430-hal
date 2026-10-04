@@ -16,25 +16,36 @@ embedded-hal-02 = ["dep:embedded-hal-02", "dep:void"]
 defmt = ["dep:defmt"]
 
 # Device features. Provide exactly one of these.
+# MSP430FR2x5x: SLASEC4D Table 3-1, p. 8
 msp430fr2355 = ["2x5x", "sac_l3"] # 32kB FRAM + SAC unit
 msp430fr2353 = ["2x5x", "sac_l3"] # 16kB FRAM + SAC unit
 msp430fr2155 = ["2x5x"]           # 32kB FRAM
 msp430fr2153 = ["2x5x"]           # 16kB FRAM
+# MSP430FR2433: SLASE59F Table 3-1, p. 7
 msp430fr2433 = ["dep:msp430fr2433", "eusci_modclk", "adc", "adcpctl", "eusci_b", "info_mem", "lpm3_5_switch", "erratum_cs13", "erratum_pmm32", "erratum_gc5", "erratum_rtc15"]
+# MSP430FR247x: SLASEO7C Table 6-1, p. 6
 msp430fr2475 = ["247x"]           # 6kB RAM
 msp430fr2476 = ["247x"]           # 8kB RAM
-msp430fr2512 = ["25x2"]           # 2kB RAM up to 8 self-capacitive and 16 mutual-capacitive sensors
-msp430fr2522 = ["25x2", "frwpoa"] # 2kB RAM up to 4 self-capacitive or mutual-capacitive sensors
+# MSP430FR25x2: SLASEE4C 1.1, p. 2 (family members) and SLASEE4C Table 3-1, p. 8
+msp430fr2512 = ["25x2"]           # 2kB RAM up to 4 self-capacitive or mutual-capacitive sensors
+msp430fr2522 = ["25x2", "frwpoa"] # 2kB RAM up to 8 self-capacitive and 16 mutual-capacitive sensors
 
 # Derived features. Do not provide these.
 2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source", "xt1_high_frequency", "enhanced_cs", "rtc_aclk", "frwpoa", "timer_b", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
 247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source", "rtc_aclk", "timer_b"]
 25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "adc", "adcpctl", "eusci_b", "rtc_aclk", "lpm3_5_switch", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
+# UCSSEL = 01b selects ACLK: SLASEC4D Table 6-9, p. 68; SLASEO7C Table 9-8, p. 50; SLASEE4C Table 6-8, p. 49
 eusci_aclk = [] # eUSCI peripherals can source from ACLK
+# UCSSEL = 01b selects MODCLK: SLASE59F Table 6-7, p. 46
 eusci_modclk = [] # eUSCI peripherals can source from MODCLK
+# 12-bit ADC: SLASEC4D Table 3-1, p. 8; SLASEO7C Table 6-1, p. 6
 adc12bit = ["adc"]
+# SYSCFG2.ADCPCTLx: SLAU445I Table 1-31, p. 82; SLASE59F Table 6-17, p. 55; SLASEE4C Table 6-15, p. 58
 adcpctl = [] # ADC functionality controlled via ADCPCTLx
+# ADC on every device, 10-bit on the MSP430FR2433 and MSP430FR25x2 (SLASE59F Table 3-1, p. 7; SLASEE4C
+# Table 3-1, p. 8)
 adc = []
+# Two eCOMP on the MSP430FR2x5x (SLASEC4D Table 3-1, p. 8), one on the MSP430FR247x (SLASEO7C Table 6-1, p. 6)
 ecomp = []
 # Internal shared reference of 1.5, 2.0 or 2.5 V (SLAU445I 2.1, p. 85): SLASEC4D 1.1, p. 1 and SLASEC4D
 # Table 5-10, p. 41; SLASEO7C 8.12.5.1, p. 33
@@ -42,12 +53,18 @@ enhanced_ref = []
 # The LPM3.5 switch (LPM5SM, LPM5SW): "Only available in the FR203x, FR211x, FR2100, FR2000, FR231x, FR2433,
 # FR2422, FR263x, FR253x, FR252x, and FR413x devices" (SLAU445I Table 2-7, p. 97)
 lpm3_5_switch = []
+# eUSCI_B: SLASEC4D Table 3-1, p. 8; SLASE59F Table 3-1, p. 7; SLASEO7C Table 6-1, p. 6;
+# SLASEE4C Table 3-1, p. 8
 eusci_b = []
+# SAC-L3, MSP430FR235x only: SLASEC4D 1.1, p. 1 and SLASEC4D Table 3-1, p. 8
 sac_l3 = ["sac"]
 sac_l1 = ["sac"]
 sac = []
 tia = []
+# Information FRAM: SLASEC4D Table 6-4, p. 65; SLASE59F Table 6-23, p. 61; SLASEO7C Table 9-31, p. 73;
+# SLASEE4C Table 6-19, p. 62
 info_mem = []
+# ACLK from XT1, VLO or REFO: SLASEC4D 6.10.2, p. 68; SLASEO7C 9.10.2, p. 49
 vloclk_source = [] # ACLK can be sourced from VLOCLK
 # XT1 up to 24 MHz: SLASEC4D Table 5-4, p. 36
 xt1_high_frequency = [] # XT1 supports 1 MHz to 24 MHz crystals and inputs besides 32 kHz

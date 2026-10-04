@@ -12,7 +12,7 @@ use msp430_hal::{
 use nb::block;
 use panic_msp430 as _;
 
-// Turn on P1.0 if temp between 20 and 25C
+// Turn on P1.0 if temp between 20 and 25C (LED1, red: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog
@@ -23,10 +23,13 @@ fn main() -> ! {
     let (mut pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut led = port1.pin0.to_output();
+    led.set_low().ok();
 
     // ADC setup.
-    // Temp sensor needs >= 30 us sample time.
-    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time.
+    // Temp sensor needs >= 30 us sample time (SLAU445I 21.2.7.8, p. 556: the sample period must be
+    // greater than 30 us).
+    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time (fMODOSC is 4.6 MHz at most:
+    // SLASEC4D Table 5-9, p. 41).
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
@@ -49,7 +52,7 @@ fn main() -> ! {
         // Note integer division, so multiply first (beware overflow!), divide last to maximise accuracy
         let temp_celcius = (((355 * (reading_mv as i32 - 788)) + 30_000) / 1000) as i16;
 
-        // Turn on LED if temp between 20 and 25C
+        // Turn on LED if temp between 20 and 25C (LED1 on P1.0: SLAU680 Figure 18, p. 26)
         if (20..=25).contains(&temp_celcius) {
             led.set_high().ok();
         } else {

@@ -267,8 +267,9 @@ mod capture {
 }
 
 /* Clocks */
-/// MODCLK frequency
-pub const MODCLK_FREQ_HZ: u32 = 5_000_000;
+/// MODCLK frequency, typical (SLASEO7C 8.12.3.6, p. 30: fMODOSC is 3.0 MHz to 4.6 MHz, 3.8 MHz typical,
+/// at 3 V)
+pub const MODCLK_FREQ_HZ: u32 = 3_800_000;
 
 /* eCOMP */
 pub mod ecomp {
@@ -581,7 +582,8 @@ mod i2c {
 }
 
 /* Information Memory */
-/// Size of the Information Memory segment on this device, in bytes
+/// Size of the Information Memory segment on this device, in bytes (SLASEO7C Table 9-31, p. 73:
+/// 512 bytes, 1800h to 19FFh)
 pub const INFO_MEM_SIZE: usize = 512;
 
 /* PWM */

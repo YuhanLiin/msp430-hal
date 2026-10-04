@@ -15,8 +15,8 @@ fn main() -> ! {
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
 
-    // Convert P1.0 to SMCLK output
-    // Expect red LED to light up
+    // Convert P1.0 to SMCLK output (P1SELx = 10 with P1DIR.0 = 1: SLASEC4D Table 6-63, p. 96)
+    // Expect red LED to light up (LED1 is on P1.0: SLAU680 Figure 18, p. 26)
     p1.pin0.to_output().to_alternate2();
 
     loop {

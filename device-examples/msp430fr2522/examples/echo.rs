@@ -73,7 +73,7 @@ fn main() -> ! {
                 Err(RecvError::Parity) => b'!',
                 Err(RecvError::Overrun(_)) => b'}',
                 Err(RecvError::Framing) => b'?',
-                Err(RecvError::Break) => b'~',
+                Err(RecvError::Break)   => b'#',
             };
             block!(tx.write(ch)).unwrap();
         }

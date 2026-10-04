@@ -171,6 +171,20 @@ macro_rules! high_impedance_timer_impl {
             }
         }
     };
+    // The TBxTRGSEL bit by its number in SYSCFG2, for a PAC that doesn't name it
+    ($timer:ty, bit $bit:literal) => {
+        impl $crate::timer::HighImpedanceTimer for $timer {
+            #[inline(always)]
+            fn set_trgsel(external: bool) {
+                let sys = unsafe { &*$crate::_pac::Sys::ptr() };
+                if external {
+                    unsafe { sys.syscfg2().set_bits(|w| w.bits(1 << $bit)) };
+                } else {
+                    unsafe { sys.syscfg2().clear_bits(|w| w.bits(!(1 << $bit))) };
+                }
+            }
+        }
+    };
 }
 #[cfg(feature = "timer_b")]
 pub(crate) use high_impedance_timer_impl;

@@ -39,7 +39,7 @@ use msp430_hal::{
 use panic_msp430 as _;
 
 /// How many bits TB0 counts with
-const COUNTER_LENGTH: CounterLength = CounterLength::_8Bit;
+const COUNTER_LENGTH: CounterLength = CounterLength::_16Bit;
 /// The count up mode counts to, and up/down mode counts up to
 const COUNT: u16 = 499;
 

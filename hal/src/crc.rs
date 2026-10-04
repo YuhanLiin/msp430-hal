@@ -29,7 +29,6 @@ pub struct Crc(_pac::Crc);
 impl Crc {
     /// Create a new CRC peripheral, setting the initial output to `seed` (CRCINIRES: SLAU445I Table 11-4,
     /// p. 359).
-    /// Create a new CRC peripheral, setting the initial output to `seed`.
     ///
     /// The generated signature is based on the polynomial given in the CRC-CCITT standard: x<sup>16</sup> + x<sup>12</sup> + x<sup>5</sup> + 1.
     /// (SLAU445I 11.1, p. 353: Equation 12)
@@ -71,7 +70,7 @@ impl Crc {
 
     /// Insert a slice of u16's into the CRC peripheral, assuming that bit 0 and bit 8 are the LSbs of each byte.
     ///
-    /// The lower byte of each u16 is included first. The u16 at index 0 is included first.  
+    /// The lower byte of each u16 is included first. The u16 at index 0 is included first.
     /// (SLAU445I 11.3.1, p. 354)
     #[inline]
     pub fn add_words_lsb(&mut self, words: &[u16]) {
@@ -114,6 +113,7 @@ impl Crc {
     /// If your data has bit 0 and bit 8 as the LSbs (e.g. MSP430 memory locations, variables) use the `_lsb` method instead.
     #[inline(always)]
     pub fn add_word_msb(&mut self, word: u16) {
+        // (SLAU445I 11.3.1, p. 354: "it takes two clock cycles to process word data")
         msp430::asm::nop(); // u16 insertions take two cycles, delay to allow back-to-back u16 insertions to finish
         self.0.crcdi().write(|w| unsafe { w.bits(word) });
     }

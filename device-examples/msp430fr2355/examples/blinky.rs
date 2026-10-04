@@ -12,7 +12,7 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// Red onboard LED should blink at a steady period.
+// Red onboard LED should blink at a steady period. (LED1, red, on P1.0: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog

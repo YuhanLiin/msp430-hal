@@ -16,6 +16,25 @@ use crate::{_pac, info_mem::InfoMemory, lpm::SvsState};
 /// PMM type (the PMM registers: SLAU445I Table 2-1, p. 90)
 pub struct Pmm(_pac::Pmm);
 
+/// How the LPM3.5 switch is controlled, which connects the LPM3.5 domain to the core supply
+/// (PM5CTL0.LPM5SM and LPM5SW: SLAU445I 2.2.7, p. 88; SLAU445I Table 2-7, p. 97). The domain holds the RTC
+/// counter and the backup memory (SLASE59F Figure 1-1, p. 3; SLASEE4C Figure 1-1, p. 4). Only on the
+/// MSP430FR2433 and MSP430FR25x2: "Only available in the FR203x, FR211x, FR2100, FR2000, FR231x, FR2433,
+/// FR2422, FR263x, FR253x, FR252x, and FR413x devices" (SLAU445I Table 2-7, p. 97).
+#[cfg(feature = "lpm3_5_switch")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Lpm3_5Switch {
+    /// The PMM connects and disconnects it, as after a BOR: "This is the recommended mode for general
+    /// operation" (LPM5SM = 0)
+    Automatic,
+    /// Connected under software control: the domain "can accept full-speed read and write operation by
+    /// the CPU MCLK" (LPM5SM = 1, LPM5SW = 1)
+    Connected,
+    /// Disconnected under software control: "all peripherals within this domain can accept clock operation
+    /// no faster than 40 kHz" (LPM5SM = 1, LPM5SW = 0)
+    Disconnected,
+}
+
 /// Struct indicating that the internal voltage reference has been enabled and configured.
 /// This can be passed to the ADC to read the reference voltage, which is internally connected to an
 /// ADC channel (SLAU445I 2.2.8, p. 88).
@@ -219,6 +238,39 @@ impl Pmm {
     pub fn set_svsh(&mut self, svs: SvsState) {
         self.unlocked(|pmm| pmm.pmmctl0().modify(|_, w| w.pmmpw().password().svshe().bit(svs == SvsState::Enabled)));
     }
+
+    /// Select how the LPM3.5 switch is controlled, see [`Lpm3_5Switch`] (PM5CTL0.LPM5SM and LPM5SW, SLAU445I
+    /// Table 2-7, p. 97). In manual mode the user's guide recommends turning the switch off before LPM3.5
+    /// and on again after the wake-up (SLAU445I 2.2.7, p. 88): `enter_lpm3_5()` and `enter_lpm4_5()` turn it
+    /// off, and the wake-up, a BOR, brings back automatic mode with the switch connected. [`Pmm::new`] and
+    /// [`Pmm::unlock_lpm5`] bring back automatic mode as well.
+    #[cfg(feature = "lpm3_5_switch")]
+    #[inline]
+    pub fn set_lpm3_5_switch(&mut self, switch: Lpm3_5Switch) {
+        // PM5CTL0 needs no PMM password (SLAU445I 2.3, p. 90). Manual mode comes first, as only then can
+        // LPM5SW be written: "In automatic mode (LPM5SM = 0) ... Any write to this bit has no effect", "In
+        // manual mode (LPM5SM = 1), this bit is read/write by software" (SLAU445I Table 2-7, p. 97).
+        // The PACs name the LPM5SM and LPM5SW values differently, so they are written as bits: LPM5SM = 1 is
+        // manual mode and LPM5SW = 1 connects the switch.
+        let pm5ctl0 = self.0.pm5ctl0();
+        match switch {
+            Lpm3_5Switch::Automatic => unsafe { pm5ctl0.clear_bits(|w| w.lpm5sm().clear_bit()) },
+            Lpm3_5Switch::Connected => {
+                unsafe { pm5ctl0.set_bits(|w| w.lpm5sm().set_bit()) };
+                unsafe { pm5ctl0.set_bits(|w| w.lpm5sw().set_bit()) };
+            }
+            Lpm3_5Switch::Disconnected => {
+                unsafe { pm5ctl0.set_bits(|w| w.lpm5sm().set_bit()) };
+                unsafe { pm5ctl0.clear_bits(|w| w.lpm5sw().clear_bit()) };
+            }
+        }
+    }
+
+    /// Whether the LPM3.5 switch is connected, in automatic mode too: there LPM5SW "represents the switch
+    /// connection between Vcore and VLPM3.5" (SLAU445I Table 2-7, p. 97)
+    #[cfg(feature = "lpm3_5_switch")]
+    #[inline]
+    pub fn lpm3_5_switch_connected(&self) -> bool { self.0.pm5ctl0().read().lpm5sw().bit_is_set() }
 
     /// Run `f` with write access to the PMM registers, and lock them again afterwards.
     ///

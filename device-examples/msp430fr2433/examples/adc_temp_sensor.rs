@@ -13,21 +13,29 @@ use nb::block;
 use panic_msp430 as _;
 
 // Turn on P1.0 if temp between 20 and 25C
+// P1.0 drives the red LED1 (SLAU739 Figure 18, p. 23).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog
+    // (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2, p. 363)
     let periph = msp430fr2433::Peripherals::take().unwrap();
     let _wdt = Wdt::constrain(periph.watchdog_timer);
 
     // Configure GPIO
+    // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
+    // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
     let (mut pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut led = port1.pin0.to_output();
     led.set_low().ok();
 
     // ADC setup.
-    // Temp sensor needs >= 30 us sample time.
-    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time.
+    // Temp sensor needs >= 30 us sample time (SLASE59F Table 5-22, p. 36: tSENSOR(sample), AM).
+    // MODCLK is at most 5.8 MHz (SLASE59F Table 5-9, p. 26), so 256 cycles / 5.8 MHz = 44 us sample time.
+    // (ADCSSELx = 00b MODCLK: SLAU445I Table 21-4, p. 564; ADCSHTx = 1000b, 256 cycles: SLAU445I
+    // Table 21-3, p. 561; ADCRES = 01b, 10 bits, and ADCSR = 0, 200 ksps: SLAU445I Table 21-5, p. 565.)
+    // MODCLK in active mode also avoids SLAZ664S ADC50, which makes temperature sensor results wrong
+    // with ACLK as the ADC clock in LPM3.
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
@@ -38,6 +46,9 @@ fn main() -> ! {
     .use_modclk()
     .configure(periph.adc);
 
+    // The 1.5-V reference: REFVSEL = 00b and INTREFEN = 1 in PMMCTL2 (SLAU445I Table 2-4, p. 93 to p. 94).
+    // The sensor: TSENSOREN in PMMCTL2 "must be set to turn on the sensor" (SLAU445I 2.2.9, p. 89), and it
+    // is ADC channel 12 (SLASE59F Table 6-15, p. 53).
     let vref = pmm.enable_internal_reference(ReferenceVoltage::_1V5).unwrap();
     let mut t_sense = pmm.enable_internal_temp_sensor(&vref).unwrap();
 

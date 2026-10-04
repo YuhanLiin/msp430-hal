@@ -34,6 +34,22 @@ They can be built by moving into the relevant project folder, then running `carg
 An example can be flashed to a connected device with 
 `cargo run --example <example_name>`
 
+## Hardware multiplier
+
+Every supported device has the 32-bit hardware multiplier (MPY32). For multiplications to use it, link TI's
+`libmul_f5` before `libgcc`, as the example projects do in `.cargo/config.toml`:
+
+```toml
+rustflags = [
+    # ...
+    "-C", "link-arg=-lmul_f5",
+    "-C", "link-arg=-lgcc",
+]
+```
+
+With `libmul_none` multiplications run in software, about 5 to 10 times slower. Don't use `libmul_32`: it
+expects the multiplier at another address, which is PM5CTL0 on these devices.
+
 # Supported Devices
 The library currently supports a subset of the MSP430FR2xxx / 4xxx family: the MSP430FR2x5x and MSP430FR247x and MSP430FR25x2 subfamilies, and the MSP430FR2433.
 Adding support for a device in the MSP430FR2xxx/4xxx family is easy, see [Supporting additional devices](#Supporting-additional-devices).
@@ -66,19 +82,13 @@ and pin function can be checked against its source. [REFERENCES.md](REFERENCES.m
 documents, their revisions and the reference format.
 
 # Functionality
-The library is mostly feature complete for the FR2xxx/4xxx family. There are a few edge cases not yet supported, such as:
-- Arbitrary DCO clock speed support (currently supports 1, 2, 4, 8, 12, 16, 20, 24 MHz)
-- External oscillator support
-- Some RTC clock sources (currently only supports SMCLK and VLOCLK)
-- ADC reference voltage selection
-
-The following FR2xxx/4xxx peripherals do not yet have drivers:
+The library is mostly feature complete for the FR2xxx/4xxx family. The following FR2xxx/4xxx peripherals do not yet have drivers:
 - LCD driver
 - CapTIvate
 - TIA
 - SAC-L1
 
-PRs with implementations for these features or peripherals are welcome.
+PRs with implementations for these peripherals are welcome.
 
 If you encounter any use cases not supported please open an issue (or submit a pull request).
 
@@ -97,6 +107,7 @@ To add support for a device (or subfamily) you should fork this repo and:
 3. Append an entry to `hal/src/device_specific.rs` to re-export your PAC and any device-specific constants to the rest of the library.
 4. Add a project crate to `device_examples/` and add some examples to test everything works (again refer to the msp430fr2355 as an example/template). 
     * Ensure the `memory.x` file is correct, as this is usually unique to each device.
+    * Check that the device's hardware multiplier suits `libmul_f5` in `.cargo/config.toml`: an MPY32 at 04C0h, `MPY_TYPE` 8 in msp430-gcc's `include/devices.csv`.
 5. Add the device name to the CI in `.github/workflows/build.yml` to make it automatically build all your device examples. Check that the CI passes.
 
 For issues or concerns, feel free to open an issue.
@@ -131,7 +142,12 @@ This is not checked in the HAL.
 
 # Panics
 
-The library is intended to be panic-free, though this hasn't been verified. If you encounter panics
+Some configuration functions panic on arguments the hardware doesn't support, as their documentation describes
+under "Panics": XT1 and DCO frequencies outside the supported ranges, a UART baud rate above a third of its clock,
+I2C clock divisors below the user's guide minimum, and more writable program FRAM than the device has. With
+constant, valid arguments these checks are usually optimised away.
+
+Apart from these, the library is intended to be panic-free, though this hasn't been verified. If you encounter panics
 while using the library (or `panic-never` points to the existence of possible panics) please open an issue.
 
 # License

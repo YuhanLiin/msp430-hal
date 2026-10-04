@@ -9,6 +9,8 @@ use panic_msp430 as _;
 
 // Use the non-volatile information memory to toggle the red onboard LED.
 // Resetting or power cycling the board toggles the red LED.
+// (Information memory is FRAM, 512 bytes from 1800h: SLASEC4D Table 6-4, p. 65. LED1, red, is on P1.0:
+// SLAU680 Figure 18, p. 26.)
 
 #[entry]
 fn main() -> ! {
@@ -26,6 +28,8 @@ fn main() -> ! {
     }
 
     // The write method provides a mutable reference to the memory, automatically managing write protection.
+    // ("The information FRAM can be write protected by setting DFWP bit in SYSCFG0 register":
+    // SLASEC4D Table 6-4, note 2, p. 65)
     nv_mem.write(|mem| 
         // Toggle the first byte between 1 and 0
         mem[0] = (mem[0].wrapping_add(1)) & 1

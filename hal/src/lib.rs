@@ -1,5 +1,9 @@
 //! A collection of peripheral drivers for the MSP430 family of microcontrollers (primarily the [MSP430FR2xxx/4xxx](http://www.ti.com/lit/ug/slau445i/slau445i.pdf)) with implementations of [`embedded_hal`] traits.
 //!
+//! The peripherals are described in the family user's guide, SLAU445I, and in the device data sheets
+//! (SLASEC4D, SLASE59F, SLASEO7C and SLASEE4C); REFERENCES.md in the repository lists these documents and
+//! the reference format used in the comments.
+//!
 //! The documentation on docs.rs is built for the MSP430FR2355. To build the documentation for your device
 //! add this crate as a dependency to your project (see: [Feature Flags](#feature-flags)) then run `cargo doc --open --package msp430-hal`.
 //! The github repository contains such projects for various devices under `device_examples/`.
@@ -17,7 +21,7 @@
 //!
 //! The `device-examples/` directory in the repository contains projects for various supported devices, each containing a typical
 //! project structure and a number of examples that show how to use the HAL abstractions. These examples typically target the relevant dev board,
-//! such as the MSP-EXP430FR2355 for the MSP430FR2355.
+//! such as the MSP-EXP430FR2355 for the MSP430FR2355 (SLAU680, p. 1).
 //!
 //! To flash the examples, make sure you have `mspdebug` with `tilib` support installed and in
 //! $PATH. Invoke `cargo run --example whatever` from within the relevant project folder with the board plugged and the scripts should do
@@ -45,37 +49,63 @@
 #![feature(const_option)]
 #![deny(missing_docs)]
 
+// The hardware modules and where the documents describe them. A module behind a feature exists only on
+// some of the devices.
+// Backup memory (BAKMEM): SLAU445I chapter 7, p. 309
 pub mod bak_mem;
+// Digital I/O: SLAU445I chapter 8, p. 311
 pub mod batch_gpio;
+// Timer_A and Timer_B capture: SLAU445I chapter 13, p. 367 and SLAU445I chapter 14, p. 390
 pub mod capture;
+// Clock System (CS): SLAU445I chapter 3, p. 98
 pub mod clock;
+// CRC module: SLAU445I chapter 11, p. 352
 pub mod crc;
+// Software delay counted in MCLK cycles of the CPU instructions: SLAU445I 4.5.1.5, p. 154
 pub mod delay;
+// FRAM controller (FRCTL): SLAU445I chapter 6, p. 300
 pub mod fram;
+// Digital I/O: SLAU445I chapter 8, p. 311
 pub mod gpio;
+// Operating (low-power) modes: SLAU445I 1.4, p. 36
 pub mod lpm;
+// Pin remapping bits in SYSCFG2 and SYSCFG3: SLAU445I Table 1-31, p. 82 and SLAU445I Table 1-32, p. 83
 pub mod pin_mapping;
+// Power Management Module (PMM) and SVS: SLAU445I chapter 2, p. 84
 pub mod pmm;
 pub mod prelude;
+// Timer_A and Timer_B output modes (PWM): SLAU445I chapter 13, p. 367 and SLAU445I chapter 14, p. 390
 pub mod pwm;
+// Real-Time Clock (RTC) counter: SLAU445I chapter 15, p. 415
 pub mod rtc;
+// eUSCI_A in UART mode: SLAU445I chapter 22, p. 574
 pub mod serial;
+// eUSCI_A and eUSCI_B in SPI mode: SLAU445I chapter 23, p. 603
 pub mod spi;
+// Timer_A and Timer_B: SLAU445I chapter 13, p. 367 and SLAU445I chapter 14, p. 390
 pub mod timer;
+// Watchdog Timer (WDT_A): SLAU445I chapter 12, p. 360
 pub mod watchdog;
 
+// ADC: SLAU445I chapter 21, p. 538
 #[cfg(feature = "adc")]
 pub mod adc;
 
+// Enhanced Comparator (eCOMP): SLAU445I chapter 18, p. 503. The MSP430FR2x5x has two, the MSP430FR247x
+// one (SLASEC4D 1.1, p. 1; SLASEO7C section 1, p. 1).
 #[cfg(feature = "ecomp")]
 pub mod ecomp;
 
+// eUSCI_B in I2C mode: SLAU445I chapter 24, p. 626
 #[cfg(feature = "eusci_b")]
 pub mod i2c;
 
+// Information memory, 1800h to 19FFh: SLAU445I 1.9.1, p. 44
 #[cfg(feature = "info_mem")]
 pub mod info_mem;
 
+// Smart Analog Combo (SAC): SLAU445I chapter 20, p. 518. Only the MSP430FR235x has SAC-L3 (SLASEC4D 1.1,
+// p. 1: "MSP430FR235x devices only").
 #[cfg(feature = "sac")]
 #[path = "sac_l3.rs"]
 pub mod sac;

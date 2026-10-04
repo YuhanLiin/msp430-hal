@@ -12,19 +12,25 @@ use msp430_hal::{
 };
 use panic_msp430 as _;
 
-// Red onboard LED should blink at a steady period.
+// Red onboard LED should blink at a steady period (LED1 on P1.0, SLAU739 Figure 18, p. 23).
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog
+    // (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2, p. 363)
     let periph = msp430fr2433::Peripherals::take().unwrap();
     let _wdt = Wdt::constrain(periph.watchdog_timer);
 
     // Configure GPIO
+    // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
+    // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut p1_0 = port1.pin0.to_output();
 
     // Configure clocks to get accurate delay timing
+    // MCLK = SMCLK = about 8 MHz: DCORSEL = 011b with the FLL locked to REFO (SLAU445I Table 3-5, p. 114;
+    // SLAU445I 3.2.5, p. 104), DIVM and DIVS /1 (SLAU445I Table 3-9, p. 118). Up to 8 MHz the FRAM needs
+    // no wait state (SLASE59F 5.3, p. 16).
     let mut fram = Fram::new(periph.fram);
     let (_smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_8MHz, MclkDiv::_1)

@@ -171,8 +171,10 @@ mod capture {
 }
 
 /* Clocks */
-/// MODCLK frequency
-pub const MODCLK_FREQ_HZ: u32 = 5_000_000;
+/// MODCLK frequency, typical (SLASE59F Table 5-9, p. 26: fMODOSC 3.8 MHz to 5.8 MHz, 4.8 MHz typical.
+/// SLASE59F Table 6-7, p. 46, gives "5 MHz +-10%" instead, and SLASE59F Table 5-21, p. 35, 4.5 MHz to
+/// 5.5 MHz for the ADC.)
+pub const MODCLK_FREQ_HZ: u32 = 4_800_000;
 
 /* eUSCI */
 mod eusci {
@@ -255,7 +257,8 @@ mod i2c {
 }
 
 /* Information Memory */
-/// Size of the Information Memory segment on this device, in bytes
+/// Size of the Information Memory segment on this device, in bytes (SLASE59F Table 6-23, p. 61: 512 bytes,
+/// 1800h to 19FFh)
 pub const INFO_MEM_SIZE: usize = 512;
 
 /* PWM */

@@ -13,20 +13,29 @@ use nb::block;
 use panic_msp430 as _;
 
 // Turn on P1.0 if temp between 20 and 25C
+// (P1.0 drives LED1: SLAU802 Figure 19, p. 25)
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog
+    // (WDTHOLD = 1 stops it: SLAU445I Table 12-2, p. 366; after a PUC it runs: SLAU445I 12.2.2, p. 363)
     let periph = msp430fr247x::Peripherals::take().unwrap();
     let _wdt = Wdt::constrain(periph.wdt_a);
 
     // Configure GPIO
+    // (Pin settings take effect once LOCKLPM5 is cleared, which Pmm::new does: SLAU445I 8.3.1, p. 316)
     let (mut pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut led = port1.pin0.to_output();
+    led.set_low().ok();
 
     // ADC setup.
-    // Temp sensor needs >= 30 us sample time.
-    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time.
+    // Temp sensor needs >= 30 us sample time (SLAU445I 21.2.7.8, p. 556: "the sample period must be
+    // greater than 30 µs").
+    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time (SLASEO7C 8.12.3.6, p. 30:
+    // fMODOSC is 4.6 MHz at most).
+    // (ADCSHTx = 1000b for 256 ADCCLK cycles: SLAU445I Table 21-3, p. 561; ADCSSELx = 00b is MODCLK:
+    // SLAU445I Table 21-4, p. 564; ADCRES = 10b for 12 bits and ADCSR = 0 for up to about 200 ksps:
+    // SLAU445I Table 21-5, p. 565)
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
@@ -37,7 +46,9 @@ fn main() -> ! {
     .use_modclk()
     .configure(periph.adc);
 
+    // REFVSEL = 00b selects 1.5 V, and TSENSOREN = 1 turns the sensor on (SLAU445I Table 2-4, p. 93)
     let vref = pmm.enable_internal_reference(ReferenceVoltage::_1V5).unwrap();
+    // The sensor is ADC channel 12 (SLASEO7C Table 9-19, p. 62)
     let mut t_sense = pmm.enable_internal_temp_sensor(&vref).unwrap();
 
     loop {
