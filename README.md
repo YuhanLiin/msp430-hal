@@ -58,6 +58,13 @@ The documentation on crates.rs (and example programs) target the MSP430FR2355. D
 built by running `cargo doc --open --features <device>` from within the `hal/` folder, or `cargo doc --open --package msp430fr2x5x-hal` in a 
 cargo project with `msp430fr2x5x-hal` correctly configured as a dependency, such as the projects in the `device-examples/` folder.
 
+# Documents
+
+The code follows TI's family user's guide, the device data sheets and errata sheets, and the
+LaunchPad user's guides. Comments cite them by section, table and page, so each register setting
+and pin function can be checked against its source. [REFERENCES.md](REFERENCES.md) lists the
+documents, their revisions and the reference format.
+
 # Functionality
 The library is mostly feature complete for the FR2xxx/4xxx family. There are a few edge cases not yet supported, such as:
 - Arbitrary DCO clock speed support (currently supports 1, 2, 4, 8, 12, 16, 20, 24 MHz)
