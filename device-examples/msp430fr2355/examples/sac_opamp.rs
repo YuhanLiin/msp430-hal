@@ -8,6 +8,7 @@ use msp430_hal::{
 use panic_msp430 as _;
 
 // Configure one of the Smart Analog Combo (SAC) units into a general-purpose 3-pin operational amplifier.
+// (The SACs are on the MSP430FR235x only: SLASEC4D 6.10.15, p. 79.)
 
 #[entry]
 fn main() -> ! {
@@ -19,14 +20,20 @@ fn main() -> ! {
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
 
+    // OA0+ on P1.3, OA0- on P1.2 and OA0O on P1.1, P1SELx = 11 (SLASEC4D Table 6-63, p. 96); OA0+ and
+    // OA0- are the SAC0 inputs PSEL = 00 and NSEL = 00 (SLASEC4D Table 6-27, p. 79). They are pins 9, 10
+    // and 28 of the BoosterPack header (SLAU680 Figure 10, p. 15).
     let p1_3 = port1.pin3.to_alternate3();
     let p1_2 = port1.pin2.to_alternate3();
     let p1_1 = port1.pin1.to_alternate3();
 
     // Each Smart Analog Combo unit contains a DAC and amplifier.
+    // (SLASEC4D 6.10.15, p. 79: an operational amplifier, and in SAC-L3 a "12-bit voltage reference DAC")
     let (_dac_config, amp_config) = SacConfig::begin(periph.sac0);
 
     // Set the Smart Analog Combo to a general-purpose opamp.  There is no internal feedback in this mode.
+    // (In GP mode "OAx+ and OAx- pins are dedicated as noninverting and inverting inputs": SLAU445I
+    // 20.2.2.1, p. 522)
     let _amp = amp_config.opamp(PositiveInput::ExtPin(p1_3), NegativeInput::ExtPin(p1_2), PowerMode::HighPerformance)
         .output_pin(p1_1);
 
