@@ -1,13 +1,15 @@
-//! Watchdog timer, configurable as either a traditional watchdog or a 16-bit timer.
+//! Watchdog timer, configurable as either a traditional watchdog or an interval timer, counting with a
+//! 32-bit counter (SLAU445I 12.2.1, p. 363).
 //!
 //! **Note**: MSP430 devices will reset after bootup if watchdog is not stopped after an initial 32
-//! ms interval (roughly). If this is undesirable, call `Wdt::constrain()` as soon in the
-//! application as possible to stop the watchdog.
+//! ms interval (roughly) (SLAU445I 12.1, p. 361). If this is undesirable, call `Wdt::constrain()` as soon
+//! in the application as possible to stop the watchdog.
 
 use crate::_pac::{self, wdt_a::wdtctl::Wdtssel};
 use crate::clock::{Aclk, Smclk};
 use core::{convert::Infallible, marker::PhantomData};
 
+// WDTPW: every write to WDTCTL carries the password, or the device resets with a PUC (SLAU445I 12.2, p. 363)
 const PASSWORD: u8 = 0x5A;
 
 pub use crate::_pac::wdt_a::wdtctl::Wdtis as WdtClkPeriods;
@@ -41,9 +43,9 @@ impl Wdt<WatchdogMode> {
     }
 }
 
-/// Watchdog mode typestate
+/// Watchdog mode typestate: expiry of the interval resets the device with a PUC (SLAU445I 12.2.2, p. 363)
 pub struct WatchdogMode;
-/// Interval mode typestate
+/// Interval mode typestate: expiry of the interval sets WDTIFG (SLAU445I 12.2.3, p. 363)
 pub struct IntervalMode;
 
 /// Marker trait for watchdog modes
@@ -65,14 +67,15 @@ type WdtWriter = _pac::wdt_a::wdtctl::W;
 impl<MODE: WatchdogSelect> Wdt<MODE> {
     #[inline(always)]
     fn prewrite(w: &mut WdtWriter, bits: u16) -> &mut WdtWriter {
-        // Write argument bits, password, and correct mode bit to the watchdog write proxy
+        // Write argument bits, password, and correct mode bit to the watchdog write proxy (WDTCTL: SLAU445I
+        // Table 12-2, p. 366)
         unsafe { w.bits(bits).wdtpw().bits(PASSWORD) }
             .wdttmsel().bit(MODE::mode_bit())
     }
 
     #[inline]
     fn set_clk(&mut self, clk_src: Wdtssel) -> &mut Self {
-        // Halt timer first, as specified in the user's guide
+        // Halt timer first, as specified in the user's guide (SLAU445I 12.2.3, p. 363)
         self.periph.wdtctl().write(|w| {
             Self::prewrite(w, 0)
                 .wdthold().hold()
@@ -99,7 +102,8 @@ impl<MODE: WatchdogSelect> Wdt<MODE> {
     #[inline]
     pub fn set_smclk(&mut self, _clks: &Smclk) -> &mut Self { self.set_clk(Wdtssel::Smclk) }
 
-    /// Reset countdown, unpause timer, and set timeout in a single write
+    /// Reset countdown, unpause timer, and set timeout in a single write, as the user's guide requires
+    /// (SLAU445I 12.2.3, p. 363)
     #[inline]
     pub fn set_interval_and_start(&mut self, periods: WdtClkPeriods) {
         self.periph.wdtctl().modify(|r, w| {
@@ -128,19 +132,6 @@ impl<MODE: WatchdogSelect> Wdt<MODE> {
             Self::prewrite(w, r.bits())
             .wdthold().unhold());
     }
-
-    /// Checks if the timer has expired, returning `Ok(())` if it has, otherwise `WouldBlock`.
-    /// If called while the timer is not running, this will always return `WouldBlock`.
-    #[inline]
-    pub fn wait(&mut self) -> nb::Result<(), Infallible> {
-        let sfr = unsafe { &*_pac::Sfr::ptr() };
-        if sfr.sfrifg1().read().wdtifg().bit_is_set() {
-            unsafe { sfr.sfrifg1().clear_bits(|w| w.wdtifg().clear_bit()) };
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
-        }
-    }
 }
 
 impl Wdt<WatchdogMode> {
@@ -162,32 +153,48 @@ impl Wdt<WatchdogMode> {
 }
 
 impl Wdt<IntervalMode> {
+    /// Checks if the timer has expired, returning `Ok(())` if it has, otherwise `WouldBlock`.
+    /// If called while the timer is not running, this will always return `WouldBlock`.
+    ///
+    /// Only available in interval mode. In watchdog mode the expiry resets the device, and the reset clears
+    /// WDTIFG (SLAU445I Table 1-10, p. 63), so waiting would only wait for the reset.
+    #[inline]
+    pub fn wait(&mut self) -> nb::Result<(), Infallible> {
+        let sfr = unsafe { _pac::Sfr::steal() };
+        if sfr.sfrifg1().read().wdtifg().bit_is_set() {
+            unsafe { sfr.sfrifg1().clear_bits(|w| w.wdtifg().clear_bit()) };
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
+    }
+
     /// Convert to watchdog mode and pause timer
     #[inline]
     pub fn to_watchdog(self) -> Wdt<WatchdogMode> {
         let mut wdt = Wdt { _mode: PhantomData, periph: self.periph };
         // Change mode bit and pause timer
         wdt.pause();
-        // Wipe out old interrupt flag, which may cause a watchdog reset
-        let sfr = unsafe { &*_pac::Sfr::ptr() };
+        // Wipe out old interrupt flag, which may cause a watchdog reset (SLAU445I 12.2.4, p. 363)
+        let sfr = unsafe { _pac::Sfr::steal() };
         unsafe { sfr.sfrifg1().clear_bits(|w| w.wdtifg().clear_bit()) };
         wdt
     }
 
     /// Enable interrupts for watchdog, which fires when the watchdog interrupt flag is set in
     /// interval mode. This setting does nothing in watchdog mode, but will carry over when
-    /// switching to interval mode.
+    /// switching to interval mode (WDTIE in SFRIE1: SLAU445I 12.2.4, p. 363).
     #[inline]
     pub fn enable_interrupts(&mut self) -> &mut Self {
-        let sfr = unsafe { &*_pac::Sfr::ptr() };
+        let sfr = unsafe { _pac::Sfr::steal() };
         unsafe { sfr.sfrie1().set_bits(|w| w.wdtie().set_bit()) };
         self
     }
 
-    /// Disable interrupts for watchdog.
+    /// Disable interrupts for watchdog (WDTIE in SFRIE1: SLAU445I 12.2.4, p. 363).
     #[inline]
     pub fn disable_interrupts(&mut self) -> &mut Self {
-        let sfr = unsafe { &*_pac::Sfr::ptr() };
+        let sfr = unsafe { _pac::Sfr::steal() };
         unsafe { sfr.sfrie1().clear_bits(|w| w.wdtie().clear_bit()) };
         self
     }

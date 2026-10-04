@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Add `Pmm::enable_vref_output()`, which outputs the 1.2 V reference on the VREF+ pin. It starts the buffered bandgap (REFBGEN) and waits until it is ready (REFBGRDY).
 - `Pmm::new()` and `Pmm::new_locked()` document the data sheets' order: configure the ports, then clear LOCKLPM5.
 - Add the `reset_cause` example for the MSP430FR2476.
+- Breaking: `Wdt::wait()` is only available in interval mode.
+- The watchdog examples of all devices set the same 1 s timeout through `Wdt` and toggle the LED once per second.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.

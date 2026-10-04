@@ -20,7 +20,7 @@ fn main() -> ! {
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let mut red_led = Batch::new(periph.p1).split(&pmm).pin0.to_output();
 
-    red_led.toggle();
+    red_led.toggle().ok();
 
     // The watchdog will reset program execution when it times out
     loop {}
