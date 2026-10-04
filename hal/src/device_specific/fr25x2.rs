@@ -86,18 +86,30 @@ pub mod gpio {
 
 /* ADC */
 mod adc {
-    use crate::{adc::*, gpio::*};
+    use crate::{adc::*, gpio::*, pmm::VrefOutputPin};
+
+    // The timer whose CCR1 output triggers conversions (SLASEE4C Table 6-14, p. 56, ADC trigger signal
+    // connections: ADCSHSx = 10 is TA1.1B; SLASEE4C Figure 6-2, p. 54)
+    impl AdcTriggerTimer for crate::pac::Ta1 {}
+
+    // External reference inputs and the VREF+ output, selected with SYSCFG2.ADCPCTLx like the channels:
+    // A0/Veref+ on P1.0 and A2/Veref- on P1.2 (SLASEE4C Table 6-13, p. 55, ADC channel connections);
+    // VREF+ on P1.1, where the 1.2-V reference "can be output to P1.1/../A1/VREF+"
+    // (SLASEE4C 6.10.1, p. 49), as A1,VREF+ (SLASEE4C Table 6-15, p. 58)
+    impl<DIR> VeRefPlusPin for Pin<P1, Pin0, AdcMode<DIR>> {} // Veref+, ADCPCTL0 = 1
+    impl<DIR> VeRefMinusPin for Pin<P1, Pin2, AdcMode<DIR>> {} // Veref-, ADCPCTL2 = 1
+    impl<DIR> VrefOutputPin for Pin<P1, Pin1, AdcMode<DIR>> {} // VREF+, ADCPCTL1 = 1
 
     // Channels A0 to A7, ADCINCHx = 0 to 7 (SLASEE4C Table 6-13, p. 55), each pin enabled by its
     // SYSCFG2.ADCPCTLx (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60)
-    impl_adc_channel_pin!(P1, Pin0, AdcMode => 0);
-    impl_adc_channel_pin!(P1, Pin1, AdcMode => 1);
-    impl_adc_channel_pin!(P1, Pin2, AdcMode => 2);
-    impl_adc_channel_pin!(P1, Pin3, AdcMode => 3);
-    impl_adc_channel_pin!(P2, Pin2, AdcMode => 4);
-    impl_adc_channel_pin!(P2, Pin3, AdcMode => 5);
-    impl_adc_channel_pin!(P2, Pin4, AdcMode => 6);
-    impl_adc_channel_pin!(P2, Pin5, AdcMode => 7);
+    impl_adc_channel_pin!(P1, Pin0, AdcMode => 0); // A0, ADCPCTL0 = 1
+    impl_adc_channel_pin!(P1, Pin1, AdcMode => 1); // A1, ADCPCTL1 = 1
+    impl_adc_channel_pin!(P1, Pin2, AdcMode => 2); // A2, ADCPCTL2 = 1
+    impl_adc_channel_pin!(P1, Pin3, AdcMode => 3); // A3, ADCPCTL3 = 1
+    impl_adc_channel_pin!(P2, Pin2, AdcMode => 4); // A4, ADCPCTL4 = 1
+    impl_adc_channel_pin!(P2, Pin3, AdcMode => 5); // A5, ADCPCTL5 = 1
+    impl_adc_channel_pin!(P2, Pin4, AdcMode => 6); // A6, ADCPCTL6 = 1
+    impl_adc_channel_pin!(P2, Pin5, AdcMode => 7); // A7, ADCPCTL7 = 1
 }
 
 /* Backup Memory */

@@ -133,20 +133,37 @@ pub mod gpio {
 
 /* ADC */
 mod adc {
-    use crate::{adc::*, gpio::*};
+    use crate::{adc::*, gpio::*, pmm::VrefOutputPin};
 
-    impl_adc_channel_pin!(P1, Pin0, Alternate3 => 0);
-    impl_adc_channel_pin!(P1, Pin1, Alternate3 => 1);
-    impl_adc_channel_pin!(P1, Pin2, Alternate3 => 2);
-    impl_adc_channel_pin!(P1, Pin3, Alternate3 => 3);
-    impl_adc_channel_pin!(P1, Pin4, Alternate3 => 4);
-    impl_adc_channel_pin!(P1, Pin5, Alternate3 => 5);
-    impl_adc_channel_pin!(P1, Pin6, Alternate3 => 6);
-    impl_adc_channel_pin!(P1, Pin7, Alternate3 => 7);
-    impl_adc_channel_pin!(P4, Pin3, Alternate3 => 8);
-    impl_adc_channel_pin!(P4, Pin4, Alternate3 => 9);
-    impl_adc_channel_pin!(P5, Pin3, Alternate3 => 10);
-    impl_adc_channel_pin!(P5, Pin4, Alternate3 => 11);
+    // The timer whose CCR1 output triggers conversions (SLASEO7C Table 9-20, p. 62: ADCSHSx = 10b is
+    // TA1.1B; SLASEO7C Table 9-13, p. 56: TA1 CCR1 output "To ADC trigger")
+    impl AdcTriggerTimer for crate::pac::Ta1 {}
+
+    // External reference inputs and the VREF+ output, each in its P1SELx = 11 function
+    // (SLASEO7C Table 9-23, p. 65; ADC channel connections: SLASEO7C Table 9-19, p. 62;
+    // Veref+ and Veref-: SLASEO7C Table 7-2, p. 15; VREF+: SLASEO7C Table 7-2, p. 17).
+    // VREF+ outputs the PMM's 1.2 V reference with EXTREFEN = 1 (SLASEO7C Table 9-19 note 1, p. 62;
+    // SLASEO7C 8.12.5.1, p. 33); the 1.5 V, 2.0 V and 2.5 V references "cannot be output to the
+    // VREF+ pin" (SLASEO7C 8.12.5.1, p. 33).
+    impl<DIR> VeRefPlusPin for Pin<P1, Pin0, Alternate3<DIR>> {}  // 11: Veref+ (A0), ADC positive reference
+    impl<DIR> VeRefMinusPin for Pin<P1, Pin2, Alternate3<DIR>> {} // 11: Veref- (A2), ADC negative reference
+    impl<DIR> VrefOutputPin for Pin<P1, Pin4, Alternate3<DIR>> {} // 11: VREF+ (A4), reference output
+
+    // The 12 external inputs with their ADCINCHx value (SLASEO7C 9.10.12, p. 62;
+    // SLASEO7C Table 9-19, p. 62), each in its PxSELx = 11 function (SLASEO7C Table 9-23, p. 65;
+    // SLASEO7C Table 9-26, p. 68; SLASEO7C Table 9-27, p. 69)
+    impl_adc_channel_pin!(P1, Pin0, Alternate3 => 0);  // 11: A0
+    impl_adc_channel_pin!(P1, Pin1, Alternate3 => 1);  // 11: A1
+    impl_adc_channel_pin!(P1, Pin2, Alternate3 => 2);  // 11: A2
+    impl_adc_channel_pin!(P1, Pin3, Alternate3 => 3);  // 11: A3
+    impl_adc_channel_pin!(P1, Pin4, Alternate3 => 4);  // 11: A4
+    impl_adc_channel_pin!(P1, Pin5, Alternate3 => 5);  // 11: A5
+    impl_adc_channel_pin!(P1, Pin6, Alternate3 => 6);  // 11: A6
+    impl_adc_channel_pin!(P1, Pin7, Alternate3 => 7);  // 11: A7
+    impl_adc_channel_pin!(P4, Pin3, Alternate3 => 8);  // 11: A8
+    impl_adc_channel_pin!(P4, Pin4, Alternate3 => 9);  // 11: A9
+    impl_adc_channel_pin!(P5, Pin3, Alternate3 => 10); // 11: A10
+    impl_adc_channel_pin!(P5, Pin4, Alternate3 => 11); // 11: A11
 }
 
 /* Backup Memory */

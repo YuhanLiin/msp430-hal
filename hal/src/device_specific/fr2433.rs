@@ -78,16 +78,35 @@ pub mod gpio {
 
 /* ADC */
 mod adc {
-    use crate::{adc::*, gpio::*};
+    use crate::{adc::*, gpio::*, pmm::VrefOutputPin};
 
-    impl_adc_channel_pin!(P1, Pin0, AdcMode => 0);
-    impl_adc_channel_pin!(P1, Pin1, AdcMode => 1);
-    impl_adc_channel_pin!(P1, Pin2, AdcMode => 2);
-    impl_adc_channel_pin!(P1, Pin3, AdcMode => 3);
-    impl_adc_channel_pin!(P1, Pin4, AdcMode => 4);
-    impl_adc_channel_pin!(P1, Pin5, AdcMode => 5);
-    impl_adc_channel_pin!(P1, Pin6, AdcMode => 6);
-    impl_adc_channel_pin!(P1, Pin7, AdcMode => 7);
+    // The timer whose CCR1 output triggers conversions (SLASE59F Table 6-16, p. 53: ADCSHSx = 10 is
+    // "TA1.1B"; SLASE59F Table 6-12, p. 51: the TA1 CCR1 output goes "to ADC trigger"; ADCSHSx is in
+    // ADCCTL1, SLAU445I Table 21-4, p. 563)
+    impl AdcTriggerTimer for crate::pac::Timer1A3 {}
+
+    // External reference inputs and the VREF+ output, each selected with its ADCPCTLx bit (SLASE59F
+    // Table 6-15, p. 53; SLASE59F Table 6-17, p. 55). ADCSREFx picks VEREF+ and VEREF- as references
+    // (SLAU445I Table 21-8, p. 567). The 1.2-V reference goes out on P1.4 when EXTREFEN = 1 (SLASE59F
+    // 6.10.1, p. 45; SLAU445I 1.12.2.3, p. 51). SLASE59F 6.10.1, p. 45 puts EXTREFEN "in the PMMCTL1
+    // register", but SLAU445I 2.2.8, p. 89 and SLAU445I Table 2-4, p. 94 put it in PMMCTL2, as does the
+    // FR2433 PAC; the HAL writes PMMCTL2.
+    impl<DIR> VeRefPlusPin for Pin<P1, Pin0, AdcMode<DIR>> {} // Veref+, with A0: ADCPCTL0 = 1
+    impl<DIR> VeRefMinusPin for Pin<P1, Pin2, AdcMode<DIR>> {} // Veref-, with A2: ADCPCTL2 = 1
+    impl<DIR> VrefOutputPin for Pin<P1, Pin4, AdcMode<DIR>> {} // VREF+, with A4: ADCPCTL4 = 1
+
+    // Inputs A0 to A7 on P1.0 to P1.7 are ADCINCHx = 0 to 7 (SLASE59F Table 6-15, p. 53; ADCINCHx is in
+    // ADCMCTL0, SLAU445I Table 21-8, p. 567), each selected
+    // with ADCPCTLx = 1 (SLASE59F Table 6-17, p. 55). A8 and A9 have no pin ("NA" in SLASE59F Table 6-15,
+    // p. 53).
+    impl_adc_channel_pin!(P1, Pin0, AdcMode => 0); // A0/Veref+: ADCPCTL0 = 1
+    impl_adc_channel_pin!(P1, Pin1, AdcMode => 1); // A1: ADCPCTL1 = 1
+    impl_adc_channel_pin!(P1, Pin2, AdcMode => 2); // A2/Veref-: ADCPCTL2 = 1
+    impl_adc_channel_pin!(P1, Pin3, AdcMode => 3); // A3: ADCPCTL3 = 1
+    impl_adc_channel_pin!(P1, Pin4, AdcMode => 4); // A4/VREF+: ADCPCTL4 = 1
+    impl_adc_channel_pin!(P1, Pin5, AdcMode => 5); // A5: ADCPCTL5 = 1
+    impl_adc_channel_pin!(P1, Pin6, AdcMode => 6); // A6: ADCPCTL6 = 1
+    impl_adc_channel_pin!(P1, Pin7, AdcMode => 7); // A7: ADCPCTL7 = 1
 }
 
 /* Backup Memory */

@@ -134,20 +134,37 @@ pub mod gpio {
 
 /* ADC */
 mod adc {
-    use crate::{adc::*, gpio::*};
+    use crate::{adc::*, gpio::*, pmm::VrefOutputPin};
 
-    impl_adc_channel_pin!(P1, Pin0, Alternate3 => 0);
-    impl_adc_channel_pin!(P1, Pin1, Alternate3 => 1);
-    impl_adc_channel_pin!(P1, Pin2, Alternate3 => 2);
-    impl_adc_channel_pin!(P1, Pin3, Alternate3 => 3);
-    impl_adc_channel_pin!(P1, Pin4, Alternate3 => 4);
-    impl_adc_channel_pin!(P1, Pin5, Alternate3 => 5);
-    impl_adc_channel_pin!(P1, Pin6, Alternate3 => 6);
-    impl_adc_channel_pin!(P1, Pin7, Alternate3 => 7);
-    impl_adc_channel_pin!(P5, Pin0, Alternate3 => 8);
-    impl_adc_channel_pin!(P5, Pin1, Alternate3 => 9);
-    impl_adc_channel_pin!(P5, Pin2, Alternate3 => 10);
-    impl_adc_channel_pin!(P5, Pin3, Alternate3 => 11);
+    // The timer whose CCR1 output triggers conversions (SLASEC4D Table 6-22, p. 77: ADCSHSx = 10b is
+    // TB1.1B; SLASEC4D Table 6-17, p. 74: the TB1 CCR1 output goes "To ADC trigger")
+    impl AdcTriggerTimer for crate::pac::Tb1 {}
+
+    // External reference inputs and the VREF+ output, each in its P1SELx = 11 function (SLASEC4D
+    // Table 6-63, p. 96; SLASEC4D Table 4-2, p. 22 to p. 23)
+    impl<DIR> VeRefPlusPin for Pin<P1, Pin0, Alternate3<DIR>> {} // 11: Veref+, "ADC positive reference"
+    impl<DIR> VeRefMinusPin for Pin<P1, Pin2, Alternate3<DIR>> {} // 11: Veref-, "ADC negative reference"
+    // 11: VREF+, the 1.2 V reference output: "When A7 is used, the PMM 1.2-V reference voltage can be
+    // output to this pin" (SLASEC4D Table 6-21, note 1, p. 77). The 1.5 V, 2.0 V and 2.5 V references
+    // "cannot be output to the VREF+ pin" (SLASEC4D Table 5-10, p. 41).
+    impl<DIR> VrefOutputPin for Pin<P1, Pin7, Alternate3<DIR>> {}
+
+    // The 12 external inputs A0 to A11 with their ADCINCHx value (SLASEC4D 6.10.12 and Table 6-21,
+    // p. 77), each in its PxSELx = 11 function (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-67,
+    // p. 104): "Set the PxSEL bit in the port register to disable the I/O functions" (SLAU445I 1.12.4.3,
+    // p. 54).
+    impl_adc_channel_pin!(P1, Pin0, Alternate3 => 0); // A0, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin1, Alternate3 => 1); // A1, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin2, Alternate3 => 2); // A2, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin3, Alternate3 => 3); // A3, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin4, Alternate3 => 4); // A4, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin5, Alternate3 => 5); // A5, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin6, Alternate3 => 6); // A6, P1SELx = 11
+    impl_adc_channel_pin!(P1, Pin7, Alternate3 => 7); // A7, P1SELx = 11
+    impl_adc_channel_pin!(P5, Pin0, Alternate3 => 8); // A8, P5SELx = 11
+    impl_adc_channel_pin!(P5, Pin1, Alternate3 => 9); // A9, P5SELx = 11
+    impl_adc_channel_pin!(P5, Pin2, Alternate3 => 10); // A10, P5SELx = 11
+    impl_adc_channel_pin!(P5, Pin3, Alternate3 => 11); // A11, P5SELx = 11
 }
 
 /* Backup Memory */
