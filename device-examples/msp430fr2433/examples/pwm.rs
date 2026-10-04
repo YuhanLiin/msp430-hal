@@ -18,10 +18,10 @@ use panic_msp430 as _;
 fn main() -> ! {
     let periph = msp430fr2433::Peripherals::take().unwrap();
 
-    let mut fram = Fram::new(periph.frctl);
+    let mut fram = Fram::new(periph.fram);
     // Hold the watchdog (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2,
     // p. 363)
-    Wdt::constrain(periph.wdt_a);
+    Wdt::constrain(periph.watchdog_timer);
 
     // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
     // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
@@ -39,7 +39,7 @@ fn main() -> ! {
 
     // TA0 counts SMCLK (TASSEL = 10b, SLAU445I Table 13-4, p. 384) from 0 up to 5000 in Up mode, a period of
     // 5001 cycles, about 210 Hz (SLAU445I 13.2.3.1, p. 371)
-    let pwm = PwmParts3::new(periph.ta0, TimerConfig::smclk(&smclk), 5000);
+    let pwm = PwmParts3::new(periph.timer_0_a3, TimerConfig::smclk(&smclk), 5000);
     // TA0.1 on P1.1: P1SELx = 10, P1DIR = 1 (SLASE59F Table 6-17, p. 55; SLASE59F Table 6-11, p. 50)
     let mut pwm1 = pwm.pwm1.init(p1.pin1.to_output().to_alternate2());
 
