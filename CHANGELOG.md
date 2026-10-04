@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - The MSP430FR25x2 capture and alternate examples capture on CCR2 and output SMCLK on P1.2.
 - Breaking: the SAC amplifier modes only accept the inputs the user's guide supports (SLAU445I Table 20-1). `PositiveInput`, for the open-loop and non-inverting modes, no longer has a `Dac` variant; the inverting amplifier takes a `BiasInput` (OA+ or the DAC) and the buffer a `BufferInput` (OA+, the DAC or the paired amplifier).
 - Add `DacConfig::configure_with_interrupts()` and `Dac::data_loaded()`, for the SAC DAC interrupt that requests new data after a timer-triggered load.
+- GPIO batches now turn pin interrupts off while reconfiguring a port, and switch pins whose two function select bits both change through PxSELC. Pins a device doesn't have start out `Unavailable` and can't be used. On the MSP430FR2433 and MSP430FR25x2, a batch's `to_adc_mode()` and `from_adc_mode()` now set and clear the pin's ADCPCTL bit; before, they only changed its type.
+- Fixed GPIO batches not turning the pin interrupts off while reconfiguring a port: PxIE was ORed with 0 instead of cleared.
+- GPIO batches switch pins whose two function select bits both change through PxSELC, so they don't pass through another function on the way. Pins a device doesn't have start out `Unavailable` and can't be used.
+- Add `to_output_low()` and `to_output_high()` for GPIO pins, since PxOUT is undefined after a reset.
+- Fixed on the MSP430FR2x5x: pin directions as in the data sheet, and the SAC op-amp pins on P3 only on the MSP430FR235x.
+- Fixed the TB0 clock input pin (TB0CLK) on the MSP430FR247x, which is P6.1, not P2.7.
+- Fixed on the MSP430FR2x5x: the SAC op-amp pins on P3 only exist on the MSP430FR235x.
+- Fixed on the MSP430FR2433: the ACLK output on P2.2 uses alternate function 2.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
