@@ -7,12 +7,14 @@ use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
 
 // Green onboard LED should go on when P2.3 button is pressed
+// (LED2, green, on P6.6 and button S2 on P2.3: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
     let _wdt = Wdt::constrain(periph.wdt_a);
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
+    // S2 connects P2.3 to GND and the board has no pull-up for it (SLAU680 Figure 18, p. 26)
     let p2 = Batch::new(periph.p2)
         .config_pin3(|p| p.pullup())
         .split(&pmm);
