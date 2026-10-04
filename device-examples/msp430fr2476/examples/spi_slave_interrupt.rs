@@ -137,6 +137,8 @@ fn EUSCI_A0() {
         let byte = match unsafe{spi_slave.read_unchecked()} { // Only Rx interrupts are enabled, so Rx buffer must be ready
             Ok(b) => b,
             Err(SpiErr::Overrun(b)) => b,
+            // Only a master on a multi-master bus gets this (UCFE: SLAU445I Table 23-5, p. 615)
+            Err(SpiErr::BusConflict) => return,
         };
         nb::block!( spi_slave.write(byte.wrapping_add(1)) ).unwrap(); // Infallible, safe to unwrap after blocking
     });

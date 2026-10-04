@@ -51,14 +51,15 @@
 //!
 //! Besides plain UART, [`SerialConfig::mode`] selects the multiprocessor formats, which mark address characters
 //! ([`Tx::send_address`], [`Rx::set_dormant`]; SLAU445I 22.3.3, p. 577 to p. 579), and automatic baud-rate
-//! detection from a LIN break and synch field (SLAU445I 22.3.4, p. 580). [`SerialConfig::deglitch`] sets how
-//! short a pulse on RXD is ignored (SLAU445I 22.3.7.1, p. 583).
+//! detection from a LIN break and synch field (SLAU445I 22.3.4, p. 580). [`SerialConfig::irda`] adds IrDA
+//! encoding and decoding (SLAU445I 22.3.5, p. 581), and [`SerialConfig::deglitch`] sets how short a pulse on
+//! RXD is ignored (SLAU445I 22.3.7.1, p. 583).
 //!
 
 #[cfg(feature = "eusci_aclk")]
 use crate::clock::Aclk;
 use crate::clock::{Clock, Smclk};
-use crate::hw_traits::eusci::{EUsciUart, UartUcxStatw, UcaCtlw0, Ucssel};
+use crate::hw_traits::eusci::{EUsciUart, UartUcxStatw, UcaCtlw0, UcaIrctl, Ucssel};
 use crate::pin_mapping::*;
 use core::convert::Infallible;
 use core::fmt::Display;
@@ -245,6 +246,57 @@ impl UartMode {
     }
 }
 
+/// The clock the IrDA transmit pulse length is counted in (UCIRTXCLK, SLAU445I Table 22-16, p. 599)
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum IrdaClock {
+    /// The baud-rate clock, BRCLK (UCIRTXCLK = 0). The user's guide then requires the prescaler UCBRx to be
+    /// at least 5 (SLAU445I 22.3.5.1, p. 581: "the prescaler UCBRx must be set to a value greater or equal to
+    /// 5"), which the configuration asserts.
+    Brclk,
+    /// 16 times the baud rate (BITCLK16). This needs oversampling, which the baud-rate calculation uses when
+    /// the clock is at least 16 times the baud rate; otherwise BRCLK is used (SLAU445I 22.3.9.2, p. 585;
+    /// SLAU445I Table 22-16, p. 599: "BITCLK16 when UCOS16 = 1. Otherwise, BRCLK").
+    BitClk16,
+}
+
+/// IrDA encoding and decoding (UCAxIRCTL, SLAU445I 22.3.5, p. 581 and SLAU445I Table 22-16, p. 599)
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct IrdaConfig {
+    /// Transmit pulse length: (tx_pulse + 1) / (2 * pulse clock), with `tx_pulse` from 0 to 63 (UCIRTXPL,
+    /// SLAU445I Table 22-16, p. 599)
+    pub tx_pulse: u8,
+    /// The clock the transmit pulse length is counted in (UCIRTXCLK, SLAU445I Table 22-16, p. 599)
+    pub pulse_clock: IrdaClock,
+    /// Ignore received pulses shorter than (filter + 4) / (2 * pulse clock), with the filter from 0 to 63, or
+    /// `None` to accept all (UCIRRXFE, UCIRRXFL, SLAU445I Table 22-16, p. 599; the formula in SLAU445I
+    /// 22.3.5.2, p. 581 counts in BRCLK instead; this follows the register table)
+    pub rx_filter: Option<u8>,
+    /// The transceiver gives a low pulse for light, instead of a high pulse (UCIRRXPL, SLAU445I Table 22-16,
+    /// p. 599)
+    pub rx_inverted: bool,
+}
+
+impl IrdaConfig {
+    /// The standard IrDA pulse of 3/16 of a bit time, from 6 half periods of BITCLK16 (SLAU445I 22.3.5.1,
+    /// p. 581)
+    pub const fn standard() -> Self {
+        IrdaConfig { tx_pulse: 5, pulse_clock: IrdaClock::BitClk16, rx_filter: None, rx_inverted: false }
+    }
+
+    // UCAxIRCTL with the encoder and decoder on (SLAU445I Table 22-16, p. 599)
+    #[inline(always)]
+    fn irctl(&self) -> UcaIrctl {
+        UcaIrctl {
+            uciren: true,
+            ucirtxclk: self.pulse_clock == IrdaClock::BitClk16,
+            ucirtxpl: self.tx_pulse.min(63),
+            ucirrxfe: self.rx_filter.is_some(),
+            ucirrxpl: self.rx_inverted,
+            ucirrxfl: self.rx_filter.map_or(0, |len| len.min(63)),
+        }
+    }
+}
+
 /// The highest-priority pending UART interrupt among the enabled ones, in the order of UCAxIV, as
 /// returned by `interrupt_source()` (SLAU445I 22.3.15.4, p. 591 and SLAU445I Table 22-19, p. 602)
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -349,6 +401,7 @@ where USCI: SerialUsci<M>
     loopback: Loopback,
     mode: UartMode,
     deglitch: UartDeglitch,
+    irda: Option<IrdaConfig>,
     break_interrupts: bool,
     state: S,
     _map: PhantomData<M>,
@@ -365,6 +418,7 @@ macro_rules! serial_config {
             loopback: $conf.loopback,
             mode: $conf.mode,
             deglitch: $conf.deglitch,
+            irda: $conf.irda,
             break_interrupts: $conf.break_interrupts,
             state: $state,
             _map: core::marker::PhantomData,
@@ -390,6 +444,14 @@ where
     #[inline]
     pub fn deglitch(mut self, deglitch: UartDeglitch) -> Self {
         self.deglitch = deglitch;
+        self
+    }
+
+    /// Encode transmitted and decode received bits as IrDA pulses, for an infrared transceiver (SLAU445I
+    /// 22.3.5, p. 581).
+    #[inline]
+    pub fn irda(mut self, irda: IrdaConfig) -> Self {
+        self.irda = Some(irda);
         self
     }
 
@@ -431,6 +493,7 @@ where
             // Table 22-9, p. 594)
             mode: UartMode::Uart,
             deglitch: UartDeglitch::_200ns,
+            irda: None,
             break_interrupts: false,
             state: NoClockSet { baudrate: NonZeroU32::new(baudrate).unwrap_or(ONE) },
             _map: PhantomData,
@@ -633,6 +696,15 @@ where
         let ClockSet { baud_config, clksel } = self.state;
         let usci = self.usci;
 
+        // With UCBRx counting BRCLK, the IrDA encoder needs UCBRx of at least 5 (SLAU445I 22.3.5.1, p. 581:
+        // "When UCIRTXCLK = 0, the prescaler UCBRx must be set to a value greater or equal to 5")
+        if let Some(irda) = self.irda {
+            assert!(
+                irda.pulse_clock != IrdaClock::Brclk || baud_config.br >= 5,
+                "IrDA with IrdaClock::Brclk needs a baud-rate prescaler UCBRx of at least 5"
+            );
+        }
+
         // Set UCSWRST, then initialize the registers (SLAU445I 22.3.1, p. 577, steps 1 and 2)
         usci.ctl0_reset();
         // UCAxBRW holds UCBRx; UCAxMCTLW holds UCBRSx, UCBRFx and UCOS16 (SLAU445I Table 22-10, p. 595;
@@ -648,6 +720,8 @@ where
             UartMode::AutoBaud { delimiter } => usci.abctl_settings(true, delimiter as u8),
             _ => usci.abctl_settings(false, 0),
         }
+        // UCAxIRCTL; all zero keeps the IrDA encoder and decoder off (UCIREN = 0, SLAU445I Table 22-16, p. 599)
+        usci.irctl_settings(self.irda.map_or(UcaIrctl::default(), |irda| irda.irctl()));
         // UCAxCTLW0, with UCSWRST still set (SLAU445I Table 22-8, p. 593 to p. 594)
         usci.ctl0_settings(UcaCtlw0 {
             ucpen: self.parity.ucpen(),

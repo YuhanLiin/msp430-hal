@@ -697,6 +697,7 @@ mod serial {
         uca0rxbuf,
         uca0txbuf,
         uca0abctl,
+        uca0irctl,
         uca0ie,
         uca0ifg,
         uca0iv,
@@ -714,6 +715,7 @@ mod serial {
         uca1rxbuf,
         uca1txbuf,
         uca1abctl,
+        uca1irctl,
         uca1ie,
         uca1ifg,
         uca1iv,
@@ -1375,4 +1377,33 @@ pub mod clock {
 pub(crate) mod lpm {
     // The device's ports, P1 to P6 (SLASEO7C 9.10.3, p. 51)
     crate::lpm::reset_all_pin_functions_impl!(P1, P2, P3, P4, P5, P6);
+}
+
+/* Infrared modulation */
+pub mod ir {
+    use crate::{gpio::*, ir::*, pac::*, pin_mapping::*};
+
+    /// The eUSCI whose TXD pin carries the modulated signal (SLASEO7C 9.10.8, p. 60: the timers can
+    /// "modulate the eUSCI_A pin of UCA0TXD/UCA0SIMO"; SLASEO7C Figure 9-2, p. 57)
+    pub type IrUsci = EUsciA0;
+    /// The pin mapping of that TXD pin (P1.4; the output doesn't follow eUSCI_A0 to its remapped pins,
+    /// measured on an MSP430FR2476)
+    pub type IrMapping = DefaultMapping;
+
+    // The CCR2 outputs of Ta0 and Ta1 feed the modulator (SLASEO7C Table 9-12, p. 55: TA0 CCR2
+    // "IR carrier input"; SLASEO7C Table 9-13, p. 56: TA1 CCR2 "IR coding input";
+    // SLASEO7C Figure 9-2, p. 57). TA0 is the first input, the carrier in ASK mode, and TA1 the second,
+    // the envelope (SLAU445I 1.12.1.2, p. 48: "the first PWM is used for carrier generation and the
+    // second generates the envelope").
+    impl IrInputTimer for Ta0 {}
+    impl IrInputTimer for Ta1 {}
+    impl IrFirstTimer for Ta0 {}
+    impl IrSecondTimer for Ta1 {}
+
+    // eUSCI_A0's TXD pin in the default mapping: P1.4 UCA0TXD, P1SELx = 01, USCIA0RMP = 0
+    // (SLASEO7C Table 9-11, p. 54; SLASEO7C Table 9-23, p. 65). Measured on an MSP430FR2476: with
+    // eUSCI_A0 remapped, neither P1.4 nor P5.2 carries the modulated signal. (The data sheet figure,
+    // SLASEO7C Figure 9-2, p. 57, gives P2.0, which isn't a TXD pin on this device:
+    // SLASEO7C Table 9-24, p. 66 lists only XOUT on it.)
+    impl<DIR> IrOutputPin for Pin<P1, Pin4, Alternate1<DIR>> {}
 }

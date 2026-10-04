@@ -17,6 +17,12 @@
 //! [`FullDuplex`](embedded_hal_nb::spi::FullDuplex) trait.
 //! Standalone methods are also provided for directly writing to the Tx and Rx buffers for interrupt-based implementations.
 //!
+//! An [`Spi`] can share the bus with other masters, set up with
+//! [`multi_master_bus()`](SpiConfig::multi_master_bus): another master takes the bus through this device's
+//! STE pin, and SCLK and MOSI then stop driving it (SLAU445I 23.3.3.1, p. 608). Writes wait while
+//! another master has the bus, and a transfer that another master interrupts returns
+//! [`SpiErr::BusConflict`].
+//!
 //! # [`SpiSlave`]
 //! The SPI peripheral can be configured as a slave device by calling [`to_slave()`](SpiConfig::to_slave) during configuration.
 //!
@@ -68,7 +74,7 @@
 use crate::clock::Aclk;
 use crate::{
     clock::Smclk,
-    hw_traits::eusci::{EusciSPI, Ucmode, Ucssel, UcxSpiCtw0},
+    hw_traits::eusci::{EusciSPI, SpiStatw, Ucmode, Ucssel, UcxSpiCtw0},
     pin_mapping::*,
 };
 use core::{convert::Infallible, marker::PhantomData};
@@ -85,7 +91,7 @@ pub trait SpiUsci<M: PinMap = DefaultMapping>: EusciSPI {
     /// Serial Clock (UCxCLK, SLAU445I 23.3, p. 606)
     type SCLK;
     /// Slave Transmit Enable (acts like CS; UCxSTE, SLAU445I 23.3, p. 606)
-    type STE;
+    type STE: SpiPinLevel;
 
     /// Additional configuration
     #[inline(always)]
@@ -104,9 +110,27 @@ macro_rules! impl_spi_pin {
             #[inline(always)]
             fn from(_val: Pin<$port, $pin, $alt<DIR>>) -> Self { $struct_name }
         }
+        impl $crate::spi::SpiPinLevel for $struct_name {
+            // The pin's bit in PxIN (SLAU445I Table 8-9, p. 334)
+            #[inline(always)]
+            fn is_high() -> bool {
+                use $crate::hw_traits::{gpio::GpioPeriph, Steal};
+                let port = unsafe { <$port as Steal>::steal() };
+                port.pxin_rd() & <$pin as $crate::gpio::PinNum>::SET_MASK != 0
+            }
+        }
     };
 }
 pub(crate) use impl_spi_pin;
+
+/// The level of an SPI pin, read from its bit in PxIN. PxIN.x and the eUSCI's input both come from the
+/// pin's Schmitt trigger, which only an analog function switches off (SLASEC4D Figure 6-4, p. 95;
+/// SLASE59F Figure 6-1, p. 54; SLASEO7C Figure 9-4, p. 64; SLASEE4C Figure 6-3, p. 57), so the bit reads the
+/// pin in its eUSCI function too (measured on an MSP430FR2476, with STE).
+pub trait SpiPinLevel {
+    /// Whether the pin is high
+    fn is_high() -> bool;
+}
 
 /// Typestate for an SPI bus whose role has not yet been chosen.
 pub struct RoleNotSet;
@@ -271,21 +295,58 @@ where
         // UCSTEM = 1: STE is an output, the enable signal of a single slave (SLAU445I 23.3.3.2, p. 608)
         self.ctlw0.ucstem = true;
         self.configure_hw();
-        Spi { usci: self.usci, _pin_map: PhantomData }
+        Spi { usci: self.usci, ste_master_active: None, _pin_map: PhantomData }
     }
 
-    // Note: Errata USCI50 makes this mode a real pain to implement. Leave out for now.
-    // (SLAZ695J USCI50, SLAZ664S USCI50, SLAZ726B USCI50, SLAZ705H USCI50: in 4-pin master mode with
-    // UCSTEM = 0, data moved into UCxTXBUF while STE is inactive "may not be transmitted correctly". STE turning
-    // SCLK and MOSI into inputs: SLAU445I 23.3.3.1, p. 608.)
-    // /// For an SPI bus with more than one master.
-    // /// The STE pin is used by the other master to turn SCLK and MOSI high impedance, so the other master can talk on the bus.
-    // pub fn multi_master_bus<MOSI, MISO, SCLK, STE>(mut self, _miso: MISO, _mosi: MOSI, _sclk: SCLK, _ste: STE, ste_pol: StePolarity) -> Spi<USCI>
-    // where MOSI: Into<USCI::MOSI>, MISO: Into<USCI::MISO>, SCLK: Into<USCI::SCLK>, STE: Into<USCI::STE> {
-    //     // TODO: UCMODE
-    //     self.configure_hw();
-    //     Spi(PhantomData)
-    // }
+    /// For an SPI bus with more than one master (4-pin master mode with UCSTEM = 0: SLAU445I 23.3.3.1,
+    /// p. 608). `ste_pol` is the STE level at which this master may use the bus: `EnabledWhenHigh` while STE
+    /// is high, `EnabledWhenLow` while it's low. Another master takes the bus by driving STE to the other
+    /// level, and SCLK and MOSI then stop driving the bus (SLAU445I Table 23-1, p. 606). Give STE a pull
+    /// resistor to the enabled level, with `pullup()` or `pulldown()` before `to_alternate1()`, if nothing
+    /// drives it while the other masters are idle; the pull resistor works in the eUSCI function too, while
+    /// STE is an input (SLASEC4D Figure 6-4, p. 95; SLASE59F Figure 6-1, p. 54; SLASEO7C Figure 9-4, p. 64;
+    /// SLASEE4C Figure 6-3, p. 57).
+    ///
+    /// Erratum USCI50: "only move data into UCxTXBUF when UCxSTE is in the active state" (SLAZ695J USCI50,
+    /// SLAZ664S USCI50, SLAZ726B USCI50, SLAZ705H USCI50). Measured on an MSP430FR2476, a character written
+    /// to UCxTXBUF while another master has the bus is never sent. So the writes return `WouldBlock`, and the
+    /// blocking ones wait, until [`Spi::bus_available()`]; check it before
+    /// [`write_unchecked()`](Spi::write_unchecked).
+    ///
+    /// A transfer that another master interrupts is aborted, and the next read returns
+    /// [`SpiErr::BusConflict`]: "the data must be rewritten" (SLAU445I 23.3.3.1, p. 608). Repeat the
+    /// transaction then. Between characters, a write waits while another master has the bus and goes on
+    /// after it.
+    pub fn multi_master_bus<MOSI, MISO, SCLK, STE>(
+        mut self,
+        _miso: MISO,
+        _mosi: MOSI,
+        _sclk: SCLK,
+        _ste: STE,
+        ste_pol: StePolarity,
+    ) -> Spi<USCI, M>
+    where
+        MOSI: Into<USCI::MOSI>,
+        MISO: Into<USCI::MISO>,
+        SCLK: Into<USCI::SCLK>,
+        STE: Into<USCI::STE>,
+    {
+        // The master is active while STE is low with UCMODEx = 01b, while it's high with 10b (SLAU445I
+        // Table 23-1, p. 606). UCSTEM = 0, as `new` sets it, makes STE an input (SLAU445I 23.3.3.1, p. 608).
+        let ste_master_active = match ste_pol {
+            StePolarity::EnabledWhenHigh => {
+                self.ctlw0.ucmode = Ucmode::FourPinSPI0;
+                true
+            }
+            StePolarity::EnabledWhenLow => {
+                self.ctlw0.ucmode = Ucmode::FourPinSPI1;
+                false
+            }
+        };
+        self.configure_hw();
+        Spi { usci: self.usci, ste_master_active: Some(ste_master_active), _pin_map: PhantomData }
+    }
+
     /// For an SPI bus with a single master.
     /// SCLK and MOSI are always outputs. The STE pin is not required
     /// (3-pin master mode, UCMODEx = 00b: SLAU445I Table 23-3, p. 613; SLAU445I 23.3.3.1, p. 608: "The
@@ -304,7 +365,7 @@ where
         // UCMODEx = 00b: 3-pin SPI (SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620)
         self.ctlw0.ucmode = Ucmode::ThreePinSPI;
         self.configure_hw();
-        Spi { usci: self.usci, _pin_map: PhantomData }
+        Spi { usci: self.usci, ste_master_active: None, _pin_map: PhantomData }
     }
 }
 impl<USCI, M> SpiConfig<USCI, Slave, M>
@@ -397,6 +458,24 @@ where
     }
 }
 
+#[cfg(feature = "mfm")]
+impl<M: PinMap> SpiConfig<crate::pac::EUsciB1, Slave, M>
+where crate::pac::EUsciB1: SpiUsci<M>
+{
+    /// Set eUSCI_B1 up as the 4-wire SPI slave of the Manchester Function Module, see [`crate::mfm`]. The MFM
+    /// connects to it internally, so its own pins aren't needed (SLASEC4D 6.10.14, p. 79: "the eUSCI_B1 must
+    /// be configured in 4-wire SPI slave mode"; SLAU445I 25.6.1, p. 668).
+    pub fn mfm_slave(mut self, ste_pol: StePolarity) -> SpiSlave<crate::pac::EUsciB1, M> {
+        // UCMODEx = 01b: STE active high, 10b: STE active low (SLAU445I Table 23-12, p. 620)
+        self.ctlw0.ucmode = match ste_pol {
+            StePolarity::EnabledWhenHigh => Ucmode::FourPinSPI1,
+            StePolarity::EnabledWhenLow  => Ucmode::FourPinSPI0,
+        };
+        self.configure_hw();
+        SpiSlave { usci: self.usci, _pin_map: PhantomData }
+    }
+}
+
 /// The polarity of the STE pin. The values are those of UCMODEx (SLAU445I Table 23-1, p. 606;
 /// SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620).
 pub enum StePolarity {
@@ -443,9 +522,13 @@ macro_rules! spi_common {
         /// SLAU445I 23.3.8.2, p. 611).
         #[inline]
         pub unsafe fn read_unchecked(&mut self) -> Result<u8, SpiErr> {
-            // UCOE first: reading UCxRXBUF clears it (SLAU445I Table 23-5, p. 615;
-            // SLAU445I Table 23-14, p. 622)
-            if self.usci.overrun_flag() {
+            // UCFE and UCOE first: reading UCxRXBUF clears them (UCOE: SLAU445I Table 23-5, p. 615;
+            // SLAU445I Table 23-14, p. 622; UCFE measured on an MSP430FR2476)
+            let statw = self.usci.statw_rd();
+            if statw.ucfe() {
+                return Err(self.bus_conflict());
+            }
+            if statw.ucoe() {
                 return Err(SpiErr::Overrun(self.usci.rxbuf_rd()));
             }
             Ok(self.usci.rxbuf_rd())
@@ -453,9 +536,11 @@ macro_rules! spi_common {
 
         fn recv_byte(&mut self) -> nb::Result<u8, SpiErr> {
             if self.usci.receive_flag() {
-                // UCOE first, as in read_unchecked: reading UCxRXBUF clears it (SLAU445I Table 23-5, p. 615;
-                // SLAU445I Table 23-14, p. 622)
-                if self.usci.overrun_flag() {
+                // UCFE and UCOE first, as in read_unchecked
+                let statw = self.usci.statw_rd();
+                if statw.ucfe() {
+                    Err(nb::Error::Other(self.bus_conflict()))
+                } else if statw.ucoe() {
                     Err(nb::Error::Other(SpiErr::Overrun(self.usci.rxbuf_rd())))
                 } else {
                     Ok(self.usci.rxbuf_rd())
@@ -465,14 +550,17 @@ macro_rules! spi_common {
             }
         }
 
-        fn send_byte(&mut self, word: u8) -> nb::Result<(), Infallible> {
-            // UCTXIFG = 1: UCxTXBUF can take another character (SLAU445I 23.3.8.1, p. 611)
-            if self.usci.transmit_flag() {
-                self.usci.txbuf_wr(word);
-                Ok(())
-            } else {
-                Err(WouldBlock)
-            }
+        // UCFE: another master interrupted a transfer on a multi-master bus, which aborted it (SLAU445I
+        // 23.3.3.1, p. 608); UCFE isn't used otherwise (SLAU445I Table 23-5, p. 615). Measured on an
+        // MSP430FR2476, the abort sets UCRXIFG too, with the last character still in UCxRXBUF, and a character
+        // waiting in UCxTXBUF stays there and isn't sent. A reset of the eUSCI drops both and clears the flags
+        // (UCSWRST: SLAU445I 23.3.1, p. 606). It clears the interrupt enables too, so they're set again.
+        fn bus_conflict(&mut self) -> SpiErr {
+            let ie = self.usci.ie_rd();
+            self.usci.ctw0_set_rst();
+            self.usci.ctw0_clear_rst();
+            self.usci.ie_wr(ie);
+            SpiErr::BusConflict
         }
 
         /// Get the source of the interrupt currently being serviced: the highest-priority pending interrupt
@@ -517,6 +605,8 @@ pub struct Spi<USCI, M: PinMap = DefaultMapping>
 where USCI: SpiUsci<M>
 {
     usci: USCI,
+    // On a multi-master bus, the STE level at which this master may use the bus; `None` otherwise
+    ste_master_active: Option<bool>,
     _pin_map: PhantomData<M>,
 }
 impl<USCI, M> Spi<USCI, M>
@@ -525,6 +615,28 @@ where
     M: PinMap,
 {
     spi_common!();
+
+    /// Whether this master may use the bus: on a bus set up with
+    /// [`multi_master_bus()`](SpiConfig::multi_master_bus), whether STE is at the level given there
+    /// (SLAU445I Table 23-1, p. 606), and always on the other buses.
+    #[inline]
+    pub fn bus_available(&self) -> bool {
+        match self.ste_master_active {
+            Some(level) => <USCI::STE as SpiPinLevel>::is_high() == level,
+            None => true,
+        }
+    }
+
+    fn send_byte(&mut self, word: u8) -> nb::Result<(), Infallible> {
+        // UCTXIFG = 1: UCxTXBUF can take another character (SLAU445I 23.3.8.1, p. 611), on a multi-master
+        // bus only while this master may use it (erratum USCI50, see `multi_master_bus`)
+        if self.usci.transmit_flag() && self.bus_available() {
+            self.usci.txbuf_wr(word);
+            Ok(())
+        } else {
+            Err(WouldBlock)
+        }
+    }
 
     #[inline(always)]
     /// Change the SPI mode. This requires resetting the peripheral, which also sets TXIFG and clears RXIFG, UCOE, and UCFE.
@@ -560,7 +672,15 @@ where
 
     /// Try to write a byte into the Tx buffer. Returns `nb::WouldBlock` if the buffer is still full. Returns immediately.
     #[inline(always)]
-    pub fn write(&mut self, byte: u8) -> nb::Result<(), Infallible> { self.send_byte(byte) }
+    pub fn write(&mut self, byte: u8) -> nb::Result<(), Infallible> {
+        // UCTXIFG = 1: UCxTXBUF can take another character (SLAU445I 23.3.8.1, p. 611)
+        if self.usci.transmit_flag() {
+            self.usci.txbuf_wr(byte);
+            Ok(())
+        } else {
+            Err(WouldBlock)
+        }
+    }
 }
 
 /// SPI transmit/receive errors
@@ -570,6 +690,10 @@ pub enum SpiErr {
     /// Data in the recieve buffer was overwritten before it was read. The contained data is the new contents of the recieve buffer.
     /// (UCOE, SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622.)
     Overrun(u8),
+    /// On a bus set up with [`multi_master_bus()`](SpiConfig::multi_master_bus), another master took the
+    /// bus during a transfer, which aborted it: "the data must be rewritten" (UCFE: SLAU445I 23.3.3.1,
+    /// p. 608). Repeat the transaction; its writes wait until this master may use the bus again.
+    BusConflict,
 }
 impl From<Infallible> for SpiErr {
     fn from(value: Infallible) -> Self { match value {} }
@@ -584,6 +708,7 @@ mod ehal1 {
         fn kind(&self) -> embedded_hal::spi::ErrorKind {
             match self {
                 SpiErr::Overrun(_) => embedded_hal::spi::ErrorKind::Overrun,
+                SpiErr::BusConflict => embedded_hal::spi::ErrorKind::ModeFault,
             }
         }
     }
@@ -614,11 +739,14 @@ mod ehal1 {
         /// Write `words` to the slave, ignoring all the incoming words.
         ///
         /// Returns once the last word has been sent: the incoming word is waited for after each one, and
-        /// UCRXIFG is set when "the RX or TX operation is complete" (SLAU445I 23.3.3, p. 607).
+        /// UCRXIFG is set when "the RX or TX operation is complete" (SLAU445I 23.3.3, p. 607). Only a
+        /// [`SpiErr::BusConflict`] is returned, as it means a word wasn't sent.
         fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
             for word in words {
                 block!(self.send_byte(*word))?;
-                let _ = block!(self.recv_byte());
+                if let Err(SpiErr::BusConflict) = block!(self.recv_byte()) {
+                    return Err(SpiErr::BusConflict);
+                }
             }
             Ok(())
         }

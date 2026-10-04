@@ -1,19 +1,34 @@
+//! The internal temperature sensor: LED1 is on while the chip is between 20.0 °C and 25.0 °C, and off
+//! otherwise.
+//!
+//! The ADC converts the sensor, channel 12, against the internal 1.5 V reference. The device descriptors
+//! (TLV) hold the factory's readings of the sensor against that reference at 30 °C and 105 °C, and
+//! `TempSensorCalibration` turns each new reading into tenths of a degree with them.
+//! (Channel 12: SLASEO7C Table 9-19, p. 62. The readings at 30 °C and 105 °C: SLASEO7C Table 9-30, p. 72;
+//! their use: SLAU445I 1.13.3.3, p. 60. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
+//!
+//! How to test:
+//! 1. Flash this example. In a room at 20 °C to 25 °C, LED1 is on.
+//! 2. Hold a fingertip on the MSP430FR2476 (MSP1: SLAU802 Figure 2, p. 4): as the chip warms past 25 °C,
+//!    LED1 turns off. Take the finger away, and LED1 turns on again as the chip cools.
+//!
+//! In a room below 20 °C LED1 starts off: the finger turns it on as the chip passes 20 °C, and off again
+//! past 25 °C.
 #![no_main]
 #![no_std]
 
 use embedded_hal::digital::*;
 use msp430_rt::entry;
 use msp430_hal::{
-    adc::{AdcConfig, ClockDivider, Predivider, Resolution, SampleTime, SamplingRate},
+    adc::{AdcConfig, ClockDivider, NegativeReference, PositiveReference, Predivider, Resolution, SampleTime, SamplingRate},
     gpio::Batch,
     pmm::{Pmm, ReferenceVoltage},
+    tlv::TempSensorCalibration,
     watchdog::Wdt,
 };
 use nb::block;
 use panic_msp430 as _;
 
-// Turn on P1.0 if temp between 20 and 25C
-// (P1.0 drives LED1: SLAU802 Figure 19, p. 25)
 #[entry]
 fn main() -> ! {
     // Take peripherals and disable watchdog
@@ -36,7 +51,7 @@ fn main() -> ! {
     // (ADCSHTx = 1000b for 256 ADCCLK cycles: SLAU445I Table 21-3, p. 561; ADCSSELx = 00b is MODCLK:
     // SLAU445I Table 21-4, p. 564; ADCRES = 10b for 12 bits and ADCSR = 0 for up to about 200 ksps:
     // SLAU445I Table 21-5, p. 565)
-    let mut adc = AdcConfig::new(
+    let adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
         Resolution::Bits12,
@@ -51,17 +66,22 @@ fn main() -> ! {
     // The sensor is ADC channel 12 (SLASEO7C Table 9-19, p. 62)
     let mut t_sense = pmm.enable_internal_temp_sensor(&vref).unwrap();
 
-    loop {
-        // Get the voltage of the internal temp sensor, assuming the ADC reference voltage is 3300mV
-        let reading_mv = block!( adc.read_voltage_mv(&mut t_sense, 3300) ).unwrap();
+    // The device descriptors (TLV) hold the sensor readings measured in the factory at two temperatures,
+    // against the internal 1.5 V reference at full resolution, so measure the same way. This is much more
+    // accurate than the typical sensor voltage and slope from the data sheet.
+    // (SLASEO7C Table 9-30, p. 72: 1.5-V reference readings at 30°C and 105°C; SLAU445I 1.13.3.3, p. 60.
+    // The typical values are VSENSOR and TCSENSOR in SLASEO7C 8.12.5.1, p. 33. The sensor's offset error
+    // "can be large and must be calibrated": SLAU445I 21.2.7.8, p. 556.)
+    // ADCSREFx = 001b: VR+ = VREF and VR- = AVSS (SLAU445I 21.3.6, p. 567)
+    let mut adc = adc.with_reference(PositiveReference::Internal(&vref), NegativeReference::Avss);
+    let calibration = TempSensorCalibration::new(ReferenceVoltage::V1_5);
 
-        // Equation 11 gives us this equation for calculating temperature from the temp sensor voltage:
-        // T = 0.00355 × (V_t – V_30C) + 30C, and V_30C = 788 mV (8.12.5.1).
-        // Note integer division, so multiply first (beware overflow!), divide last to maximise accuracy
-        let temp_celcius = (((355 * (reading_mv as i32 - 788)) + 30_000) / 1000) as i16;
+    loop {
+        let count = block!(adc.read_count(&mut t_sense)).unwrap();
+        let temp_decicelsius = calibration.decicelsius(count);
 
         // Turn on LED if temp between 20 and 25C
-        if (20..=25).contains(&temp_celcius) {
+        if (200..=250).contains(&temp_decicelsius) {
             led.set_high().ok();
         } else {
             led.set_low().ok();

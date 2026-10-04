@@ -297,6 +297,7 @@ mod serial {
         uca0rxbuf,
         uca0txbuf,
         uca0abctl,
+        uca0irctl,
         uca0ie,
         uca0ifg,
         uca0iv,
@@ -313,6 +314,7 @@ mod serial {
         uca1rxbuf,
         uca1txbuf,
         uca1abctl,
+        uca1irctl,
         uca1ie,
         uca1ifg,
         uca1iv,
@@ -607,4 +609,29 @@ pub mod clock {
 pub(crate) mod lpm {
     // All of the device's ports (SLASE59F 6.10.3, p. 46)
     crate::lpm::reset_all_pin_functions_impl!(P1, P2, P3);
+}
+
+/* Infrared modulation */
+pub mod ir {
+    use crate::{gpio::*, ir::*, pac::*, pin_mapping::*};
+
+    /// The eUSCI whose TXD pin carries the modulated signal (SLASE59F 6.10.8, p. 51: "the eUSCI_A pin
+    /// of UCA0TXD/UCA0SIMO")
+    pub type IrUsci = EUsciA0;
+    /// The pin mapping of that TXD pin. This device has no eUSCI pin remapping (no SYSCFG3 in the
+    /// SYS registers, SLASE59F Table 6-27, p. 63).
+    pub type IrMapping = DefaultMapping;
+
+    // The CCR2 outputs of Ta0 and Ta1 feed the modulator (SLASE59F Table 6-11, p. 50, and
+    // SLASE59F Table 6-12, p. 51: "IR Input"). TA0's is the first PWM, the ASK carrier, and TA1's the
+    // second (SLAU445I 1.12.2.2, Figure 1-8, p. 50). IREN, IRPSEL, IRMSEL, IRDSSEL and IRDATA are in
+    // SYSCFG1 (SLASE59F 6.10.8, p. 51; SLAU445I Table 1-30, p. 81).
+    impl IrInputTimer for Ta0 {}
+    impl IrInputTimer for Ta1 {}
+    impl IrFirstTimer for Ta0 {}
+    impl IrSecondTimer for Ta1 {}
+
+    // eUSCI_A0's TXD pin, P1.4 with P1SELx = 01 (SLASE59F 6.10.8, p. 51: "modulate the eUSCI_A pin of
+    // UCA0TXD/UCA0SIMO"; SLASE59F Table 6-17, p. 55; SLAU445I Figure 1-8, p. 50)
+    impl<DIR> IrOutputPin for Pin<P1, Pin4, Alternate1<DIR>> {}
 }

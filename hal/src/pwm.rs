@@ -349,6 +349,20 @@ impl<T: CapCmp<CCR1> + crate::adc::AdcTriggerTimer, M> PwmUninit<T, CCR1, M> {
     }
 }
 
+impl<T: CapCmp<CCR2> + crate::ir::IrInputTimer, M> PwmUninit<T, CCR2, M> {
+    /// Use this PWM output as an input of the infrared modulator, see [`crate::ir`], instead of driving a pin
+    /// (CCR2 of TB0/TB1 or TA0/TA1: SLASEC4D Table 6-16, p. 73; SLASEC4D Table 6-17, p. 74; SLASE59F
+    /// Table 6-11, p. 50; SLASE59F Table 6-12, p. 51; SLASEO7C Table 9-12, p. 55; SLASEO7C Table 9-13,
+    /// p. 56; SLASEE4C Figure 6-2, p. 54). The output is high for the first `high_cycles` timer cycles of
+    /// each period (reset/set, SLAU445I Table 13-2, p. 376).
+    #[inline]
+    pub fn into_ir_input(self, high_cycles: u16) -> crate::ir::IrInput<T> {
+        let timer = unsafe { T::steal() };
+        CCRn::<CCR2>::set_ccrn(&timer, high_cycles);
+        crate::ir::IrInput(PhantomData)
+    }
+}
+
 /// A PWM output that starts ADC conversions, see [`PwmUninit::into_adc_trigger()`]
 pub struct AdcTriggerOutput<T>(PhantomData<T>);
 

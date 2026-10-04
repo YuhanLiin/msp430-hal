@@ -136,6 +136,20 @@ pub struct UcaCtlw0 {
     pub ucbrkie: bool,
 }
 
+/// UCAxIRCTL (SLAU445I Table 22-16, p. 599). All zero, the default, keeps the IrDA encoder and decoder
+/// off (UCIREN = 0).
+#[derive(Default)]
+pub struct UcaIrctl {
+    pub uciren: bool,
+    pub ucirtxclk: bool,
+    /// Transmit pulse length, 0 to 63
+    pub ucirtxpl: u8,
+    pub ucirrxfe: bool,
+    pub ucirrxpl: bool,
+    /// Receive filter length, 0 to 63
+    pub ucirrxfl: u8,
+}
+
 /// The UCAxIFG flags whose interrupt is enabled in UCAxIE (SLAU445I Table 22-18, p. 601; SLAU445I
 /// Table 22-17, p. 600)
 pub struct UartPending {
@@ -283,6 +297,10 @@ pub trait EUsciUart: Steal {
     // UCBTOE and UCSTOE in UCAxABCTL (SLAU445I Table 22-15, p. 598)
     fn btoe_rd(&self) -> bool;
     fn stoe_rd(&self) -> bool;
+
+    /// Write UCAxIRCTL (IrDA, SLAU445I Table 22-16, p. 599), only while UCSWRST = 1
+    /// (SLAU445I Figure 22-20, p. 599)
+    fn irctl_settings(&self, reg: UcaIrctl);
 
     // UCSTTIE and UCTXCPTIE in UCAxIE (SLAU445I Table 22-17, p. 600)
     fn sttie_set(&self);
@@ -457,8 +475,8 @@ pub trait EusciSPI: Steal {
 
     fn receive_flag(&self) -> bool;
 
-    // UCOE in UCxSTATW (SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622)
-    fn overrun_flag(&self) -> bool;
+    // UCxSTATW, for UCFE and UCOE (SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622)
+    fn statw_rd(&self) -> Self::Statw;
 
     // UCxIV (SLAU445I Table 23-10, p. 618; SLAU445I Table 23-19, p. 625)
     fn iv_rd(&self) -> u16;
@@ -479,10 +497,8 @@ pub trait UartUcxStatw {
 
 /// UCxSTATW flags in SPI mode (SLAU445I Table 23-5, p. 615 and SLAU445I Table 23-14, p. 622)
 pub trait SpiStatw {
-    fn uclisten(&self) -> bool;
     fn ucfe(&self) -> bool;
     fn ucoe(&self) -> bool;
-    fn ucbusy(&self) -> bool;
 }
 
 /// UCBxIFG in I2C mode (SLAU445I Table 24-19, p. 662 to p. 663)
@@ -619,9 +635,9 @@ macro_rules! eusci_spi_impl {
             #[inline(always)]
             fn receive_flag(&self) -> bool { self.$ucxifg().read().ucrxifg().bit() }
 
-            // UCOE in UCxSTATW (SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622)
+            // UCxSTATW (SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622)
             #[inline(always)]
-            fn overrun_flag(&self) -> bool { self.$ucxstatw().read().ucoe().bit() }
+            fn statw_rd(&self) -> Self::Statw { self.$ucxstatw().read() }
 
             // UCxIV (SLAU445I Table 23-10, p. 618; SLAU445I Table 23-19, p. 625)
             #[inline(always)]
@@ -634,16 +650,10 @@ macro_rules! eusci_spi_impl {
         // UCxSTATW flags (SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622)
         impl SpiStatw for $StatwSpi {
             #[inline(always)]
-            fn uclisten(&self) -> bool { self.uclisten().bit() }
-
-            #[inline(always)]
             fn ucfe(&self) -> bool { self.ucfe().bit() }
 
             #[inline(always)]
             fn ucoe(&self) -> bool { self.ucoe().bit() }
-
-            #[inline(always)]
-            fn ucbusy(&self) -> bool { self.ucbusy().bit() }
         }
     };
 }
@@ -652,7 +662,7 @@ pub(crate) use eusci_spi_impl;
 macro_rules! eusci_uart_impl {
     ($EUsci:ident, $ucaxctlw0:ident, $ucaxctlw1:ident, $ucaxbrw:ident,
      $ucaxmctlw:ident, $ucaxstatw:ident, $ucaxrxbuf:ident, $ucaxtxbuf:ident, $ucaxabctl:ident,
-     $ucaxie:ident, $ucaxifg:ident, $ucaxiv:ident, $Statw:ty) => {
+     $ucaxirctl:ident, $ucaxie:ident, $ucaxifg:ident, $ucaxiv:ident, $Statw:ty) => {
         impl EUsciUart for $EUsci {
             type Statw = $Statw;
 
@@ -784,6 +794,19 @@ macro_rules! eusci_uart_impl {
 
             #[inline(always)]
             fn stoe_rd(&self) -> bool { self.$ucaxabctl().read().ucstoe().bit() }
+
+            // UCAxIRCTL (SLAU445I Table 22-16, p. 599)
+            #[inline(always)]
+            fn irctl_settings(&self, reg: UcaIrctl) {
+                self.$ucaxirctl().write(|w| unsafe { w
+                    .uciren().bit(reg.uciren)
+                    .ucirtxclk().bit(reg.ucirtxclk)
+                    .ucirtxpl().bits(reg.ucirtxpl)
+                    .ucirrxfe().bit(reg.ucirrxfe)
+                    .ucirrxpl().bit(reg.ucirrxpl)
+                    .ucirrxfl().bits(reg.ucirrxfl)
+                });
+            }
 
             // UCSTTIE and UCTXCPTIE in UCAxIE (SLAU445I Table 22-17, p. 600)
             #[inline(always)]

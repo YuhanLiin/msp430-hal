@@ -610,6 +610,7 @@ mod serial {
         uca0rxbuf,
         uca0txbuf,
         uca0abctl,
+        uca0irctl,
         uca0ie,
         uca0ifg,
         uca0iv,
@@ -627,6 +628,7 @@ mod serial {
         uca1rxbuf,
         uca1txbuf,
         uca1abctl,
+        uca1irctl,
         uca1ie,
         uca1ifg,
         uca1iv,
@@ -994,4 +996,29 @@ pub(crate) mod lpm {
     // All six ports, P1 to P6 (SLASEC4D 6.10.3, p. 69), to return to general-purpose I/O before LPMx.5
     // (SLAU445I 1.4.3.1, p. 41, step 2)
     crate::lpm::reset_all_pin_functions_impl!(P1, P2, P3, P4, P5, P6);
+}
+
+/* Infrared modulation */
+pub mod ir {
+    use crate::{gpio::*, ir::*, pac::*, pin_mapping::*};
+
+    /// The eUSCI whose TXD pin carries the modulated signal (SLASEC4D 6.10.9, p. 75: Timer0_B3 and
+    /// Timer1_B3 "can be used to modulate the eUSCI_A pin of UCA0TXD/UCA0SIMO")
+    pub type IrUsci = EUsciA0;
+    /// The pin mapping of that TXD pin. eUSCI_A0 has one set of pins, with UCA0TXD on P1.7
+    /// (SLASEC4D Table 6-14, p. 72).
+    pub type IrMapping = DefaultMapping;
+
+    // The CCR2 outputs of Tb0 and Tb1 feed the modulator (SLASEC4D Table 6-16, p. 73: the TB0 CCR2
+    // output is the "IR carrier input"; SLASEC4D Table 6-17, p. 74: the TB1 CCR2 output is the "IR
+    // coding input"). TB0 is the first input: "In ASK modulation, the first PWM is used for carrier
+    // generation, and the second PWM generates the envelope" (SLAU445I 1.12.4.2, p. 54).
+    impl IrInputTimer for Tb0 {}
+    impl IrInputTimer for Tb1 {}
+    impl IrFirstTimer for Tb0 {}
+    impl IrSecondTimer for Tb1 {}
+
+    // eUSCI_A0's TXD pin, P1.7 with P1SELx = 01 (SLASEC4D Table 6-63, p. 96), where the modulator
+    // output goes ("P1.7/UCA0TXD/UCA0SIMO" in SLAU445I Figure 1-13, p. 54)
+    impl<DIR> IrOutputPin for Pin<P1, Pin7, Alternate1<DIR>> {}
 }

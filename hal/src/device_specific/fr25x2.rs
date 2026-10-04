@@ -304,6 +304,7 @@ mod serial {
         uca0rxbuf,
         uca0txbuf,
         uca0abctl,
+        uca0irctl,
         uca0ie,
         uca0ifg,
         uca0iv,
@@ -630,4 +631,29 @@ pub mod clock {
 // The device's ports, P1 and P2 (SLASEE4C 6.10.3, p. 51)
 pub(crate) mod lpm {
     crate::lpm::reset_all_pin_functions_impl!(P1, P2);
+}
+
+/* Infrared modulation */
+pub mod ir {
+    use crate::{gpio::*, ir::*, pac::*, pin_mapping::*};
+
+    /// The eUSCI whose TXD pin carries the modulated signal (SLASEE4C 6.10.8, p. 54: the timers "modulate
+    /// the eUSCI_A pin of UCA0TXD/UCA0SIMO")
+    pub type IrUsci = EUsciA0;
+    /// The pin mapping of that TXD pin: the modulator output is P2.0 (SLASEE4C Figure 6-2, p. 54), which is
+    /// UCA0TXD with USCIA0RMP = 1 (SLASEE4C Table 6-11, p. 53)
+    pub type IrMapping = RemappedMapping;
+
+    // The CCR2 outputs of Ta0 and Ta1 feed the modulator (SLASEE4C Figure 6-2, p. 54, Timer0_A3 and
+    // Timer1_A3 signal connections: TA0 CCR2 to its "Carrier" input, TA1 CCR2 to its "Coding" input)
+    impl IrInputTimer for Ta0 {}
+    impl IrInputTimer for Ta1 {}
+    impl IrFirstTimer for Ta0 {}
+    impl IrSecondTimer for Ta1 {}
+
+    // eUSCI_A0's TXD pin in the remapped mapping, where the data sheet figure (Timer0_A3 and Timer1_A3
+    // signal connections) shows the modulator output. Not tested on hardware.
+    // SLASEE4C Figure 6-2, p. 54: "P2.0/UCA0TXD/UCA0SIMO". UCA0TXD is P2SELx = 01 with USCIA0RMP = 1
+    // (SLASEE4C Table 6-16, p. 60; SLASEE4C Table 6-11, p. 53).
+    impl<DIR> IrOutputPin for Pin<P2, Pin0, Alternate1<DIR>> {} // UCA0TXD, P2SELx = 01, USCIA0RMP = 1
 }

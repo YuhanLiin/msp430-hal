@@ -45,6 +45,7 @@
 #![allow(incomplete_features)] // Enable specialization without warnings
 #![feature(specialization)]
 #![feature(asm_experimental_arch)]
+#![feature(abi_msp430_interrupt)]
 #![allow(stable_features)] // Feature flags used on older compiler versions
 #![feature(const_option)]
 #![deny(missing_docs)]
@@ -67,8 +68,18 @@ pub mod delay;
 pub mod fram;
 // Digital I/O: SLAU445I chapter 8, p. 311
 pub mod gpio;
+// Interrupt Compare Controller (ICC): SLAU445I chapter 5, p. 280. Only the MSP430FR2x5x has one (SLASEC4D
+// 1.1, p. 1: "Interrupt compare controller (ICC)").
+#[cfg(feature = "icc")]
+pub mod icc;
+// Infrared modulation in the SYS module: SLAU445I 1.12.2.2, p. 50
+pub mod ir;
 // Operating (low-power) modes: SLAU445I 1.4, p. 36
 pub mod lpm;
+// Manchester Function Module (MFM): SLAU445I chapter 25, p. 665. Only the MSP430FR2x5x has one (SLASEC4D
+// 1.1, p. 1: "Manchester codec (MFM)").
+#[cfg(feature = "mfm")]
+pub mod mfm;
 // Pin remapping bits in SYSCFG2 and SYSCFG3: SLAU445I Table 1-31, p. 82 and SLAU445I Table 1-32, p. 83
 pub mod pin_mapping;
 // Power Management Module (PMM) and SVS: SLAU445I chapter 2, p. 84
@@ -82,8 +93,12 @@ pub mod rtc;
 pub mod serial;
 // eUSCI_A and eUSCI_B in SPI mode: SLAU445I chapter 23, p. 603
 pub mod spi;
+// System Control Module (SYS): SLAU445I chapter 1, p. 29
+pub mod sys;
 // Timer_A and Timer_B: SLAU445I chapter 13, p. 367 and SLAU445I chapter 14, p. 390
 pub mod timer;
+// Device Descriptor Table (TLV): SLAU445I 1.13, p. 57
+pub mod tlv;
 // Watchdog Timer (WDT_A): SLAU445I chapter 12, p. 360
 pub mod watchdog;
 
