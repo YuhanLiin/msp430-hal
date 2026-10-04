@@ -36,6 +36,8 @@ adc12bit = ["adc"]
 adcpctl = [] # ADC functionality controlled via ADCPCTLx
 adc = []
 ecomp = []
+# Internal shared reference of 1.5, 2.0 or 2.5 V (SLAU445I 2.1, p. 85): SLASEC4D 1.1, p. 1 and SLASEC4D
+# Table 5-10, p. 41; SLASEO7C 8.12.5.1, p. 33
 enhanced_ref = []
 eusci_b = []
 sac_l3 = ["sac"]
@@ -43,7 +45,11 @@ sac_l1 = ["sac"]
 sac = []
 tia = []
 info_mem = []
-vloclk_source = []
+vloclk_source = [] # ACLK can be sourced from VLOCLK
+# XT1 up to 24 MHz: SLASEC4D Table 5-4, p. 36
+xt1_high_frequency = [] # XT1 supports 1 MHz to 24 MHz crystals and inputs besides 32 kHz
+# Enhanced CS on the MSP430FR235x and MSP430FR215x: SLAU445I Table 3-1, p. 98
+enhanced_cs = [] # Enhanced clock system: 20/24 MHz DCO, XT1FAULTOFF, low-power REFO
 # Timer_B on the MSP430FR2x5x (SLASEC4D Table 3-1, p. 8) and the MSP430FR247x (SLASEO7C Table 6-1, p. 6); the
 # MSP430FR2433 and MSP430FR25x2 have only Timer_A (SLASE59F Table 3-1, p. 7; SLASEE4C Table 3-1, p. 8)
 timer_b = []

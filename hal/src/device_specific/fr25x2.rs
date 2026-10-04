@@ -613,3 +613,19 @@ mod timer {
         type Source = Ta0;
     }
 }
+
+pub mod clock {
+    use crate::gpio::*;
+    use crate::_pac::cs::csctl3::Fllrefdiv;
+
+    // The XT1 pins are defined once, here. Everything else, from the `Xt1Config` constructors to
+    // keeping the pins selected through LPM3.5, derives the port, pin and PxSEL bits from these
+    // types. Both pins are selected with P2SELx = 10. On 01 the pins are UCA0 (SLASEE4C Table 6-16, p. 60).
+    /// XT1 input pin (XIN), in its XT1 function: P2.1 with P2SELx = 10 (SLASEE4C Table 6-16, p. 60)
+    pub type Xt1Xin<DIR> = Pin<P2, Pin1, Alternate2<DIR>>;
+    /// XT1 output pin (XOUT), in its XT1 function: P2.0 with P2SELx = 10 (SLASEE4C Table 6-16, p. 60)
+    pub type Xt1Xout<DIR> = Pin<P2, Pin0, Alternate2<DIR>>;
+
+    /// FLLREFDIV = 000b, the reference divided by 1 (SLAU445I Table 3-7, p. 116)
+    pub const FLLREFDIV_1: Fllrefdiv = Fllrefdiv::_1;
+}

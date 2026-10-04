@@ -582,3 +582,20 @@ mod timer {
     // 6-11 to 6-14, p. 50 to p. 52, list no INCLK input. SLAU445I Figure 1-8, p. 50, still draws INCLK on
     // the TA0 and TA1 clock selects, TA0's "from CapTouchIO", which SLASE59F doesn't list.)
 }
+
+pub mod clock {
+    use crate::gpio::*;
+    use crate::_pac::cs::csctl3::Fllrefdiv;
+
+    // The XT1 pins are defined once, here. Everything else, from the `Xt1Config` constructors to
+    // keeping the pins selected through LPM3.5, derives the port, pin and PxSEL bits from these
+    // types. Both pins are selected with P2SELx = 01 (SLASE59F Table 6-18, p. 56). XT1 follows the
+    // PxSEL bit of XIN; in bypass mode XOUT's is don't care (SLAU445I 3.2.4, p. 103).
+    /// XT1 input pin (XIN, P2.1, P2SELx = 01), in its XT1 function
+    pub type Xt1Xin<DIR> = Pin<P2, Pin1, Alternate1<DIR>>;
+    /// XT1 output pin (XOUT, P2.0, P2SELx = 01), in its XT1 function
+    pub type Xt1Xout<DIR> = Pin<P2, Pin0, Alternate1<DIR>>;
+
+    /// FLLREFDIV = 000b, the reference divided by 1 (SLAU445I Table 3-7, p. 116)
+    pub const FLLREFDIV_1: Fllrefdiv = Fllrefdiv::Fllrefdiv0;
+}

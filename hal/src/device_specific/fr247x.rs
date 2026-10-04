@@ -1340,3 +1340,19 @@ mod timer {
     // P3.5 TB0TRG, P3SELx = 10, P3DIR.5 = 0 (SLASEO7C Table 9-25, p. 67)
     impl<PULL> HighImpedancePin<Tb0> for Pin<P3, Pin5, Alternate2<Input<PULL>>> {}
 }
+
+pub mod clock {
+    use crate::gpio::*;
+    use crate::_pac::cs::csctl3::Fllrefdiv;
+
+    // The XT1 pins are defined once, here. Everything else, from the `Xt1Config` constructors to
+    // keeping the pins selected through LPM3.5, derives the port, pin and PxSEL bits from these
+    // types. Both pins are selected with P2SELx = 01 (SLASEO7C Table 9-24, p. 66: P2.1 XIN, P2.0 XOUT).
+    /// XT1 input pin (XIN), in its XT1 function
+    pub type Xt1Xin<DIR> = Pin<P2, Pin1, Alternate1<DIR>>;
+    /// XT1 output pin (XOUT), in its XT1 function
+    pub type Xt1Xout<DIR> = Pin<P2, Pin0, Alternate1<DIR>>;
+
+    /// FLLREFDIV = 000b, the reference divided by 1 (SLAU445I Table 3-7, p. 116)
+    pub const FLLREFDIV_1: Fllrefdiv = Fllrefdiv::_1;
+}
