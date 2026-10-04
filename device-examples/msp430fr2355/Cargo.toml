@@ -14,7 +14,7 @@ panic-msp430 = "0.4.0"
 panic-never = "0.1.0"
 msp430 = {version = "0.4.1", features = ["critical-section-single-core"]}
 msp430-rt = "0.4.0"
-msp430fr2355 = {version = "0.6", features = ["rt", "critical-section"]}
+msp430fr2355 = { version = "0.7.0", path = "../../../msp430fr2355", features = ["rt", "critical-section"] }
 msp430-hal = {path = "../../hal", features = ["msp430fr2355", "defmt"]}
 critical-section = "1.2.0"
 msp430-atomic = "0.1.5"

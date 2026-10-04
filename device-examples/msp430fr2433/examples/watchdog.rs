@@ -23,7 +23,7 @@ fn main() -> ! {
 
     // Hold the watchdog while the pins and clocks are set up (WDTHOLD, SLAU445I Table 12-2, p. 366: after
     // a PUC the WDT runs, SLAU445I 12.2.2, p. 363)
-    let mut wdt = Wdt::constrain(periph.watchdog_timer);
+    let mut wdt = Wdt::constrain(periph.wdt_a);
 
     // Pmm::new clears LOCKLPM5, so the pins take on their configuration (SLAU445I 8.3.1, p. 316)
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
@@ -31,7 +31,7 @@ fn main() -> ! {
 
     // MCLK = SMCLK = about 1 MHz for the delay: DCORSEL = 000b with the FLL locked to REFO (SLAU445I
     // Table 3-5, p. 114; SLAU445I 3.2.5, p. 104), DIVM and DIVS /1 (SLAU445I Table 3-9, p. 118).
-    let mut fram = Fram::new(periph.fram);
+    let mut fram = Fram::new(periph.frctl);
     let (_smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)

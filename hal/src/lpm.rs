@@ -82,16 +82,7 @@ use crate::{
 /// SLAU445I Table 2-2, p. 91). `Disabled` switches SVSH off in LPM2, LPM3, LPM4, LPM3.5 and LPM4.5,
 /// which saves power (SLAU445I 2.2.4, p. 87); it stays on in active mode, LPM0 and LPM1. `Enabled`
 /// keeps it on always.
-///
-/// (The PACs name the SVSHE values differently, so this enum is written as the SVSHE bit.)
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum SvsState {
-    /// SVSH is only on in active mode, LPM0 and LPM1 (SVSHE = 0)
-    Disabled,
-    /// SVSH is always on (SVSHE = 1)
-    Enabled,
-}
+pub use crate::_pac::pmm::pmmctl0::Svshe as SvsState;
 
 // Status register (SLAU445I Figure 4-9, p. 130):
 // SCG1 SCG0 OSC_OFF CPU_OFF GIE N Z C
@@ -258,9 +249,7 @@ fn fram_unlocked(f: impl FnOnce(&_pac::Frctl)) {
     critical_section::with(|_| {
         fram.frctl0().modify(|_, w| w.frctlpw().password());
         f(&fram);
-        // A byte write of 0 to the upper byte of FRCTL0 locks it again. The PACs don't have an `frctl0_h`
-        // register yet, so this is a raw write to offset 1; it can use `frctl0_h()` once they do.
-        unsafe { (fram.frctl0().as_ptr() as *mut u8).add(1).write_volatile(0) };
+        fram.frctl0_h().write(|w| w.frctlpw().lock());
     });
 }
 
@@ -273,16 +262,16 @@ struct SavedDco {
 }
 
 /// Bring the DCO to 2 MHz or lower for erratum CS13 (SLAZ695J CS13, p. 9; SLAZ664S CS13; SLAZ705H
-/// CS13), if it may run faster. DCORSEL is bits 3-1 of CSCTL1 (SLAU445I Table 3-5, p. 114). In the
-/// lowest range, DCORSEL = 000b, with DCOFTRIM = 000b the DCO runs at 0.85 MHz to 0.90 MHz at its
-/// highest tap (SLASEC4D Table 5-6, p. 38; SLASE59F Table 5-6, p. 25; SLASEE4C Table 5-6, p. 27). In
-/// that range already, the FLL keeps it near 1 MHz, and nothing changes.
+/// CS13), if it may run faster. In the lowest range, DCORSEL = 000b (SLAU445I Table 3-5, p. 114),
+/// with DCOFTRIM = 000b the DCO runs at 0.85 MHz to 0.90 MHz at its highest tap (SLASEC4D
+/// Table 5-6, p. 38; SLASE59F Table 5-6, p. 25; SLASEE4C Table 5-6, p. 27). In that range already,
+/// the FLL keeps it near 1 MHz, and nothing changes.
 #[cfg(feature = "erratum_cs13")]
 #[inline(always)]
 fn lower_dco() -> Option<SavedDco> {
     let cs = unsafe { _pac::Cs::steal() };
     let csctl1 = cs.csctl1().read();
-    if csctl1.dcorsel().bits() == 0 {
+    if csctl1.dcorsel().is_range_1mhz() {
         return None;
     }
     let saved = SavedDco {
@@ -295,7 +284,11 @@ fn lower_dco() -> Option<SavedDco> {
     // in interrupt handlers: an interrupt "does not clear SCG0" (SLAU445I 3.2.10, p. 106).
     set_sr_bits::<SCG0>();
     // DCOFTRIMEN = 1, DCOFTRIM = 000b, DCORSEL = 000b, DISMOD kept (CSCTL1, SLAU445I Table 3-5, p. 114)
-    cs.csctl1().write(|w| w.dismod().bit(csctl1.dismod().bit()).dcoftrimen().set_bit());
+    cs.csctl1().write(|w| w
+        .dismod().bit(csctl1.dismod().bit())
+        .dcoftrimen().set_bit()
+        .dcoftrim().set(0)
+        .dcorsel().range_1mhz());
     Some(saved)
 }
 
@@ -603,7 +596,7 @@ fn enter_lpmx_5<MODE: WatchdogSelect>(mut wdt: Wdt<MODE>, svs: SvsState) -> ! {
     // p. 91)
     regs.pmm.pmmctl0().write(|w| w
         .pmmpw().password()
-        .svshe().bit(svs == SvsState::Enabled)
+        .svshe().variant(svs)
         .pmmregoff().set_bit()
     );
 
@@ -611,17 +604,15 @@ fn enter_lpmx_5<MODE: WatchdogSelect>(mut wdt: Wdt<MODE>, svs: SvsState) -> ! {
     // Only write to the upper byte of PMMCTL0
     // (SLAU445I 1.4.3.1, p. 41, step 9d; a word write with a wrong password causes a PUC:
     // SLAU445I 2.3, p. 90)
-    // The PACs don't have a `pmmctl0_h` register yet, so this is a raw byte write of 0 to offset 1 of the
-    // little-endian PMMCTL0; it can use `pmmctl0_h()` once they do.
-    unsafe { (regs.pmm.pmmctl0().as_ptr() as *mut u8).add(1).write_volatile(0) };
+    regs.pmm.pmmctl0_h().write(|w| w.pmmpw().lock());
 
     // In manual mode, disconnect the LPM3.5 switch before the entry (SLAU445I 2.2.7, p. 88: "It is
     // recommended to turn off the switch to avoid unnecessary leakage before the device enters LPM3.5").
     // The BOR at the wake-up puts it back in automatic mode, connected (LPM5SM "rw-[0]", LPM5SW "rw-[1]":
     // SLAU445I Table 2-7, p. 97, with the key in SLAU445I Table 0-1, p. 28).
     #[cfg(feature = "lpm3_5_switch")]
-    if regs.pmm.pm5ctl0().read().lpm5sm().bit_is_set() {
-        unsafe { regs.pmm.pm5ctl0().clear_bits(|w| w.lpm5sw().clear_bit()) };
+    if regs.pmm.pm5ctl0().read().lpm5sm().is_manual() {
+        unsafe { regs.pmm.pm5ctl0().clear_bits(|w| w.lpm5sw().disconnected()) };
     }
 
     // Enter LPMx.5 with CPUOFF, OSCOFF, SCG0 and SCG1 (SLAU445I 1.4.3.1, p. 41, step 10). If

@@ -26,10 +26,10 @@ use panic_never as _;
 #[entry]
 fn main() -> ! {
     let Some(periph) = msp430fr2433::Peripherals::take() else { loop{} };
-    let mut fram = Fram::new(periph.fram);
+    let mut fram = Fram::new(periph.frctl);
     // Hold the watchdog (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2,
     // p. 363)
-    let _wdt = Wdt::constrain(periph.watchdog_timer);
+    let _wdt = Wdt::constrain(periph.wdt_a);
 
     // MCLK = about 1 MHz: DCORSEL = 000b with the FLL locked to REFO (SLAU445I Table 3-5, p. 114; SLAU445I
     // 3.2.5, p. 104), DIVM /1; SMCLK = MCLK / 2: DIVS (SLAU445I Table 3-9, p. 118). ACLK = REFO: SELA = 01b
@@ -56,7 +56,7 @@ fn main() -> ! {
     // (SLAU445I Table 22-8, p. 593); no loopback (UCLISTEN = 0, SLAU445I Table 22-12, p. 596). The 9600-baud
     // divider for SMCLK (UCSSELx = 10b) follows SLAU445I 22.3.10, p. 586.
     let (mut tx, mut rx) = SerialConfig::new(
-        periph.usci_a0_uart_mode,
+        periph.e_usci_a0,
         BitOrder::LsbFirst,
         BitCount::EightBits,
         StopBits::OneStopBit,

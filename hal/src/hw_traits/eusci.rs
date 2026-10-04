@@ -404,8 +404,9 @@ pub trait EUsciI2C: Steal {
     fn ifg_rst(&self);
     fn ifg_clr_except_rx(&self);
 
-    // UCBxIV (SLAU445I Table 24-20, p. 664)
-    fn iv_rd(&self) -> u16;
+    // UCBxIV (SLAU445I Table 24-20, p. 664). Reading it clears the flag it reports (SLAU445I 24.3.11.5,
+    // p. 646).
+    fn iv_rd(&self) -> crate::i2c::I2cVector;
 }
 
 pub trait EusciSPI: Steal {
@@ -437,6 +438,10 @@ pub trait EusciSPI: Steal {
     // UCxIE (SLAU445I Table 23-8, p. 617; SLAU445I Table 23-17, p. 624)
     fn ie_rd(&self) -> u16;
     fn ie_wr(&self, reg: u16);
+
+    // UCRXIE and UCTXIE in UCxIE (SLAU445I Table 23-8, p. 617; SLAU445I Table 23-17, p. 624)
+    fn receive_interrupt_enabled(&self) -> bool;
+    fn transmit_interrupt_enabled(&self) -> bool;
 
     // UCTXIE and UCRXIE in UCxIE (SLAU445I Table 23-8, p. 617; SLAU445I Table 23-17, p. 624)
     fn set_transmit_interrupt(&self);
@@ -561,6 +566,12 @@ macro_rules! eusci_spi_impl {
             fn ie_wr(&self, reg: u16) { self.$ucxie().write(|w| unsafe { w.bits(reg) }); }
 
             #[inline(always)]
+            fn receive_interrupt_enabled(&self) -> bool { self.$ucxie().read().ucrxie().bit() }
+
+            #[inline(always)]
+            fn transmit_interrupt_enabled(&self) -> bool { self.$ucxie().read().uctxie().bit() }
+
+            #[inline(always)]
             fn set_transmit_interrupt(&self) {
                 unsafe { self.$ucxie().set_bits(|w| w.uctxie().set_bit()) }
             }
@@ -638,24 +649,6 @@ macro_rules! eusci_spi_impl {
 }
 pub(crate) use eusci_spi_impl;
 
-// UCAxIE and UCAxIFG bit masks (SLAU445I Table 22-17, p. 600; SLAU445I Table 22-18, p. 601) and the
-// UCADDR/UCIDLE flag of UCAxSTATW (SLAU445I Table 22-12, p. 596). These are raw masks as not every PAC has
-// fields for UCSTTIE and UCTXCPTIE, nor names UCADDR_UCIDLE the same.
-pub(crate) const UCRXIE: u8 = 1 << 0;
-pub(crate) const UCTXIE: u8 = 1 << 1;
-pub(crate) const UCSTTIE: u8 = 1 << 2;
-pub(crate) const UCTXCPTIE: u8 = 1 << 3;
-pub(crate) const UCADDR_UCIDLE: u8 = 1 << 1;
-
-/// Whether any bit of `mask` is set in a register value of either 8 or 16 bits
-#[inline(always)]
-pub(crate) fn flag_set<T>(value: T, mask: u8) -> bool
-where
-    T: From<u8> + core::ops::BitAnd<Output = T> + PartialEq,
-{
-    value & T::from(mask) != T::from(0)
-}
-
 macro_rules! eusci_uart_impl {
     ($EUsci:ident, $ucaxctlw0:ident, $ucaxctlw1:ident, $ucaxbrw:ident,
      $ucaxmctlw:ident, $ucaxstatw:ident, $ucaxrxbuf:ident, $ucaxtxbuf:ident, $ucaxabctl:ident,
@@ -667,18 +660,18 @@ macro_rules! eusci_uart_impl {
             // (UCAxCTLW0 fields: SLAU445I Table 22-8, p. 593 to p. 594)
             #[inline(always)]
             fn ctl0_settings(&self, reg: UcaCtlw0) {
-                self.$ucaxctlw0().write(|w| unsafe { w
+                self.$ucaxctlw0().write(|w| w
                     .ucpen().bit(reg.ucpen)
                     .ucpar().bit(reg.ucpar)
                     .ucmsb().bit(reg.ucmsb)
                     .uc7bit().bit(reg.uc7bit)
                     .ucspb().bit(reg.ucspb)
-                    .ucmode().bits(reg.ucmode)
-                    .ucssel().bits(reg.ucssel as u8)
+                    .ucmode().set(reg.ucmode)
+                    .ucssel().set(reg.ucssel as u8)
                     .ucrxeie().bit(reg.ucrxeie)
                     .ucbrkie().bit(reg.ucbrkie)
                     .ucswrst().set_bit()
-                });
+                );
             }
 
             // UCAxMCTLW: UCOS16, UCBRSx and UCBRFx (SLAU445I Table 22-11, p. 595)
@@ -758,11 +751,11 @@ macro_rules! eusci_uart_impl {
 
             // UCGLITx in UCAxCTLW1 (SLAU445I Table 22-9, p. 594)
             #[inline(always)]
-            fn ctl1_settings(&self, ucglit: u8) { self.$ucaxctlw1().write(|w| unsafe { w.ucglit().bits(ucglit) }); }
+            fn ctl1_settings(&self, ucglit: u8) { self.$ucaxctlw1().write(|w| w.ucglit().set(ucglit)); }
 
             // UCMODEx in UCAxCTLW0 (SLAU445I Table 22-8, p. 593)
             #[inline(always)]
-            fn auto_baud_mode(&self) -> bool { self.$ucaxctlw0().read().ucmode().bits() == 0b11 }
+            fn auto_baud_mode(&self) -> bool { self.$ucaxctlw0().read().ucmode().is_ucmode_3() }
 
             // UCTXADDR, UCTXBRK and UCDORM in UCAxCTLW0 (SLAU445I Table 22-8, p. 594)
             #[inline(always)]
@@ -783,7 +776,7 @@ macro_rules! eusci_uart_impl {
             // UCAxABCTL (SLAU445I Table 22-15, p. 598)
             #[inline(always)]
             fn abctl_settings(&self, ucabden: bool, ucdelim: u8) {
-                self.$ucaxabctl().write(|w| unsafe { w.bits((ucabden as u8 | (ucdelim << 4)).into()) });
+                self.$ucaxabctl().write(|w| w.ucabden().bit(ucabden).ucdelim().set(ucdelim));
             }
 
             #[inline(always)]
@@ -794,26 +787,26 @@ macro_rules! eusci_uart_impl {
 
             // UCSTTIE and UCTXCPTIE in UCAxIE (SLAU445I Table 22-17, p. 600)
             #[inline(always)]
-            fn sttie_set(&self) { unsafe { self.$ucaxie().set_bits(|w| w.bits($crate::hw_traits::eusci::UCSTTIE.into())) }; }
+            fn sttie_set(&self) { unsafe { self.$ucaxie().set_bits(|w| w.ucsttie().set_bit()) }; }
 
             #[inline(always)]
-            fn sttie_clear(&self) { unsafe { self.$ucaxie().clear_bits(|w| w.bits($crate::hw_traits::eusci::UCSTTIE.into())) }; }
+            fn sttie_clear(&self) { unsafe { self.$ucaxie().clear_bits(|w| w.ucsttie().clear_bit()) }; }
 
             #[inline(always)]
-            fn txcptie_set(&self) { unsafe { self.$ucaxie().set_bits(|w| w.bits($crate::hw_traits::eusci::UCTXCPTIE.into())) }; }
+            fn txcptie_set(&self) { unsafe { self.$ucaxie().set_bits(|w| w.uctxcptie().set_bit()) }; }
 
             #[inline(always)]
             fn txcptie_clear(&self) {
-                unsafe { self.$ucaxie().clear_bits(|w| w.bits($crate::hw_traits::eusci::UCTXCPTIE.into())) };
+                unsafe { self.$ucaxie().clear_bits(|w| w.uctxcptie().clear_bit()) };
             }
 
             // UCSTTIFG and UCTXCPTIFG in UCAxIFG (SLAU445I Table 22-18, p. 601)
             #[inline(always)]
-            fn sttifg_clear(&self) { unsafe { self.$ucaxifg().clear_bits(|w| w.bits($crate::hw_traits::eusci::UCSTTIE.into())) }; }
+            fn sttifg_clear(&self) { unsafe { self.$ucaxifg().clear_bits(|w| w.ucsttifg().clear_bit()) }; }
 
             #[inline(always)]
             fn txcptifg_clear(&self) {
-                unsafe { self.$ucaxifg().clear_bits(|w| w.bits($crate::hw_traits::eusci::UCTXCPTIE.into())) };
+                unsafe { self.$ucaxifg().clear_bits(|w| w.uctxcptifg().clear_bit()) };
             }
 
             // UCAxIFG and UCAxIE (SLAU445I Table 22-18, p. 601; SLAU445I Table 22-17, p. 600)
@@ -822,10 +815,10 @@ macro_rules! eusci_uart_impl {
                 let ifg = self.$ucaxifg().read();
                 let ie = self.$ucaxie().read();
                 UartPending {
-                    rx: $crate::hw_traits::eusci::flag_set(ifg.bits() & ie.bits(), $crate::hw_traits::eusci::UCRXIE),
-                    tx: $crate::hw_traits::eusci::flag_set(ifg.bits() & ie.bits(), $crate::hw_traits::eusci::UCTXIE),
-                    start_bit: $crate::hw_traits::eusci::flag_set(ifg.bits() & ie.bits(), $crate::hw_traits::eusci::UCSTTIE),
-                    tx_complete: $crate::hw_traits::eusci::flag_set(ifg.bits() & ie.bits(), $crate::hw_traits::eusci::UCTXCPTIE),
+                    rx: ifg.ucrxifg().bit() && ie.ucrxie().bit(),
+                    tx: ifg.uctxifg().bit() && ie.uctxie().bit(),
+                    start_bit: ifg.ucsttifg().bit() && ie.ucsttie().bit(),
+                    tx_complete: ifg.uctxcptifg().bit() && ie.uctxcptie().bit(),
                 }
             }
         }
@@ -848,7 +841,7 @@ macro_rules! eusci_uart_impl {
             fn ucbusy(&self) -> bool { self.ucbusy().bit() }
 
             #[inline(always)]
-            fn ucaddr_ucidle(&self) -> bool { $crate::hw_traits::eusci::flag_set(self.bits(), $crate::hw_traits::eusci::UCADDR_UCIDLE) }
+            fn ucaddr_ucidle(&self) -> bool { self.ucaddr_ucidle().bit() }
         }
     };
 }
@@ -1097,10 +1090,10 @@ macro_rules! eusci_i2c_impl {
 
             // UCBxADDMASK (SLAU445I Table 24-16, p. 659)
             #[inline(always)]
-            fn addmask_rd(&self) -> u16 { self.$ucbxaddmask().read().bits() }
+            fn addmask_rd(&self) -> u16 { self.$ucbxaddmask().read().addmask().bits() }
             #[inline(always)]
             fn addmask_wr(&self, val: u16) {
-                self.$ucbxaddmask().write(|w| unsafe { w.bits(val) });
+                self.$ucbxaddmask().write(|w| unsafe { w.addmask().bits(val) });
             }
 
             // UCBxI2CSA (SLAU445I Table 24-17, p. 659)
@@ -1148,7 +1141,27 @@ macro_rules! eusci_i2c_impl {
 
             // UCBxIV (SLAU445I Table 24-20, p. 664)
             #[inline(always)]
-            fn iv_rd(&self) -> u16 { self.$ucbxiv().read().bits() }
+            fn iv_rd(&self) -> crate::i2c::I2cVector {
+                use crate::i2c::I2cVector;
+                let r = self.$ucbxiv().read();
+                let iv = r.uciv();
+                if iv.is_ucalifg() { I2cVector::ArbitrationLost }
+                else if iv.is_ucnackifg() { I2cVector::NackReceived }
+                else if iv.is_ucsttifg() { I2cVector::StartReceived }
+                else if iv.is_ucstpifg() { I2cVector::StopReceived }
+                else if iv.is_ucrxifg3() { I2cVector::Slave3RxBufFull }
+                else if iv.is_uctxifg3() { I2cVector::Slave3TxBufEmpty }
+                else if iv.is_ucrxifg2() { I2cVector::Slave2RxBufFull }
+                else if iv.is_uctxifg2() { I2cVector::Slave2TxBufEmpty }
+                else if iv.is_ucrxifg1() { I2cVector::Slave1RxBufFull }
+                else if iv.is_uctxifg1() { I2cVector::Slave1TxBufEmpty }
+                else if iv.is_ucrxifg0() { I2cVector::RxBufFull }
+                else if iv.is_uctxifg0() { I2cVector::TxBufEmpty }
+                else if iv.is_ucbcntifg() { I2cVector::ByteCounterZero }
+                else if iv.is_uccltoifg() { I2cVector::ClockLowTimeout }
+                else if iv.is_ucbit9ifg() { I2cVector::NinthBitReceived }
+                else { I2cVector::None }
+            }
         }
 
         // UCBxIFG flags (SLAU445I Table 24-19, p. 662 to p. 663)

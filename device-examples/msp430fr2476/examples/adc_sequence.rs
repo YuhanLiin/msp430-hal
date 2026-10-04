@@ -97,9 +97,9 @@ fn main() -> ! {
     let mut config = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
-        SamplingRate::_200KSPS,
-        SampleTime::_256,
+        Resolution::Bits12,
+        SamplingRate::Max200ksps,
+        SampleTime::Cycles256,
     );
     config.data_format = DataFormat::Signed;
     let mut adc = config.use_modclk().configure(periph.adc);

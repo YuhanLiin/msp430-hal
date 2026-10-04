@@ -85,9 +85,9 @@ fn main() -> ! {
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
-        SamplingRate::_200KSPS,
-        SampleTime::_16,
+        Resolution::Bits12,
+        SamplingRate::Max200ksps,
+        SampleTime::Cycles16,
     )
     .use_modclk()
     .configure(periph.adc);

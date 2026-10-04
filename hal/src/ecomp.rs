@@ -138,30 +138,23 @@ impl<COMP: ECompInputs> Comparator<COMP> {
     /// Whether the output rose since the flag was last cleared (CPIFG), whether or not its interrupt is enabled.
     /// (CPIFG, CPxINT bit 0: SLAU445I Table 18-4, p. 511; set on each edge: SLAU445I 18.3, p. 507)
     #[inline(always)]
-    pub fn rising_edge_flag(&self) -> bool { COMP::int_flags() & 0b01 != 0 }
+    pub fn rising_edge_flag(&self) -> bool { COMP::rising_flag() }
 
     /// Whether the output fell since the flag was last cleared (CPIIFG), whether or not its interrupt is enabled.
     /// (CPIIFG, CPxINT bit 1: SLAU445I Table 18-4, p. 511; set on each edge: SLAU445I 18.3, p. 507)
     #[inline(always)]
-    pub fn falling_edge_flag(&self) -> bool { COMP::int_flags() & 0b10 != 0 }
+    pub fn falling_edge_flag(&self) -> bool { COMP::falling_flag() }
 
     /// Clear both edge flags. Clear them before enabling interrupts, or an edge from before requests one.
     /// (SLAU445I Table 18-4, p. 511: "Write 1 to clear this bit"; configuring can set them too, SLAU445I
     /// Table 18-3, p. 510: "Changing CPFLT might set interrupt flag")
     #[inline(always)]
-    pub fn clear_edge_flags(&mut self) { COMP::clear_int_flags(0b11); }
+    pub fn clear_edge_flags(&mut self) { COMP::clear_edge_flags(); }
 
     /// The highest-priority pending interrupt among the enabled ones (CPxIV). Reading it clears its flag.
     /// (SLAU445I Table 18-5, p. 512)
     #[inline(always)]
-    pub fn interrupt_source(&mut self) -> ComparatorVector {
-        // CPxIV values (SLAU445I Table 18-5, p. 512)
-        match COMP::iv() {
-            0x02 => ComparatorVector::RisingEdge,
-            0x04 => ComparatorVector::FallingEdge,
-            _ => ComparatorVector::None,
-        }
-    }
+    pub fn interrupt_source(&mut self) -> ComparatorVector { COMP::iv() }
 }
 
 /// The highest-priority pending comparator interrupt, as read from CPxIV by [`Comparator::interrupt_source()`]

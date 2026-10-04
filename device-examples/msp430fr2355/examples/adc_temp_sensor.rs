@@ -33,14 +33,14 @@ fn main() -> ! {
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
-        SamplingRate::_200KSPS,
-        SampleTime::_256,
+        Resolution::Bits12,
+        SamplingRate::Max200ksps,
+        SampleTime::Cycles256,
     )
     .use_modclk()
     .configure(periph.adc);
 
-    let vref = pmm.enable_internal_reference(ReferenceVoltage::_1V5).unwrap();
+    let vref = pmm.enable_internal_reference(ReferenceVoltage::V1_5).unwrap();
     let mut t_sense = pmm.enable_internal_temp_sensor(&vref).unwrap();
 
     loop {

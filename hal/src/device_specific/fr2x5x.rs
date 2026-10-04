@@ -373,7 +373,7 @@ pub mod ecomp {
     }
 
     // eCOMP registers (SLAU445I Table 18-1, p. 508): eCOMP0 at 08E0h (SLASEC4D Table 6-57, p. 93)
-    impl_ecomp!(EComp0, cpctl0, cpctl1, cpdacctl, cpdacdata, cpint, cpiv);
+    impl_ecomp!(EComp0, cp0ctl0, cp0ctl1, cp0dacctl, cp0dacdata, cp0int, cp0iv);
 
     // eCOMP1 at 0900h (SLASEC4D Table 6-58, p. 93)
     impl_ecomp!(EComp1, cp1ctl0, cp1ctl1, cp1dacctl, cp1dacdata, cp1int, cp1iv);
@@ -965,12 +965,10 @@ mod timer {
     // and only eCOMP1 for TB3 (SLASEC4D Table 6-20, p. 76). TB0TRGSEL to TB3TRGSEL are SYSCFG2
     // bits 15 to 12, 0 for the internal and 1 for the external source (SLAU445I 1.16.1.3, Table 1-26,
     // p. 77).
-    // The msp430fr2355 PAC doesn't have the TBxTRGSEL fields yet, so they are written by bit number. This
-    // can use `high_impedance_timer_impl!(Tb0, tb0trgsel)` and so on once the PAC has them.
-    high_impedance_timer_impl!(Tb0, bit 15);
-    high_impedance_timer_impl!(Tb1, bit 14);
-    high_impedance_timer_impl!(Tb2, bit 13);
-    high_impedance_timer_impl!(Tb3, bit 12);
+    high_impedance_timer_impl!(Tb0, tb0trgsel);
+    high_impedance_timer_impl!(Tb1, tb1trgsel);
+    high_impedance_timer_impl!(Tb2, tb2trgsel);
+    high_impedance_timer_impl!(Tb3, tb3trgsel);
     // The TBxTRG pins, inputs (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-64, p. 98; SLASEC4D
     // Table 6-67, p. 104). TB3 has none: TB3TRGSEL = 1 is "N/A" (SLASEC4D Table 6-20, p. 76).
     impl<PULL> HighImpedancePin<Tb0> for Pin<P1, Pin2, Alternate2<Input<PULL>>> {} // TB0TRG, P1SELx = 10
@@ -980,7 +978,6 @@ mod timer {
 
 pub mod clock {
     use crate::gpio::*;
-    use crate::_pac::cs::csctl3::Fllrefdiv;
 
     // The XT1 pins are defined once, here. Everything else, from the `Xt1Config` constructors to
     // keeping the pins selected through LPM3.5, derives the port, pin and PxSEL bits from these
@@ -990,9 +987,6 @@ pub mod clock {
     pub type Xt1Xin<DIR> = Pin<P2, Pin7, Alternate2<DIR>>;
     /// XT1 output pin (XOUT), in its XT1 function: P2.6 with P2SELx = 10 (SLASEC4D Table 6-64, p. 98)
     pub type Xt1Xout<DIR> = Pin<P2, Pin6, Alternate2<DIR>>;
-
-    /// FLLREFDIV = 000b, the reference divided by 1 (SLAU445I Table 3-7, p. 116)
-    pub const FLLREFDIV_1: Fllrefdiv = Fllrefdiv::_1;
 }
 
 /* LPM */

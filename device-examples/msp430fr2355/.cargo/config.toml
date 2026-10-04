@@ -18,6 +18,8 @@ rustflags = [
     # SLASEO7C Table 9-49, p. 79 and SLASEO7C Table 9-34, p. 74; SLASEE4C Table 6-32, p. 67 and
     # SLASEE4C Table 6-22, p. 63.)
     "-C", "link-arg=-lmul_f5",
+    # If linking fails with duplicate definitions of __muldi3, uncomment this:
+    #"-C", "link-arg=-Wl,--allow-multiple-definition", # Prevent __muldi3 dupe errors
     
     # libgcc must be linked after everything that depends on it (e.g. lmul_f5)
     "-C", "link-arg=-lgcc",

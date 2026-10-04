@@ -36,15 +36,15 @@ fn main() -> ! {
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_10BIT,
-        SamplingRate::_200KSPS,
-        SampleTime::_256,
+        Resolution::Bits10,
+        SamplingRate::Max200ksps,
+        SampleTime::Cycles256,
     )
     .use_modclk()
     .configure(periph.adc);
 
     // The temperature sensor is ADC channel 12 (SLASEE4C Table 6-13, p. 55)
-    let vref = pmm.enable_internal_reference(ReferenceVoltage::_1V5).unwrap();
+    let vref = pmm.enable_internal_reference(ReferenceVoltage::V1_5).unwrap();
     let mut t_sense = pmm.enable_internal_temp_sensor(&vref).unwrap();
 
     loop {

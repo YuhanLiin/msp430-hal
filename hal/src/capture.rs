@@ -14,7 +14,7 @@
 
 use crate::hw_traits::timer_base::{CCRn, Ccis, Cm};
 use crate::pin_mapping::*;
-use crate::timer::{read_tbxiv, CapCmpTimer2, CapCmpTimer3, CapCmpTimer7, TimerVector};
+use crate::timer::{CapCmpTimer2, CapCmpTimer3, CapCmpTimer7, TimerVector};
 use core::marker::PhantomData;
 
 pub use crate::timer::{
@@ -569,7 +569,6 @@ impl<T: CapCmp<C>, C> InterruptCapture<T, C> {
     }
 }
 
-// TODO: should have default?
 /// Interrupt vector register for determining which capture-register caused an ISR (TAxIV/TBxIV: SLAU445I
 /// Table 13-8, p. 388; SLAU445I Table 14-10, p. 414)
 pub struct TBxIV<T: TimerPeriph<M>, M: PinMap = DefaultMapping>(PhantomData<T>, PhantomData<M>);
@@ -581,7 +580,7 @@ impl<T: TimerPeriph<M>, M: PinMap> TBxIV<T, M> {
     /// read token will be returned as well.
     pub fn interrupt_vector(&mut self) -> CaptureVector<T> {
         let timer = unsafe { T::steal() };
-        match read_tbxiv(&timer) {
+        match timer.tbxiv_rd() {
             TimerVector::NoInterrupt => CaptureVector::NoInterrupt,
             TimerVector::SubTimer1 => {
                 CaptureVector::Capture1(InterruptCapture(PhantomData, PhantomData))

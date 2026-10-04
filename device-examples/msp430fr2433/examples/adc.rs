@@ -17,7 +17,7 @@ fn main() -> ! {
     // Take peripherals and disable watchdog
     // (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2, p. 363)
     let periph = msp430fr2433::Peripherals::take().unwrap();
-    let _wdt = Wdt::constrain(periph.watchdog_timer);
+    let _wdt = Wdt::constrain(periph.wdt_a);
 
     // Configure GPIO
     // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
@@ -38,9 +38,9 @@ fn main() -> ! {
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_8BIT,
-        SamplingRate::_50KSPS,
-        SampleTime::_16,
+        Resolution::Bits8,
+        SamplingRate::Max50ksps,
+        SampleTime::Cycles16,
     )
     .use_modclk()
     .configure(periph.adc);

@@ -16,7 +16,7 @@
 //! After choosing the most convenient data type for your application call the relevant method,
 //! such as [`BackupMemory::as_u8s()`], to recieve a mutable reference to the backup memory.
 
-use crate::device_specific::_pac::Bkmem;
+use crate::device_specific::_pac::Bakmem;
 pub use crate::device_specific::BAK_MEM_SIZE;
 use core::mem::size_of;
 
@@ -30,11 +30,11 @@ macro_rules! as_x {
         #[doc = stringify!($arr)]
         #[doc = "`. See also: [BAK_MEM_SIZE]"]
         #[inline(always)]
-        pub fn $fn_name(_reg: Bkmem) -> &'static mut $arr {
+        pub fn $fn_name(_reg: Bakmem) -> &'static mut $arr {
             const { assert!(core::mem::size_of::<$arr>() == BAK_MEM_SIZE) }
             // BAKMEM0 to BAKMEM15 at the Backup Memory base address 0660h, word or byte accessible (SLAU445I
             // Table 7-1, p. 310; SLASEO7C Table 9-54, p. 81 and the matching tables of the other data sheets)
-            unsafe { &mut *(Bkmem::PTR as *mut $arr) }
+            unsafe { &mut *(Bakmem::PTR as *mut $arr) }
         }
     };
 }

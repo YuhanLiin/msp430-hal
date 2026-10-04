@@ -15,9 +15,9 @@ pub trait SacPeriph {
     fn configure_dac(load_condition: u8, vref: bool, interrupts: bool);
     /// Write the DAC data, SACxDAT (SLAU445I Table 20-9, p. 535)
     fn set_dac_count(val: u16);
-    /// Reads SACxIV, which clears DACIFG. 4 if the DAC loaded new data. (SLAU445I Table 20-10, p. 536, and
-    /// SLAU445I Table 20-11, p. 537)
-    fn dac_iv() -> u16;
+    /// Reads SACxIV, which clears DACIFG: whether it reported DACIFG, set when the DAC loaded new data
+    /// (SLAU445I Table 20-10, p. 536, and SLAU445I Table 20-11, p. 537)
+    fn dac_iv_dacifg() -> bool;
 }
 
 // The sac module's input enums give the PSEL value of each source, so no need for a separate enum
@@ -105,8 +105,8 @@ macro_rules! impl_sac_periph {
             }
             // SACxIV (SLAU445I Table 20-11, p. 537)
             #[inline(always)]
-            fn dac_iv() -> u16 {
-                unsafe { $SAC::steal() }.$sacXiv().read().bits()
+            fn dac_iv_dacifg() -> bool {
+                unsafe { $SAC::steal() }.$sacXiv().read().saciv().is_dacifg()
             }
         }
     };

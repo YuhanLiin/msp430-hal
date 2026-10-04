@@ -45,7 +45,7 @@ fn main() -> ! {
 
     // If this reset was a wake up from LPMx.5...
     // (SYSRSTIV can be used to decode the reset condition: SLAU445I 1.4.3.2, p. 42)
-    if sys.sysrstiv().read().sysrstiv().is_lpm5wu() {
+    if sys.sysrstiv().read().sysrstiv().is_lpmx5_wake_up() {
         loop {
             for _ in 0..10_000 {
                 nop();

@@ -58,7 +58,7 @@ fn main() -> ! {
     // (SLAU445I 1.4.3.3, p. 42. After a BOR the pins stay high-impedance until LOCKLPM5 is cleared:
     // SLAU445I 8.3.1, p. 316. A wake-up from LPMx.5 shows as SYSRSTIV = 08h: SLASEO7C Table 9-10,
     // p. 52.)
-    let woke_from_lpm3_5 = periph.sys.sysrstiv().read().sysrstiv().is_lpm5wu();
+    let woke_from_lpm3_5 = periph.sys.sysrstiv().read().sysrstiv().is_lpmx5_wake_up();
     let (mut pmm, _) = if woke_from_lpm3_5 {
         Pmm::new_locked(periph.pmm, periph.sys)
     } else {
@@ -100,7 +100,7 @@ fn main() -> ! {
         // I/O registers have their values reset coming out of LPMx.5,
         // so we have to store state in the backup memory.
         // (In LPMx.5 "The register content of all modules and the CPU is lost": SLAU445I 1.4.3, p. 40)
-        let bak_mem = BackupMemory::as_u8s(periph.bkmem);
+        let bak_mem = BackupMemory::as_u8s(periph.bakmem);
 
         let old_value = bak_mem[0] == 1;
         led1.set_state(old_value.into()).ok();

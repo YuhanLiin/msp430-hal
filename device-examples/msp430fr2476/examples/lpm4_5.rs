@@ -46,7 +46,7 @@ fn main() -> ! {
 
     // If this reset was a wake up from LPMx.5...
     // (SYSRSTIV = 08h, "LPMx.5 wakeup (BOR)": SLASEO7C Table 9-10, p. 52)
-    if sys.sysrstiv().read().sysrstiv().is_lpm5wu() {
+    if sys.sysrstiv().read().sysrstiv().is_lpmx5_wake_up() {
         loop {
             for _ in 0..10_000 {
                 nop();

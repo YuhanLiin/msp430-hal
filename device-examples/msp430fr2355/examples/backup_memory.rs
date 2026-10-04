@@ -25,7 +25,7 @@ fn main() -> ! {
     let mut led = Batch::new(periph.p1).split(&pmm).pin0.to_output();
 
     // Interpret register block as a &mut [u8;32] (32 bytes: SLASEC4D 6.10.10, p. 76)
-    let bk_mem = BackupMemory::as_u8s(periph.bkmem);
+    let bk_mem = BackupMemory::as_u8s(periph.bakmem);
 
     bk_mem[0] = bk_mem[0].wrapping_add(1);
 

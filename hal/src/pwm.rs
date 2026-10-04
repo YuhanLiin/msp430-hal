@@ -47,7 +47,7 @@
 //! pin instead, or nothing.
 
 use crate::gpio::AlternatePin;
-use crate::hw_traits::timer_base::{CCRn, Outmod, RunningMode, TimerBase};
+use crate::hw_traits::timer_base::{CCRn, Clld, Outmod, RunningMode, TimerBase};
 use crate::pin_mapping::{DefaultMapping, PinMap};
 use crate::timer::{CapCmpTimer3, CapCmpTimer7};
 use core::marker::PhantomData;
@@ -102,7 +102,7 @@ fn setup_channel<T: CapCmp<C>, C>(timer: &T, alignment: Alignment) {
             // when a duty cycle below the timer's count replaces one above it. Measured on an MSP430FR2476,
             // with the duty cycle changed at random moments: 669 of 3000 periods stayed high to the end with
             // CLLD = 00b, none with CLLD = 11b.
-            CCRn::<C>::set_clld(timer, 0b11);
+            CCRn::<C>::set_clld(timer, Clld::AtOldValue);
         }
         Alignment::Center => {
             // In up/down mode: high from CCRn on the way down to CCRn on the way up, reset at the top
@@ -112,7 +112,7 @@ fn setup_channel<T: CapCmp<C>, C>(timer: &T, alignment: Alignment) {
             // duty cycle written while the timer counts down loads at 0, in the middle of a high stretch,
             // so that one stretch is not symmetric, and one that replaces 0 starts out of step (see the
             // module documentation).
-            CCRn::<C>::set_clld(timer, 0b10);
+            CCRn::<C>::set_clld(timer, Clld::AtZeroOrTop);
         }
     }
 }
@@ -126,11 +126,12 @@ fn setup_channel<T: CapCmp<C>, C>(timer: &T, alignment: Alignment) {
 /// are not listed below can be read or updated while the timer is running").
 #[inline]
 fn write_duty<T: CapCmp<C> + CapCmp<CCR0>, C>(timer: &T, duty: u16) {
-    let leaving_full = CCRn::<C>::clld_rd(timer) == 0b11 && CCRn::<C>::get_ccrn(timer) > CCRn::<CCR0>::get_ccrn(timer);
+    let leaving_full = CCRn::<C>::clld_rd(timer) == Clld::AtOldValue as u8
+        && CCRn::<C>::get_ccrn(timer) > CCRn::<CCR0>::get_ccrn(timer);
     if leaving_full {
-        CCRn::<C>::set_clld(timer, 0b00);
+        CCRn::<C>::set_clld(timer, Clld::Immediately);
         CCRn::<C>::set_ccrn(timer, duty);
-        CCRn::<C>::set_clld(timer, 0b11);
+        CCRn::<C>::set_clld(timer, Clld::AtOldValue);
     } else {
         CCRn::<C>::set_ccrn(timer, duty);
     }
@@ -417,7 +418,8 @@ impl<T: PwmPeriph<C, M>, C, M: PinMap> Pwm<T, C, M> {
         let timer = unsafe { T::steal() };
         // Edge-aligned PWM uses reset/set (7) or set/reset (3), center-aligned toggle/reset (2) or
         // toggle/set (6) (SLAU445I Table 13-2, p. 376). The top output mode bit picks between each pair.
-        let center = CCRn::<C>::outmod_rd(&timer) & 0b011 == 0b010;
+        let outmod = CCRn::<C>::outmod_rd(&timer);
+        let center = outmod == Outmod::ToggleReset as u8 || outmod == Outmod::ToggleSet as u8;
         let high_bit = (polarity == Polarity::ActiveHigh) != center;
         CCRn::<C>::set_outmod_high_bit(&timer, high_bit);
     }

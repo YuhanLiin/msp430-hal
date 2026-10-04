@@ -171,20 +171,6 @@ macro_rules! high_impedance_timer_impl {
             }
         }
     };
-    // The TBxTRGSEL bit by its number in SYSCFG2, for a PAC that doesn't name it
-    ($timer:ty, bit $bit:literal) => {
-        impl $crate::timer::HighImpedanceTimer for $timer {
-            #[inline(always)]
-            fn set_trgsel(external: bool) {
-                let sys = unsafe { &*$crate::_pac::Sys::ptr() };
-                if external {
-                    unsafe { sys.syscfg2().set_bits(|w| w.bits(1 << $bit)) };
-                } else {
-                    unsafe { sys.syscfg2().clear_bits(|w| w.bits(!(1 << $bit))) };
-                }
-            }
-        }
-    };
 }
 #[cfg(feature = "timer_b")]
 pub(crate) use high_impedance_timer_impl;
@@ -555,6 +541,8 @@ impl<T: CapCmp<C>, C> SubTimer<T, C> {
 /// no interrupt through CCR1 to CCR6 to the timer overflow (SLAU445I Table 13-8, p. 388; SLAU445I
 /// Table 14-10, p. 414). CCR0 has its own interrupt vector and isn't in this list (SLAU445I 13.2.6.1,
 /// p. 380; 14.2.6.1, p. 405).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TimerVector {
     /// No pending interrupt
     NoInterrupt,
@@ -574,22 +562,6 @@ pub enum TimerVector {
     MainTimer,
 }
 
-#[inline]
-pub(crate) fn read_tbxiv<T: TimerBase>(timer: &T) -> TimerVector {
-    // TBxIV only takes these values (SLAU445I Table 13-8, p. 388; SLAU445I Table 14-10, p. 414)
-    match timer.tbxiv_rd() {
-        0 => TimerVector::NoInterrupt,
-        2 => TimerVector::SubTimer1,
-        4 => TimerVector::SubTimer2,
-        6 => TimerVector::SubTimer3,
-        8 => TimerVector::SubTimer4,
-        10 => TimerVector::SubTimer5,
-        12 => TimerVector::SubTimer6,
-        14 => TimerVector::MainTimer,
-        _ => unsafe { core::hint::unreachable_unchecked() },
-    }
-}
-
 /// Interrupt vector register for determining which timer caused an ISR (TAxIV/TBxIV: SLAU445I Table 13-8,
 /// p. 388; SLAU445I Table 14-10, p. 414)
 pub struct TBxIV<T>(PhantomData<T>);
@@ -600,7 +572,7 @@ impl<T: TimerBase> TBxIV<T> {
     /// 13.2.6.2, p. 380; 14.2.6.2, p. 405).
     pub fn interrupt_vector(&mut self) -> TimerVector {
         let timer = unsafe { T::steal() };
-        read_tbxiv(&timer)
+        timer.tbxiv_rd()
     }
 }
 

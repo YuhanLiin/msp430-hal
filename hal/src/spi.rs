@@ -487,12 +487,10 @@ macro_rules! spi_common {
         /// Tx interrupt keeps firing until a byte is written or Tx interrupts are disabled.
         #[inline]
         pub fn interrupt_source(&mut self) -> SpiVector {
-            // UCRXIE is bit 0 and UCTXIE bit 1 of UCxIE (SLAU445I Table 23-8, p. 617; SLAU445I Table 23-17,
-            // p. 624)
-            let ie = self.usci.ie_rd();
-            if ie & 1 << 0 != 0 && self.usci.receive_flag() {
+            // UCRXIE and UCTXIE (SLAU445I Table 23-8, p. 617; SLAU445I Table 23-17, p. 624)
+            if self.usci.receive_interrupt_enabled() && self.usci.receive_flag() {
                 SpiVector::RxBufferFull
-            } else if ie & 1 << 1 != 0 && self.usci.transmit_flag() {
+            } else if self.usci.transmit_interrupt_enabled() && self.usci.transmit_flag() {
                 SpiVector::TxBufferEmpty
             } else {
                 SpiVector::None
@@ -504,6 +502,7 @@ macro_rules! spi_common {
 /// Possible sources for an eUSCI SPI interrupt. The values are those of UCxIV (SLAU445I Table 23-10, p. 618;
 /// SLAU445I Table 23-19, p. 625).
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SpiVector {
     /// No interrupt is currently being serviced.
     None = 0,

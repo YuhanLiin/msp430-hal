@@ -27,34 +27,8 @@ impl Fram {
     pub fn new(fram: _pac::Frctl) -> Self { Fram { fram } }
 }
 
-// The FRAM controller password (FRCTLPW, SLAU445I Table 6-2, p. 306)
-//
-// NOTE: for now the PACs differ in how they expose the password field, the NWAITS values and the upper
-// byte of FRCTL0 (the MSP430FR2433 PAC even names the module `fram`, the others `frctl`), so this file
-// writes those as plain bits. This can be unified with `password()`, `lock()` and the PACs' own
-// enums once every PAC has the same names.
-const PASSWORD: u8 = 0xA5;
-
 /// FRAM wait states, `Wait0` to `Wait7` (NWAITS, SLAU445I Table 6-2, p. 306)
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum WaitStates {
-    /// No wait
-    Wait0,
-    /// Wait 1 cycle
-    Wait1,
-    /// Wait 2 cycles
-    Wait2,
-    /// Wait 3 cycles
-    Wait3,
-    /// Wait 4 cycles
-    Wait4,
-    /// Wait 5 cycles
-    Wait5,
-    /// Wait 6 cycles
-    Wait6,
-    /// Wait 7 cycles
-    Wait7,
-}
+pub use crate::_pac::frctl::frctl0::Nwaits as WaitStates;
 
 /// What the FRAM controller does when it detects a bit error it can't correct (GCCTL0.UBDRSTEN, UBDIE,
 /// SLAU445I Table 6-3, p. 307)
@@ -83,12 +57,9 @@ impl Fram {
     #[inline]
     fn unlocked<R>(&mut self, f: impl FnOnce(&_pac::Frctl) -> R) -> R {
         critical_section::with(|_| {
-            self.fram.frctl0().modify(|_, w| unsafe { w.frctlpw().bits(PASSWORD) });
+            self.fram.frctl0().modify(|_, w| w.frctlpw().password());
             let ret = f(&self.fram);
-            // Lock again with a byte write to the upper byte of FRCTL0, at offset 1 of the little-endian
-            // register: not every PAC has an `frctl0_h` register. A password other than A5h locks, but
-            // as a word write it would cause a PUC (SLAU445I 6.10, p. 305).
-            unsafe { (self.fram.frctl0().as_ptr() as *mut u8).add(1).write_volatile(0) };
+            self.fram.frctl0_h().write(|w| w.frctlpw().lock());
             ret
         })
     }
@@ -102,8 +73,8 @@ impl Fram {
     #[inline]
     pub unsafe fn set_wait_states(&mut self, wait: WaitStates) {
         self.unlocked(|fram| fram.frctl0().write(|w| w
-            .frctlpw().bits(PASSWORD)
-            .nwaits().bits(wait as u8)));
+            .frctlpw().password()
+            .nwaits().variant(wait)));
     }
 
     /// Select what happens when the FRAM detects a bit error it can't correct (UBDRSTEN, UBDIE:
@@ -164,7 +135,7 @@ impl Fram {
             // SLAU445I Table 1-29, p. 80: "written with the FRAM protection bits in a word in a
             // single operation")
             sys.syscfg0().modify(|_, w| unsafe { w
-                .frwppw().bits(PASSWORD)
+                .frwppw().password()
                 .frwpoa().bits(kib)
             })
         });

@@ -72,6 +72,22 @@ pub enum Ccis {
     Vcc,
 }
 
+// CLLD values: when a Timer_B compare latch TBxCLn loads the new TBxCCRn value (SLAU445I Table 14-2, p. 400;
+// SLAU445I Table 14-8, p. 411)
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Clld {
+    // "immediately when TBxCCRn is written"
+    Immediately = 0b00,
+    // "when TBxR counts to 0"
+    AtZero = 0b01,
+    // "when TBxR counts to 0 for up and continuous modes", and "to the old TBxCL0 value or to 0 for up/down
+    // mode"
+    AtZeroOrTop = 0b10,
+    // "when TBxR counts to the old TBxCLn value"
+    AtOldValue = 0b11,
+}
+
 // Accessors of a timer's TAxCTL/TBxCTL (SLAU445I Table 13-4, p. 384; SLAU445I Table 14-6, p. 409 to
 // p. 410), TAxR/TBxR (SLAU445I Table 13-5, p. 385; SLAU445I Table 14-7, p. 410), TAxIV/TBxIV (SLAU445I
 // Table 13-8, p. 388; SLAU445I Table 14-10, p. 414) and TAxEX0/TBxEX0 (SLAU445I Table 13-9, p. 389;
@@ -131,7 +147,7 @@ pub trait TimerBase: Steal {
 
     // TAxIV/TBxIV; a read clears the highest pending flag (SLAU445I Table 13-8, p. 388; SLAU445I
     // Table 14-10, p. 414; SLAU445I 13.2.6.2, p. 380)
-    fn tbxiv_rd(&self) -> u16;
+    fn tbxiv_rd(&self) -> crate::timer::TimerVector;
 
     /// Get the current timer value (TBxR: SLAU445I Table 13-5, p. 385; SLAU445I Table 14-7, p. 410).
     fn get_tbxr(&self) -> u16;
@@ -189,13 +205,11 @@ pub trait CCRn<C>: Steal {
     /// Switch the capture input between GND and VCC (CCIS bit 0), for a software capture (SLAU445I
     /// 13.2.4.1.1, p. 376; 14.2.4.1.1, p. 399)
     fn toggle_ccis_low_bit(&self);
-    /// Set when the compare latch loads (Timer_B CLLD: 0 = at once, 1 = when the timer counts to 0,
-    /// 2 = also when it counts to the top in up/down mode, 3 = when it counts to the old latch value).
-    /// Timer_A has no compare latch (SLAU445I Table 14-2, p. 400; SLAU445I Table 14-8, p. 411; SLAU445I
-    /// 14.1.1, p. 391). In up mode 1 and 2 load at once on the MSP430FR2x5x and MSP430FR247x (SLAZ695J
-    /// TB25, p. 11; SLAZ726B TB25, p. 8).
-    fn set_clld(&self, clld: u8);
-    /// When the compare latch loads, see [`CCRn::set_clld`]. 0 on a Timer_A, which has no compare latch
+    /// Set when the compare latch loads (Timer_B CLLD, see [`Clld`]). Timer_A has no compare latch
+    /// (SLAU445I 14.1.1, p. 391). In up mode `AtZero` and `AtZeroOrTop` load at once on the MSP430FR2x5x and
+    /// MSP430FR247x (SLAZ695J TB25, p. 11; SLAZ726B TB25, p. 8).
+    fn set_clld(&self, clld: Clld);
+    /// When the compare latch loads, as a [`Clld`] value. 0 on a Timer_A, which has no compare latch
     /// (SLAU445I 14.1.1, p. 391).
     fn clld_rd(&self) -> u8;
 }
@@ -246,13 +260,14 @@ pub(crate) use timer_b_read;
 macro_rules! timer_stopped {
     ($ctl:expr, $body:expr) => {{
         let ctl = $ctl;
-        let mc = ctl.read().mc().bits();
-        let stop = $crate::hw_traits::timer_base::Mode::Stop as u8;
-        if mc != stop {
-            unsafe { ctl.clear_bits(|w| w.mc().bits(stop)) };
+        let mc = ctl.read().mc();
+        let running = !mc.is_stop();
+        let mc = mc.bits();
+        if running {
+            unsafe { ctl.clear_bits(|w| w.mc().stop()) };
         }
         let ret = $body;
-        if mc != stop {
+        if running {
             unsafe { ctl.set_bits(|w| w.mc().bits(mc)) };
         }
         ret
@@ -276,6 +291,38 @@ macro_rules! timer_b_marker {
     (B, $TBx:ident) => { impl crate::timer::TimerB for $TBx {} };
 }
 pub(crate) use timer_b_marker;
+
+// TAxIV/TBxIV as a `TimerVector`. The field and its values are TAIV, TACCRn and TAIFG on a Timer_A, and TBIV,
+// TBCCRn and TBIFG on a Timer_B (SLAU445I Table 13-8, p. 388; SLAU445I Table 14-10, p. 414).
+macro_rules! timer_vector {
+    (A, $iv:expr) => {{
+        use crate::timer::TimerVector;
+        let r = $iv.read();
+        let iv = r.taiv();
+        if iv.is_taccr1() { TimerVector::SubTimer1 }
+        else if iv.is_taccr2() { TimerVector::SubTimer2 }
+        else if iv.is_taccr3() { TimerVector::SubTimer3 }
+        else if iv.is_taccr4() { TimerVector::SubTimer4 }
+        else if iv.is_taccr5() { TimerVector::SubTimer5 }
+        else if iv.is_taccr6() { TimerVector::SubTimer6 }
+        else if iv.is_taifg() { TimerVector::MainTimer }
+        else { TimerVector::NoInterrupt }
+    }};
+    (B, $iv:expr) => {{
+        use crate::timer::TimerVector;
+        let r = $iv.read();
+        let iv = r.tbiv();
+        if iv.is_tbccr1() { TimerVector::SubTimer1 }
+        else if iv.is_tbccr2() { TimerVector::SubTimer2 }
+        else if iv.is_tbccr3() { TimerVector::SubTimer3 }
+        else if iv.is_tbccr4() { TimerVector::SubTimer4 }
+        else if iv.is_tbccr5() { TimerVector::SubTimer5 }
+        else if iv.is_tbccr6() { TimerVector::SubTimer6 }
+        else if iv.is_tbifg() { TimerVector::MainTimer }
+        else { TimerVector::NoInterrupt }
+    }};
+}
+pub(crate) use timer_vector;
 
 macro_rules! ccrn_impl {
     ($kind:ident, $TBx:ident, $tbxctl:ident, $CCRn:ident, $tbxcctln:ident, $tbxccrn:ident) => {
@@ -359,39 +406,41 @@ macro_rules! ccrn_impl {
                 };
             }
 
-            // OUTMOD is bits 7..5 (SLAU445I Table 13-6, p. 386; SLAU445I Table 14-8, p. 411)
+            // OUTMOD in TAxCCTLn/TBxCCTLn (SLAU445I Table 13-6, p. 386; SLAU445I Table 14-8, p. 411)
             #[inline(always)]
-            fn outmod_rd(&self) -> u8 { (self.$tbxcctln().read().bits() >> 5) as u8 & 0b111 }
+            fn outmod_rd(&self) -> u8 { self.$tbxcctln().read().outmod().bits() }
 
             #[inline(always)]
             fn set_outmod_high_bit(&self, set: bool) {
-                // OUTMOD is bits 7..5 (SLAU445I Table 13-6, p. 386; SLAU445I Table 14-8, p. 411), changed
-                // with the timer stopped (SLAU445I 13.2.7, p. 382; SLAU445I 14.2.7, p. 407)
+                // The top bit of OUTMOD (SLAU445I Table 13-6, p. 386; SLAU445I Table 14-8, p. 411), set or
+                // cleared in one instruction, with the timer stopped (SLAU445I 13.2.7, p. 382; SLAU445I
+                // 14.2.7, p. 407)
                 $crate::hw_traits::timer_base::timer_stopped!(self.$tbxctl(), {
                     if set {
-                        unsafe { self.$tbxcctln().set_bits(|w| w.bits(1 << 7)) };
+                        unsafe { self.$tbxcctln().set_bits(|w| w.outmod().bits(0b100)) };
                     } else {
-                        unsafe { self.$tbxcctln().clear_bits(|w| w.bits(!(1 << 7))) };
+                        unsafe { self.$tbxcctln().clear_bits(|w| w.outmod().bits(0b011)) };
                     }
                 });
             }
 
             #[inline(always)]
             fn toggle_ccis_low_bit(&self) {
-                // CCIS is bits 13..12 (SLAU445I Table 13-6, p. 386; SLAU445I Table 14-8, p. 411)
-                self.$tbxcctln().modify(|r, w| unsafe { w.bits(r.bits() ^ (1 << 12)) });
+                // The low bit of CCIS, toggled in one instruction: GND (10b) to VCC (11b) and back
+                // (SLAU445I Table 13-6, p. 386; SLAU445I Table 14-8, p. 411)
+                unsafe { self.$tbxcctln().toggle_bits(|w| w.ccis().bits(0b01)) };
             }
 
             // CLLD is a Timer_B field (SLAU445I Table 14-8, p. 411)
             #[inline(always)]
-            fn set_clld(&self, clld: u8) {
-                $crate::hw_traits::timer_base::timer_b_field!($kind, self.$tbxcctln(), clld, clld);
+            fn set_clld(&self, clld: Clld) {
+                $crate::hw_traits::timer_base::timer_b_field!($kind, self.$tbxcctln(), clld, clld as u8);
             }
 
-            // CLLD is bits 10-9 of TBxCCTLn (SLAU445I Table 14-8, p. 411)
+            // CLLD in TBxCCTLn (SLAU445I Table 14-8, p. 411)
             #[inline(always)]
             fn clld_rd(&self) -> u8 {
-                $crate::hw_traits::timer_base::timer_b_read!($kind, (self.$tbxcctln().read().bits() >> 9) as u8 & 0b11)
+                $crate::hw_traits::timer_base::timer_b_read!($kind, self.$tbxcctln().read().clld().bits())
             }
         }
     };
@@ -434,7 +483,7 @@ macro_rules! timer_base_impl {
                     unsafe { w.bits(r.bits())
                         .$txclr().set_bit()
                         .$txifg().clear_bit()
-                        .mc().bits(Mode::Up as u8)
+                        .mc().up()
                     }
                 });
             }
@@ -446,7 +495,7 @@ macro_rules! timer_base_impl {
                     unsafe { w.bits(r.bits())
                         .$txclr().set_bit()
                         .$txifg().clear_bit()
-                        .mc().bits(Mode::Continuous as u8)
+                        .mc().continuous()
                     }
                 });
             }
@@ -458,7 +507,7 @@ macro_rules! timer_base_impl {
                     unsafe { w.bits(r.bits())
                         .$txclr().set_bit()
                         .$txifg().clear_bit()
-                        .mc().bits(Mode::UpDown as u8)
+                        .mc().updown()
                     }
                 });
             }
@@ -497,13 +546,13 @@ macro_rules! timer_base_impl {
             // MC = 0 is stop mode (SLAU445I Table 13-4, p. 384; SLAU445I Table 14-6, p. 409)
             #[inline(always)]
             fn is_stopped(&self) -> bool {
-                self.$tbxctl().read().mc().bits() == (Mode::Stop as u8)
+                self.$tbxctl().read().mc().is_stop()
             }
 
             // Clears MC in TBxCTL: stop mode (SLAU445I Table 13-4, p. 384; SLAU445I Table 14-6, p. 409)
             #[inline(always)]
             fn stop(&self) {
-                unsafe { self.$tbxctl().clear_bits(|w| w.mc().bits(Mode::Stop as u8)) };
+                unsafe { self.$tbxctl().clear_bits(|w| w.mc().stop()) };
             }
 
             // Writes MC in TBxCTL (SLAU445I Table 13-4, p. 384; SLAU445I Table 14-6, p. 409)
@@ -551,8 +600,8 @@ macro_rules! timer_base_impl {
             // TBxIV (SLAU445I Table 13-8, p. 388; SLAU445I Table 14-10, p. 414). Reading it clears the
             // highest pending flag (SLAU445I 13.2.6.2, p. 380; 14.2.6.2, p. 405)
             #[inline(always)]
-            fn tbxiv_rd(&self) -> u16 {
-                self.$tbxiv().read().bits()
+            fn tbxiv_rd(&self) -> crate::timer::TimerVector {
+                $crate::hw_traits::timer_base::timer_vector!($kind, self.$tbxiv())
             }
 
             // TBxR (SLAU445I Table 13-5, p. 385; SLAU445I Table 14-7, p. 410)

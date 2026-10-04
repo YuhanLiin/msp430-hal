@@ -125,7 +125,7 @@ If you do find that a peripheral driver requires changes, we are happy to accept
 
 In addition to the device feature flags mentioned above, this crate provides an implementation of the legacy 0.2.7 version of embedded-hal behind the `embedded-hal-02` feature. Support for embedded-hal 1.0 is available by default.
 
-Support for `defmt` is available through the `defmt` feature. See `device_examples/msp430fr2355/defmt.rs` for a defmt implementation on the MSP430.
+Support for `defmt` is available through the `defmt` feature. See `device-examples/msp430fr2355/examples/defmt.rs` for a defmt implementation on the MSP430.
 
 # Minimum Supported Rust Version (MSRV)
 

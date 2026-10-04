@@ -50,13 +50,13 @@ fn main() -> ! {
     // reference, more precise than the supply (2.5 V ±1.5 %: SLASEO7C 8.12.5.1, p. 33). MODCLK clocks it
     // (ADCSSELx = 00b: SLAU445I Table 21-4, p. 564), with 12-bit results (ADCRES = 10b: SLAU445I
     // Table 21-5, p. 565) and 16 ADCCLK cycles of sampling (ADCSHTx = 0010b: SLAU445I Table 21-3, p. 561).
-    let vref = pmm.enable_internal_reference(ReferenceVoltage::_2V5).unwrap();
+    let vref = pmm.enable_internal_reference(ReferenceVoltage::V2_5).unwrap();
     let adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
-        SamplingRate::_200KSPS,
-        SampleTime::_16,
+        Resolution::Bits12,
+        SamplingRate::Max200ksps,
+        SampleTime::Cycles16,
     )
     .use_modclk()
     .configure(periph.adc);

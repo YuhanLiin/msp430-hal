@@ -120,7 +120,7 @@ mod util;
 
 pub use device_specific::pac;
 
-/// PAC with non-standard peripheral names corrected
+/// PAC with standardised peripheral names. Every device's PAC uses the same names, so this is just `pac`.
 pub(crate) use device_specific::_pac;
 
 #[cfg(feature = "embedded-hal-02")]

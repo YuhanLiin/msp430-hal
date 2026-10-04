@@ -15,10 +15,10 @@ use panic_msp430 as _;
 fn main() -> ! {
     let periph = msp430fr2433::Peripherals::take().unwrap();
 
-    let mut fram = Fram::new(periph.fram);
+    let mut fram = Fram::new(periph.frctl);
     // Hold the watchdog (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2,
     // p. 363)
-    let _wdt = Wdt::constrain(periph.watchdog_timer);
+    let _wdt = Wdt::constrain(periph.wdt_a);
 
     // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
     // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
@@ -55,7 +55,7 @@ fn main() -> ! {
     // SPI mode 0 is UCCKPH = 1, UCCKPL = 0, and `true` sends the MSB first, UCMSB = 1; master clocked from
     // SMCLK: UCMST = 1, UCSSELx = 10b (SLAU445I Table 23-3, p. 613). Without STE it runs as a 3-pin master,
     // UCMODEx = 00b (SLAU445I Table 23-3, p. 613; SLAU445I 23.3.3, p. 607).
-    let mut spi = SpiConfig::new(periph.usci_a0_spi_mode, MODE_0, true)
+    let mut spi = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
         .to_master_using_smclk(&smclk, 16) // 8MHz / 16 = 500kHz (SLAU445I 23.3.6, Equation 15, p. 609)
         .single_master_bus(miso, mosi, sck);
 

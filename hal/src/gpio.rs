@@ -342,24 +342,14 @@ impl<PORT: IntrPortNum> PxIV<PORT> {
     #[inline]
     pub fn get_interrupt_vector(&mut self) -> GpioVector {
         let p = unsafe { PORT::steal() };
-        // PxIV values: SLAU445I Tables 8-5 to 8-8, p. 332 to p. 333
-        match p.pxiv_rd() {
-            0 => GpioVector::NoIsr,
-            2 => GpioVector::Pin0Isr,
-            4 => GpioVector::Pin1Isr,
-            6 => GpioVector::Pin2Isr,
-            8 => GpioVector::Pin3Isr,
-            10 => GpioVector::Pin4Isr,
-            12 => GpioVector::Pin5Isr,
-            14 => GpioVector::Pin6Isr,
-            16 => GpioVector::Pin7Isr,
-            _ => unsafe { core::hint::unreachable_unchecked() },
-        }
+        p.pxiv_rd()
     }
 }
 
 /// Indicates which pin on the GPIO port caused the ISR: PxIV reads 00h for none and 02h to 10h for
 /// pins 0 to 7 (SLAU445I Tables 8-5 to 8-8, p. 332 to p. 333).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GpioVector {
     /// No ISR
     NoIsr,

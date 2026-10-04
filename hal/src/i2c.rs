@@ -124,6 +124,7 @@ impl From<AddressingMode> for bool {
 
 /// I2C transmission modes. The values are those of UCTR (SLAU445I Table 24-4, p. 650).
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TransmissionMode {
     /// Receiver mode
     Receive = 0,
@@ -629,7 +630,8 @@ where
     /// address (UCBxADDMASK, SLAU445I 24.3.9.2, p. 644; SLAU445I Table 24-16, p. 659).
     /// [`I2cRoleSlave::received_address`] tells which address was received.
     pub fn address_mask(mut self, mask: u16) -> Self {
-        self.addmask = mask & 0x03FF; // ADDMASKx is bits 9-0 (SLAU445I Table 24-16, p. 659)
+        // ADDMASKx is 10 bits wide, and writing the field drops the others (SLAU445I Table 24-16, p. 659)
+        self.addmask = mask;
         self
     }
 
@@ -996,29 +998,7 @@ where M: PinMap
     fn byte_count(&mut self) -> u8 { self.usci().byte_count() }
 
     /// Get the event that triggered the current interrupt. Used as part of the interrupt-based interface.
-    fn interrupt_source(&mut self) -> I2cVector {
-        use I2cVector::*;
-        // UCBxIV values (SLAU445I Table 24-20, p. 664)
-        match self.usci().iv_rd() {
-            0x00 => None,
-            0x02 => ArbitrationLost,
-            0x04 => NackReceived,
-            0x06 => StartReceived,
-            0x08 => StopReceived,
-            0x0A => Slave3RxBufFull,
-            0x0C => Slave3TxBufEmpty,
-            0x0E => Slave2RxBufFull,
-            0x10 => Slave2TxBufEmpty,
-            0x12 => Slave1RxBufFull,
-            0x14 => Slave1TxBufEmpty,
-            0x16 => RxBufFull,
-            0x18 => TxBufEmpty,
-            0x1A => ByteCounterZero,
-            0x1C => ClockLowTimeout,
-            0x1E => NinthBitReceived,
-            _ => unsafe { core::hint::unreachable_unchecked() },
-        }
-    }
+    fn interrupt_source(&mut self) -> I2cVector { self.usci().iv_rd() }
 
     /// Set the bits in the interrupt enable register that correspond to the bits set in `intrs`
     /// (UCBxIE, SLAU445I Table 24-18, p. 660).
@@ -1689,6 +1669,7 @@ impl_i2c_error!(I2cMasterSlaveErr);
 /// Writing the Tx buffer clears UCTXIFGx and reading the Rx buffer clears UCRXIFGx
 /// (SLAU445I Table 24-9, p. 655; SLAU445I Table 24-10, p. 655).
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum I2cEvent {
     /// The master sent a (repeated) start and wants to read from us. Write to the Tx buffer to clear this event.
     ReadStart,
@@ -1717,6 +1698,7 @@ pub enum I2cEvent {
 /// The values are those of UCBxIV (SLAU445I Table 24-20, p. 664); the flags behind them are described in
 /// SLAU445I Table 24-2, p. 646 and SLAU445I Table 24-19, p. 662.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum I2cVector {
     /// No interrupt.
     None             = 0x00,

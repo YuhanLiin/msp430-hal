@@ -13,6 +13,8 @@ rustflags = [
     # msp430-gcc's include/devices.csv). libmul_32 is for MPY_TYPE 4 devices, with the MPY32 at 0130h,
     # which is PM5CTL0 on these devices.
     "-C", "link-arg=-lmul_f5",
+    # If linking fails with duplicate definitions of __muldi3, uncomment this:
+    #"-C", "link-arg=-Wl,--allow-multiple-definition", # Prevent __muldi3 dupe errors
     
     # libgcc must be linked after everything that depends on it (e.g. lmul_f5)
     "-C", "link-arg=-lgcc",

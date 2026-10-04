@@ -11,7 +11,7 @@ fn main() -> ! {
     let periph = msp430fr2433::Peripherals::take().unwrap();
     // Hold the watchdog (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2,
     // p. 363)
-    let _wdt = Wdt::constrain(periph.watchdog_timer);
+    let _wdt = Wdt::constrain(periph.wdt_a);
 
     // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
     // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
@@ -31,7 +31,7 @@ fn main() -> ! {
     // Configure the hardware CRC module, pass in the data and retrieve the signature.
     // (The seed goes into CRCINIRES, the data into CRCDI or CRCDIRB, and the signature is read from
     // CRCINIRES: SLAU445I 11.3, p. 354.)
-    let mut crc_hw = Crc::new(periph.crc16, 0xFFFF);
+    let mut crc_hw = Crc::new(periph.crc, 0xFFFF);
     crc_hw.add_words_lsb(&crc_input);
     let hw_sig = crc_hw.result();
 

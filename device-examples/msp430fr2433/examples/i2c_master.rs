@@ -20,10 +20,10 @@ use panic_msp430 as _;
 fn main() -> ! {
     let periph = msp430fr2433::Peripherals::take().unwrap();
 
-    let mut fram = Fram::new(periph.fram);
+    let mut fram = Fram::new(periph.frctl);
     // Hold the watchdog (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2,
     // p. 363)
-    let _wdt = Wdt::constrain(periph.watchdog_timer);
+    let _wdt = Wdt::constrain(periph.wdt_a);
 
     // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
     // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
@@ -52,7 +52,7 @@ fn main() -> ! {
 
     // 50-ns deglitching: UCGLITx = 00b (SLAU445I Table 24-5, p. 652). Single master: UCMST = 1, UCMM = 0;
     // SMCLK as the bit clock source: UCSSELx = 10b (SLAU445I Table 24-4, p. 649).
-    let mut i2c = I2cConfig::new(periph.usci_b0_i2c_mode, GlitchFilter::Max50ns)
+    let mut i2c = I2cConfig::new(periph.e_usci_b0, GlitchFilter::Max50ns)
         .as_single_master()
         .use_smclk(&smclk, 80) // 8MHz / 80 = 100kHz (fBitClock = fBRCLK/UCBRx, SLAU445I 24.3.7, p. 642)
         .configure(scl, sda);

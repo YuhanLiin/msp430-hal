@@ -87,7 +87,7 @@ fn main() -> ! {
     let mut input = p4.pin3.to_alternate3();
     let veref_plus = p1.pin0.to_alternate3();
     // REFVSEL = 10b selects 2.5 V, and INTREFEN = 1 turns it on (SLAU445I Table 2-4, p. 93 to p. 94)
-    let vref = pmm.enable_internal_reference(ReferenceVoltage::_2V5).unwrap();
+    let vref = pmm.enable_internal_reference(ReferenceVoltage::V2_5).unwrap();
 
     // MODCLK clocks the ADC (ADCSSELx = 00b: SLAU445I Table 21-4, p. 564), with 12-bit results (ADCRES =
     // 10b: SLAU445I Table 21-5, p. 565) and 16 ADCCLK cycles of sampling (ADCSHTx = 0010b: SLAU445I
@@ -95,9 +95,9 @@ fn main() -> ! {
     let adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
-        SamplingRate::_200KSPS,
-        SampleTime::_16,
+        Resolution::Bits12,
+        SamplingRate::Max200ksps,
+        SampleTime::Cycles16,
     )
     .use_modclk()
     .configure(periph.adc);

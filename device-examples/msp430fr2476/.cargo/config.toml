@@ -19,6 +19,8 @@ rustflags = [
     # from the PMM base 0120h, so at 0130h: SLASEO7C Table 9-34, p. 74.)
     "-C",
     "link-arg=-lmul_f5",
+    # If linking fails with duplicate definitions of __muldi3, uncomment this:
+    #"-C", "link-arg=-Wl,--allow-multiple-definition", # Prevent __muldi3 dupe errors
 
     # libgcc must be linked after everything that depends on it (e.g. lmul_f5)
     "-C",

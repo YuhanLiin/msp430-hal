@@ -72,8 +72,9 @@ pub trait IntrPeriph: GpioPeriph {
     fn pxifg_set(&self, bits: u8);
     fn pxifg_clear(&self, bits: u8);
 
-    // PxIV, a 16-bit register (SLAU445I Tables 8-5 to 8-8, p. 332 to p. 333)
-    fn pxiv_rd(&self) -> u16;
+    // PxIV, a 16-bit register (SLAU445I Tables 8-5 to 8-8, p. 332 to p. 333). Reading it clears the flag it
+    // reports (SLAU445I 8.2.6, p. 315).
+    fn pxiv_rd(&self) -> crate::gpio::GpioVector;
 }
 
 // Read, write, set and clear the bits of one 8-bit port register (SLAU445I Table 8-4, p. 319 to p. 331)
@@ -146,8 +147,18 @@ macro_rules! gpio_impl {
 
                     // PxIV (SLAU445I Tables 8-5 to 8-8, p. 332 to p. 333)
                     #[inline(always)]
-                    fn pxiv_rd(&self) -> u16 {
-                        self.$pxiv().read().bits()
+                    fn pxiv_rd(&self) -> GpioVector {
+                        let r = self.$pxiv().read();
+                        let iv = r.$pxiv();
+                        if iv.is_ifg0() { GpioVector::Pin0Isr }
+                        else if iv.is_ifg1() { GpioVector::Pin1Isr }
+                        else if iv.is_ifg2() { GpioVector::Pin2Isr }
+                        else if iv.is_ifg3() { GpioVector::Pin3Isr }
+                        else if iv.is_ifg4() { GpioVector::Pin4Isr }
+                        else if iv.is_ifg5() { GpioVector::Pin5Isr }
+                        else if iv.is_ifg6() { GpioVector::Pin6Isr }
+                        else if iv.is_ifg7() { GpioVector::Pin7Isr }
+                        else { GpioVector::NoIsr }
                     }
                 }
             )?

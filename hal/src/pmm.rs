@@ -45,21 +45,10 @@ impl InternalVRef {
     pub fn voltage(&self) -> ReferenceVoltage { self.0 }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-/// A list of possible internal reference voltages (PMMCTL2.REFVSEL, SLAU445I Table 2-4, p. 93; 2.0 V
-/// and 2.5 V only in enhanced shared reference systems)
-pub enum ReferenceVoltage {
-    /// 1.5V
-    _1V5 = 0b00,
-
-    #[cfg(feature = "enhanced_ref")]
-    /// 2.0V
-    _2V0 = 0b01,
-
-    #[cfg(feature = "enhanced_ref")]
-    /// 2.5V
-    _2V5 = 0b10,
-}
+/// The internal reference voltages, `V1_5` (1.5 V), and `V2_0` (2.0 V) and `V2_5` (2.5 V) on the devices
+/// with the enhanced shared reference, the MSP430FR2x5x and MSP430FR247x (PMMCTL2.REFVSEL, SLAU445I
+/// Table 2-4, p. 93: "Enhanced shared reference systems only"; SLASEC4D 1, p. 1; SLASEO7C 1, p. 1)
+pub use crate::_pac::pmm::pmmctl2::Refvsel as ReferenceVoltage;
 
 /// Token indicating that the internal temperature sensor has been enabled.
 /// This can be passed to the ADC to read the temperature sensor voltage, which is internally
@@ -81,48 +70,29 @@ pub struct VrefOutput<PIN>(pub(crate) PIN);
 /// A reason for a reset, in priority order (SYSRSTIV: SLASEC4D Table 6-12, p. 70; SLASE59F Table 6-9,
 /// p. 48; SLASEO7C Table 9-10, p. 52; SLASEE4C Table 6-10, p. 52). A brownout reset (BOR) resets the
 /// most, then a power-on reset (POR), then a power-up clear (PUC) (SLAU445I 1.2, p. 30).
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ResetCause {
-    /// Power-up, or the supply dropped below the brownout level (BOR, SYSRSTIV 02h; SLAU445I 2.2.6, p. 88)
-    Brownout,
-    /// A low level on the RST/NMI pin (BOR, SYSRSTIV 04h; SLAU445I 1.2, p. 30)
-    ResetPin,
-    /// [`Pmm::software_bor()`] (BOR, SYSRSTIV 06h; PMMSWBOR in SLAU445I Table 2-2, p. 91)
-    SoftwareBor,
-    /// A wake-up from LPM3.5 or LPM4.5 (BOR, SYSRSTIV 08h; SLAU445I 1.4.3.2, p. 42)
-    Lpmx5WakeUp,
-    /// A security violation (BOR, SYSRSTIV 0Ah; SLASEC4D Table 6-12, p. 70). Measured on an MSP430FR2476, a
-    /// read of the RAM assigned to the protected BSL causes one, see
-    /// [`Bsl::set_ram_assigned()`](crate::sys::Bsl::set_ram_assigned).
-    SecurityViolation,
-    /// The supply dropped below the high-side SVS level (BOR, SYSRSTIV 0Eh; SVSHIFG in SLAU445I Table 2-6,
-    /// p. 96)
-    Svsh,
-    /// [`Pmm::software_por()`] (POR, SYSRSTIV 14h; PMMSWPOR in SLAU445I Table 2-2, p. 91)
-    SoftwarePor,
-    /// The watchdog timed out (PUC, SYSRSTIV 16h; SLAU445I 1.2, p. 30)
-    WatchdogTimeout,
-    /// A write to the watchdog without its password (PUC, SYSRSTIV 18h; SLAU445I 1.2, p. 30)
-    WatchdogPassword,
-    /// A write to the FRAM controller without its password (PUC, SYSRSTIV 1Ah; SLAU445I 1.2, p. 30)
-    FramPassword,
-    /// The FRAM detected a bit error it couldn't correct, see
-    /// [`Fram::set_uncorrectable_bit_error_action()`](crate::fram::Fram::set_uncorrectable_bit_error_action)
-    /// (PUC, SYSRSTIV 1Ch; GCCTL0.UBDRSTEN in SLAU445I Table 6-3, p. 307)
-    FramBitError,
-    /// The CPU fetched an instruction from the peripheral area (PUC, SYSRSTIV 1Eh; SLAU445I 1.2, p. 30)
-    PeripheralAreaFetch,
-    /// A write to the PMM without its password (PUC, SYSRSTIV 20h; SLAU445I 2.3, p. 90)
-    PmmPassword,
-    /// The DCO ran too fast for the FLL, see
-    /// [`ClockConfig::reset_on_fll_unlock()`](crate::clock::ClockConfig::reset_on_fll_unlock) (PUC,
-    /// SYSRSTIV 24h; CSCTL7.FLLULPUC in SLAU445I Table 3-11, p. 121: FLLUNLOCK = 10b, "too fast")
-    FllUnlock,
-    /// A value the data sheets list as reserved (SLASEC4D Table 6-12, p. 70; SLASE59F Table 6-9, p. 48;
-    /// SLASEO7C Table 9-10, p. 52; SLASEE4C Table 6-10, p. 52)
-    Reserved(u16),
-}
+///
+/// - `Brownout`: power-up, or the supply dropped below the brownout level (BOR; SLAU445I 2.2.6, p. 88).
+/// - `ResetPin`: a low level on the RST/NMI pin (BOR; SLAU445I 1.2, p. 30).
+/// - `SoftwareBor`: [`Pmm::software_bor()`] (BOR; PMMSWBOR in SLAU445I Table 2-2, p. 91).
+/// - `Lpmx5WakeUp`: a wake-up from LPM3.5 or LPM4.5 (BOR; SLAU445I 1.4.3.2, p. 42).
+/// - `SecurityViolation`: a security violation (BOR). Measured on an MSP430FR2476, a read of the RAM
+///   assigned to the protected BSL causes one, see
+///   [`Bsl::set_ram_assigned()`](crate::sys::Bsl::set_ram_assigned).
+/// - `Svsh`: the supply dropped below the high-side SVS level (BOR; SVSHIFG in SLAU445I Table 2-6, p. 96).
+/// - `SoftwarePor`: [`Pmm::software_por()`] (POR; PMMSWPOR in SLAU445I Table 2-2, p. 91).
+/// - `WatchdogTimeout`: the watchdog timed out (PUC; SLAU445I 1.2, p. 30).
+/// - `WatchdogPassword`: a write to the watchdog without its password (PUC; SLAU445I 1.2, p. 30).
+/// - `FramPassword`: a write to the FRAM controller without its password (PUC; SLAU445I 1.2, p. 30).
+/// - `FramBitError`: the FRAM detected a bit error it couldn't correct, see
+///   [`Fram::set_uncorrectable_bit_error_action()`](crate::fram::Fram::set_uncorrectable_bit_error_action)
+///   (PUC; GCCTL0.UBDRSTEN in SLAU445I Table 6-3, p. 307).
+/// - `PeripheralAreaFetch`: the CPU fetched an instruction from the peripheral area (PUC; SLAU445I 1.2,
+///   p. 30).
+/// - `PmmPassword`: a write to the PMM without its password (PUC; SLAU445I 2.3, p. 90).
+/// - `FllUnlock`: the DCO ran too fast for the FLL, see
+///   [`ClockConfig::reset_on_fll_unlock()`](crate::clock::ClockConfig::reset_on_fll_unlock) (PUC;
+///   CSCTL7.FLLULPUC in SLAU445I Table 3-11, p. 121: FLLUNLOCK = 10b, "too fast").
+pub use crate::_pac::sys::sysrstiv::Sysrstiv as ResetCause;
 
 impl Pmm {
     /// Clears the LOCKLPM5 bit, so the I/O pins take on their configured state (SLAU445I 8.3.1,
@@ -188,26 +158,8 @@ impl Pmm {
     /// (SYSRSTIV = 0x00)" (SLAZ664S GC4), see [`fram`](crate::fram).
     pub fn take_reset_cause(&mut self) -> Option<ResetCause> {
         let sys = unsafe { &*_pac::Sys::ptr() };
-        // SYSRSTIV values: SLASEC4D Table 6-12, p. 70; SLASE59F Table 6-9, p. 48; SLASEO7C Table 9-10,
-        // p. 52; SLASEE4C Table 6-10, p. 52
-        match sys.sysrstiv().read().bits() {
-            0x00 => None,
-            0x02 => Some(ResetCause::Brownout),
-            0x04 => Some(ResetCause::ResetPin),
-            0x06 => Some(ResetCause::SoftwareBor),
-            0x08 => Some(ResetCause::Lpmx5WakeUp),
-            0x0A => Some(ResetCause::SecurityViolation),
-            0x0E => Some(ResetCause::Svsh),
-            0x14 => Some(ResetCause::SoftwarePor),
-            0x16 => Some(ResetCause::WatchdogTimeout),
-            0x18 => Some(ResetCause::WatchdogPassword),
-            0x1A => Some(ResetCause::FramPassword),
-            0x1C => Some(ResetCause::FramBitError),
-            0x1E => Some(ResetCause::PeripheralAreaFetch),
-            0x20 => Some(ResetCause::PmmPassword),
-            0x24 => Some(ResetCause::FllUnlock),
-            other => Some(ResetCause::Reserved(other)),
-        }
+        // 00h, no reason left, has no variant, nor do the values the data sheets reserve
+        sys.sysrstiv().read().sysrstiv().variant()
     }
 
     /// Reset the device with a brownout reset (BOR), the reset of a power-up (PMMSWBOR, SLAU445I
@@ -236,7 +188,7 @@ impl Pmm {
     /// resets the device only once it reaches the brownout level (SLAU445I 2.2.4, p. 87 and SLAU445I
     /// 2.2.6, p. 88). For LPM3.5 and LPM4.5, `enter_lpm3_5()` and `enter_lpm4_5()` set this.
     pub fn set_svsh(&mut self, svs: SvsState) {
-        self.unlocked(|pmm| pmm.pmmctl0().modify(|_, w| w.pmmpw().password().svshe().bit(svs == SvsState::Enabled)));
+        self.unlocked(|pmm| pmm.pmmctl0().modify(|_, w| w.pmmpw().password().svshe().variant(svs)));
     }
 
     /// Select how the LPM3.5 switch is controlled, see [`Lpm3_5Switch`] (PM5CTL0.LPM5SM and LPM5SW, SLAU445I
@@ -250,18 +202,16 @@ impl Pmm {
         // PM5CTL0 needs no PMM password (SLAU445I 2.3, p. 90). Manual mode comes first, as only then can
         // LPM5SW be written: "In automatic mode (LPM5SM = 0) ... Any write to this bit has no effect", "In
         // manual mode (LPM5SM = 1), this bit is read/write by software" (SLAU445I Table 2-7, p. 97).
-        // The PACs name the LPM5SM and LPM5SW values differently, so they are written as bits: LPM5SM = 1 is
-        // manual mode and LPM5SW = 1 connects the switch.
         let pm5ctl0 = self.0.pm5ctl0();
         match switch {
-            Lpm3_5Switch::Automatic => unsafe { pm5ctl0.clear_bits(|w| w.lpm5sm().clear_bit()) },
+            Lpm3_5Switch::Automatic => unsafe { pm5ctl0.clear_bits(|w| w.lpm5sm().automatic()) },
             Lpm3_5Switch::Connected => {
-                unsafe { pm5ctl0.set_bits(|w| w.lpm5sm().set_bit()) };
-                unsafe { pm5ctl0.set_bits(|w| w.lpm5sw().set_bit()) };
+                unsafe { pm5ctl0.set_bits(|w| w.lpm5sm().manual()) };
+                unsafe { pm5ctl0.set_bits(|w| w.lpm5sw().connected()) };
             }
             Lpm3_5Switch::Disconnected => {
-                unsafe { pm5ctl0.set_bits(|w| w.lpm5sm().set_bit()) };
-                unsafe { pm5ctl0.clear_bits(|w| w.lpm5sw().clear_bit()) };
+                unsafe { pm5ctl0.set_bits(|w| w.lpm5sm().manual()) };
+                unsafe { pm5ctl0.clear_bits(|w| w.lpm5sw().disconnected()) };
             }
         }
     }
@@ -270,7 +220,7 @@ impl Pmm {
     /// connection between Vcore and VLPM3.5" (SLAU445I Table 2-7, p. 97)
     #[cfg(feature = "lpm3_5_switch")]
     #[inline]
-    pub fn lpm3_5_switch_connected(&self) -> bool { self.0.pm5ctl0().read().lpm5sw().bit_is_set() }
+    pub fn lpm3_5_switch_connected(&self) -> bool { self.0.pm5ctl0().read().lpm5sw().is_connected() }
 
     /// Run `f` with write access to the PMM registers, and lock them again afterwards.
     ///
@@ -286,10 +236,7 @@ impl Pmm {
             let ret = f(&self.0);
             // PMMCTL0_H is the byte at offset 01h (SLAU445I Table 2-1, p. 90), as in step 9d of
             // SLAU445I 1.4.3.1, p. 41: "MOV.B #000h, &PMMCTL0_H"
-            // The PACs don't have a `pmmctl0_h` register yet, so for now this is a raw byte write of 0 to
-            // offset 1 of the little-endian PMMCTL0. This can use `pmmctl0_h().write(|w| w.pmmpw().lock())`
-            // once the PACs all have it.
-            unsafe { (self.0.pmmctl0().as_ptr() as *mut u8).add(1).write_volatile(0) };
+            self.0.pmmctl0_h().write(|w| w.pmmpw().lock());
             ret
         })
     }
@@ -304,10 +251,10 @@ impl Pmm {
         if self.0.pmmctl2().read().intrefen().bit() {
             return None;
         }
-        self.unlocked(|pmm| pmm.pmmctl2().modify(|_, w| unsafe { w
-            .refvsel().bits(vref as u8)
+        self.unlocked(|pmm| pmm.pmmctl2().modify(|_, w| w
+            .refvsel().variant(vref)
             .intrefen().set_bit()
-        }));
+        ));
         while self.0.pmmctl2().read().refgenrdy().bit_is_clear() {}
         Some(InternalVRef(vref))
     }

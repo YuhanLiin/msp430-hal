@@ -13,7 +13,8 @@ readme = "../README.md"
 [features]
 default = []
 embedded-hal-02 = ["dep:embedded-hal-02", "dep:void"]
-defmt = ["dep:defmt"]
+# defmt::Format for the HAL's types, and for the PAC enums it re-exports, such as `pmm::ResetCause`
+defmt = ["dep:defmt", "msp430fr2355?/defmt", "msp430fr2433?/defmt", "msp430fr247x?/defmt", "msp430fr25x2?/defmt"]
 
 # Device features. Provide exactly one of these.
 # MSP430FR2x5x: SLASEC4D Table 3-1, p. 8
@@ -31,19 +32,22 @@ msp430fr2512 = ["25x2"]           # 2kB RAM up to 4 self-capacitive or mutual-ca
 msp430fr2522 = ["25x2", "frwpoa"] # 2kB RAM up to 8 self-capacitive and 16 mutual-capacitive sensors
 
 # Derived features. Do not provide these.
-2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source", "xt1_high_frequency", "enhanced_cs", "rtc_aclk", "frwpoa", "timer_b", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
-247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source", "rtc_aclk", "timer_b"]
-25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "adc", "adcpctl", "eusci_b", "rtc_aclk", "lpm3_5_switch", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
+2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc", "ecomp", "eusci_b", "vloclk_source", "xt1_high_frequency", "enhanced_cs", "rtc_aclk", "frwpoa", "timer_b", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
+247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc", "ecomp", "eusci_b", "vloclk_source", "rtc_aclk", "timer_b", "remap"]
+25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "adc", "adcpctl", "eusci_b", "rtc_aclk", "lpm3_5_switch", "erratum_cs13", "erratum_pmm32", "erratum_rtc15", "remap"]
 # UCSSEL = 01b selects ACLK: SLASEC4D Table 6-9, p. 68; SLASEO7C Table 9-8, p. 50; SLASEE4C Table 6-8, p. 49
 eusci_aclk = [] # eUSCI peripherals can source from ACLK
 # UCSSEL = 01b selects MODCLK: SLASE59F Table 6-7, p. 46
 eusci_modclk = [] # eUSCI peripherals can source from MODCLK
-# 12-bit ADC: SLASEC4D Table 3-1, p. 8; SLASEO7C Table 6-1, p. 6
-adc12bit = ["adc"]
 # SYSCFG2.ADCPCTLx: SLAU445I Table 1-31, p. 82; SLASE59F Table 6-17, p. 55; SLASEE4C Table 6-15, p. 58
 adcpctl = [] # ADC functionality controlled via ADCPCTLx
-# ADC on every device, 10-bit on the MSP430FR2433 and MSP430FR25x2 (SLASE59F Table 3-1, p. 7; SLASEE4C
-# Table 3-1, p. 8)
+# Remapping bits in SYSCFG2 and SYSCFG3 (SLAU445I Table 1-31, p. 82; SLAU445I Table 1-32, p. 83): eUSCI pins
+# on the MSP430FR247x and MSP430FR25x2 (SLASEO7C Table 9-11, p. 54; SLASEE4C Table 6-11, p. 53), TA2 and TA3
+# pins on the MSP430FR247x (SLASEO7C Table 9-16, p. 60)
+remap = [] # Peripherals whose pins move with a remapping bit
+# ADC on every device: 12-bit on the MSP430FR2x5x and MSP430FR247x (SLASEC4D Table 3-1, p. 8; SLASEO7C
+# Table 6-1, p. 6), 10-bit on the MSP430FR2433 and MSP430FR25x2 (SLASE59F Table 3-1, p. 7; SLASEE4C
+# Table 3-1, p. 8). The PAC's ADCRES enum has the resolutions of each.
 adc = []
 # Two eCOMP on the MSP430FR2x5x (SLASEC4D Table 3-1, p. 8), one on the MSP430FR247x (SLASEO7C Table 6-1, p. 6)
 ecomp = []
@@ -88,10 +92,10 @@ erratum_rtc15 = [] # The RTC hangs when moved off a stopped XT1CLK (SLAZ695J RTC
 [dependencies]
 defmt = {version = "1.0", optional = true }
 msp430 = "0.4.0"
-msp430fr2355 = { version = "0.6", features = ["rt", "critical-section"], optional = true }
-msp430fr2433 = { version = "0.2", features = ["rt", "critical-section"], optional = true }
-msp430fr247x = { version = "0.3.3", features = ["rt", "critical-section"], optional = true }
-msp430fr25x2 = { version = "0.3.3", features = ["rt", "critical-section"], optional = true }
+msp430fr2355 = { version = "0.7.0", path = "../../msp430fr2355", features = ["rt", "critical-section"], optional = true }
+msp430fr2433 = { version = "0.3.0", path = "../../msp430fr2433", features = ["rt", "critical-section"], optional = true }
+msp430fr247x = { version = "0.4.0", path = "../../msp430fr247x", features = ["rt", "critical-section"], optional = true }
+msp430fr25x2 = { version = "0.4.0", path = "../../msp430fr25x2", features = ["rt", "critical-section"], optional = true }
 nb = "1.1"
 critical-section = "1.0.0"
 void = { version = "1.0.2", default-features = false, optional = true }

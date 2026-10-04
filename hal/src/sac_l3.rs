@@ -164,9 +164,8 @@ impl<SAC: SacPeriph> Dac<'_, SAC> {
     ///
     /// Only the timer load triggers set the flag: with [`LoadTrigger::Immediate`] this is always `false`
     /// (SLAU445I 20.2.3.5, p. 529).
-    // SACxIV = 04h: "DAC channel update interrupt flag" (SLAU445I Table 20-11, p. 537)
     #[inline(always)]
-    pub fn data_loaded(&mut self) -> bool { SAC::dac_iv() == 0x04 }
+    pub fn data_loaded(&mut self) -> bool { SAC::dac_iv_dacifg() }
 }
 
 /// A builder for configuring a Smart Analog Combo (SAC) unit's amplifier

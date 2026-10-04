@@ -105,8 +105,6 @@ const DCO_RANGE_BOUNDARY_HZ: [u32; 7] = [
 /// the locked tap (SLAU445I 3.2.11.2, p. 107: "Ideally, the DCO taps are locked close to the midrange
 /// (that is, 256 taps)")
 const DCO_TAP_MID: u16 = 256;
-/// The DCO field of CSCTL0, bits 8 to 0 (the MOD field follows in bits 13 to 9: SLAU445I Table 3-4, p. 113)
-const DCO_TAP_MASK: u16 = 0x01FF;
 /// Highest DCOFTRIM value (SLAU445I 3.2.11.2, p. 107: "DCOFTRIM values between 0 and 7")
 const DCOFTRIM_MAX: u8 = 7;
 /// DCOFTRIM value the trim routine starts from, as in TI's reference routine. It is also the reset
@@ -198,16 +196,16 @@ impl DcoclkFreqSel {
     #[inline(always)]
     fn dcorsel(self) -> Dcorsel {
         match self {
-            DcoclkFreqSel::_1MHz => Dcorsel::Dcorsel0,
-            DcoclkFreqSel::_2MHz => Dcorsel::Dcorsel1,
-            DcoclkFreqSel::_4MHz => Dcorsel::Dcorsel2,
-            DcoclkFreqSel::_8MHz => Dcorsel::Dcorsel3,
-            DcoclkFreqSel::_12MHz => Dcorsel::Dcorsel4,
-            DcoclkFreqSel::_16MHz => Dcorsel::Dcorsel5,
+            DcoclkFreqSel::_1MHz => Dcorsel::Range1mhz,
+            DcoclkFreqSel::_2MHz => Dcorsel::Range2mhz,
+            DcoclkFreqSel::_4MHz => Dcorsel::Range4mhz,
+            DcoclkFreqSel::_8MHz => Dcorsel::Range8mhz,
+            DcoclkFreqSel::_12MHz => Dcorsel::Range12mhz,
+            DcoclkFreqSel::_16MHz => Dcorsel::Range16mhz,
             #[cfg(feature = "enhanced_cs")]
-            DcoclkFreqSel::_20MHz => Dcorsel::Dcorsel6,
+            DcoclkFreqSel::_20MHz => Dcorsel::Range20mhz,
             #[cfg(feature = "enhanced_cs")]
-            DcoclkFreqSel::_24MHz => Dcorsel::Dcorsel7,
+            DcoclkFreqSel::_24MHz => Dcorsel::Range24mhz,
         }
     }
 
@@ -285,19 +283,19 @@ impl DcoTarget {
             return DcoTarget { freq, ..highest };
         }
         let range = match DCO_RANGE_BOUNDARY_HZ.iter().filter(|&&boundary| freq > boundary).count() {
-            0 => Dcorsel::Dcorsel0,
-            1 => Dcorsel::Dcorsel1,
-            2 => Dcorsel::Dcorsel2,
-            3 => Dcorsel::Dcorsel3,
-            4 => Dcorsel::Dcorsel4,
+            0 => Dcorsel::Range1mhz,
+            1 => Dcorsel::Range2mhz,
+            2 => Dcorsel::Range4mhz,
+            3 => Dcorsel::Range8mhz,
+            4 => Dcorsel::Range12mhz,
             #[cfg(not(feature = "enhanced_cs"))]
-            _ => Dcorsel::Dcorsel5,
+            _ => Dcorsel::Range16mhz,
             #[cfg(feature = "enhanced_cs")]
-            5 => Dcorsel::Dcorsel5,
+            5 => Dcorsel::Range16mhz,
             #[cfg(feature = "enhanced_cs")]
-            6 => Dcorsel::Dcorsel6,
+            6 => Dcorsel::Range20mhz,
             #[cfg(feature = "enhanced_cs")]
-            _ => Dcorsel::Dcorsel7,
+            _ => Dcorsel::Range24mhz,
         };
         DcoTarget { freq, range, factory_trim: false }
     }
@@ -702,7 +700,7 @@ impl<MODE, RANGE: Xt1Range> Xt1Config<MODE, RANGE> {
         // A 32 kHz XT1 is used undivided (SLAU445I 3.2.6, p. 104). On devices whose XT1 only
         // supports 32 kHz, "FLLREFDIV always reads and should be written as zero" (SLAU445I
         // 3.3.4, Table 3-7, p. 116).
-        (self.frequency, crate::device_specific::clock::FLLREFDIV_1)
+        (self.frequency, Fllrefdiv::_1)
     }
 
     /// Bring up the XT1 oscillator and wait until it has stabilized, giving up
@@ -847,10 +845,9 @@ fn xt1_hf_fll_ref_divider(freq: u32) -> (u32, Fllrefdiv) {
         // them /512 is the closest available.
         #[cfg(feature = "enhanced_cs")]
         let res = if freq <= 22_000_000 {
-            // The PAC doesn't name these two values (FLLREFDIV = 110b and 111b) by their divider yet
-            (freq / 640, Fllrefdiv::Fllrefdiv6)
+            (freq / 640, Fllrefdiv::_640)
         } else {
-            (freq / 768, Fllrefdiv::Fllrefdiv7)
+            (freq / 768, Fllrefdiv::_768)
         };
         #[cfg(not(feature = "enhanced_cs"))]
         let res = (freq / 512, Fllrefdiv::_512);
@@ -885,8 +882,7 @@ fn osc_fault_pending() -> bool {
 /// Table 3-11, p. 121)
 #[inline]
 fn fll_unlocked(cs: &_pac::Cs) -> bool {
-    // FLLUNLOCK = 00b is locked. Compared as bits: the PACs name the values differently.
-    cs.csctl7().read().fllunlock().bits() != 0
+    !cs.csctl7().read().fllunlock().is_locked()
 }
 
 // Using Xt1State as a trait bound outside the HAL will never be useful, since we only
@@ -1291,7 +1287,7 @@ impl<SMCLK: SmclkState, XT1CLK: Xt1State> ClockConfig<MclkDefined, SMCLK, XT1CLK
         // the hardware configuration consistent by construction.
         let (selref, ref_freq, ref_div) = match (self.fll_ref, self.xt1clk.fll_reference()) {
             (Selref::Xt1clk, Some((ref_freq, ref_div))) => (Selref::Xt1clk, ref_freq, ref_div),
-            _ => (Selref::Refoclk, REFOCLK_FREQ_HZ as u32, crate::device_specific::clock::FLLREFDIV_1),
+            _ => (Selref::Refoclk, REFOCLK_FREQ_HZ as u32, Fllrefdiv::_1),
         };
 
         // FLLN is 10 bits wide (SLAU445I Table 3-6, p. 115), so the multiplier (FLLN + 1) only
@@ -1380,12 +1376,12 @@ impl<SMCLK: SmclkState, XT1CLK: Xt1State> ClockConfig<MclkDefined, SMCLK, XT1CLK
             //    DCO starts from its lowest tap, as the factory trim procedure requires (SLAU445I
             //    3.2.11.1, p. 106, steps 3 and 4: "Clear the CSCTL0 register", then set the DCO
             //    range). CSCTL1: SLAU445I Table 3-5, p. 114.
-            cs.csctl0().write(|w| unsafe { w.bits(0) });
+            cs.csctl0().write(|w| w.dco().set(0).mod_().set(0));
             if target.factory_trim {
                 cs.csctl1().write(|w| w.dcorsel().variant(target.range));
             } else {
                 cs.csctl1().write(|w| {
-                    unsafe { w.dcoftrimen().set_bit().dcoftrim().bits(DCOFTRIM_START).dcorsel().variant(target.range) }
+                    w.dcoftrimen().set_bit().dcoftrim().set(DCOFTRIM_START).dcorsel().variant(target.range)
                 });
             }
 
@@ -1439,7 +1435,7 @@ impl<SMCLK: SmclkState, XT1CLK: Xt1State> ClockConfig<MclkDefined, SMCLK, XT1CLK
         let mut prev_tap: Option<u16> = None;
         loop {
             // 7. Set the DCO tap to the middle of its range (SLAU445I 3.2.11.2, p. 107, step 7)
-            cs.csctl0().write(|w| unsafe { w.bits(DCO_TAP_MID) });
+            cs.csctl0().write(|w| w.dco().set(DCO_TAP_MID));
             // 8. Clear DCOFFG, until it reads back clear as TI's routine does (SLAU445I 3.2.11.2,
             //    p. 107, step 8). Right after the FLL is enabled it takes several writes (measured
             //    on an MSP430FR2476), and a flag left set would end step 10 at once, recording a
@@ -1462,7 +1458,7 @@ impl<SMCLK: SmclkState, XT1CLK: Xt1State> ClockConfig<MclkDefined, SMCLK, XT1CLK
             //     step 11)
             let csctl0 = cs.csctl0().read();
             let csctl1 = cs.csctl1().read();
-            let tap = csctl0.bits() & DCO_TAP_MASK;
+            let tap = csctl0.dco().bits();
             let delta = tap.abs_diff(DCO_TAP_MID);
             // 12. Record the registers if this tap is the closest to the middle so far (SLAU445I
             //     3.2.11.2, p. 107, step 12)
@@ -1487,7 +1483,7 @@ impl<SMCLK: SmclkState, XT1CLK: Xt1State> ClockConfig<MclkDefined, SMCLK, XT1CLK
             };
             match next_trim {
                 Some(next_trim) if !crossed => {
-                    cs.csctl1().modify(|_, w| unsafe { w.dcoftrim().bits(next_trim) });
+                    cs.csctl1().modify(|_, w| w.dcoftrim().set(next_trim));
                     prev_tap = Some(tap);
                 }
                 _ => break,
@@ -1775,20 +1771,7 @@ impl<RANGE> Xt1clk<RANGE> {
 /// - `TooFast`: the DCO is too fast (10b). With [`ClockConfig::reset_on_fll_unlock`] this resets the device.
 /// - `OutOfRange`: the DCO is out of its range (11b, "DCOERROR"). FLLUNLOCK also reads 11b "as long as the
 ///   DCOFFG flag is set" (SLAU445I Table 3-11, p. 121).
-///
-/// (The PACs name the FLLUNLOCK values differently, so this enum is read from the register's bits.)
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum FllStatus {
-    /// The DCO runs at the frequency the FLL locks it to
-    Locked,
-    /// The DCO is too slow
-    TooSlow,
-    /// The DCO is too fast
-    TooFast,
-    /// The DCO is out of its range
-    OutOfRange,
-}
+pub use crate::_pac::cs::csctl7::Fllunlock as FllStatus;
 
 /// The FLL's current lock status (CSCTL7.FLLUNLOCK, SLAU445I Table 3-11, p. 121), for example to watch the
 /// FLL follow an external XT1 reference. It's only meaningful while the FLL runs: "When the FLL is enabled,
@@ -1797,12 +1780,7 @@ pub enum FllStatus {
 #[inline]
 pub fn fll_status() -> FllStatus {
     let cs = unsafe { &*_pac::Cs::ptr() };
-    match cs.csctl7().read().fllunlock().bits() {
-        0b00 => FllStatus::Locked,
-        0b01 => FllStatus::TooSlow,
-        0b10 => FllStatus::TooFast,
-        _ => FllStatus::OutOfRange,
-    }
+    cs.csctl7().read().fllunlock().variant()
 }
 
 /// What the DCO has been since the FLL's unlock history was last cleared, as CSCTL7.FLLUNLOCKHIS records it
@@ -1812,20 +1790,7 @@ pub fn fll_status() -> FllStatus {
 /// - `TooSlow`: the DCO has been too slow (01b).
 /// - `TooFast`: the DCO has been too fast (10b).
 /// - `TooSlowAndFast`: the DCO has been both (11b).
-///
-/// (The PACs name the FLLUNLOCKHIS values differently, so this enum is read from the register's bits.)
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum FllUnlockHistory {
-    /// The FLL stayed locked
-    Locked,
-    /// The DCO has been too slow
-    TooSlow,
-    /// The DCO has been too fast
-    TooFast,
-    /// The DCO has been both too slow and too fast
-    TooSlowAndFast,
-}
+pub use crate::_pac::cs::csctl7::Fllunlockhis as FllUnlockHistory;
 
 /// What the DCO has been since [`clear_fll_unlock_history`] was last called: "As soon as any unlock condition
 /// happens, the respective bits are set and remain set until cleared by software by writing 0 to it or by a
@@ -1835,12 +1800,7 @@ pub enum FllUnlockHistory {
 #[inline]
 pub fn fll_unlock_history() -> FllUnlockHistory {
     let cs = unsafe { &*_pac::Cs::ptr() };
-    match cs.csctl7().read().fllunlockhis().bits() {
-        0b00 => FllUnlockHistory::Locked,
-        0b01 => FllUnlockHistory::TooSlow,
-        0b10 => FllUnlockHistory::TooFast,
-        _ => FllUnlockHistory::TooSlowAndFast,
-    }
+    cs.csctl7().read().fllunlockhis().variant()
 }
 
 /// Clear the FLL's unlock history (FLLUNLOCKHIS = 00b, SLAU445I Table 3-11, p. 121), and then OFIFG, which
@@ -1851,8 +1811,7 @@ pub fn clear_fll_unlock_history() {
     let cs = unsafe { &*_pac::Cs::ptr() };
     let sfr = unsafe { &*_pac::Sfr::ptr() };
     unsafe {
-        // clear_bits clears the bits the closure writes as 0
-        cs.csctl7().clear_bits(|w| w.fllunlockhis().bits(0));
+        cs.csctl7().clear_bits(|w| w.fllunlockhis().locked());
         sfr.sfrifg1().clear_bits(|w| w.ofifg().clear_bit());
     }
 }
@@ -1872,7 +1831,7 @@ pub fn enable_fll_unlock_interrupt() {
     let sfr = unsafe { &*_pac::Sfr::ptr() };
     clear_fll_unlock_history();
     unsafe {
-        cs.csctl7().set_bits(|w| w.fllwarnen().set_bit());
+        cs.csctl7().set_bits(|w| w.fllwarnen().enabled());
         sfr.sfrie1().set_bits(|w| w.ofie().set_bit());
     }
 }
@@ -1882,7 +1841,7 @@ pub fn enable_fll_unlock_interrupt() {
 #[inline]
 pub fn disable_fll_unlock_interrupt() {
     let cs = unsafe { &*_pac::Cs::ptr() };
-    unsafe { cs.csctl7().clear_bits(|w| w.fllwarnen().clear_bit()) };
+    unsafe { cs.csctl7().clear_bits(|w| w.fllwarnen().disabled()) };
 }
 
 /// For the `UNMI` interrupt handler: whether an oscillator fault requested the interrupt, see

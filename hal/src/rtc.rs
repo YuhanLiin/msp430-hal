@@ -11,9 +11,9 @@
 //! SLAU445I Table 1-26, p. 77; SLAU445I Table 1-31, p. 82; devices: SLASEC4D Table 6-9, p. 68;
 //! SLASEO7C Table 9-8, p. 50; SLASEE4C Table 6-8, p. 49).
 
+use crate::_pac::{self, rtc::rtcctl::Rtcss};
 use crate::clock::{Smclk, Xt1clk};
 use core::{convert::Infallible, marker::PhantomData};
-use crate::_pac::{self, rtc::rtcctl::Rtcss};
 
 #[cfg(feature = "rtc_aclk")]
 use crate::clock::Aclk;
@@ -48,7 +48,7 @@ pub struct RtcSmclk;
 impl RtcClockSrc for RtcSmclk {
     // RTCSS = 01b, the device-specific source (SLAU445I Table 15-2, p. 420)
     const CLK_SRC: Rtcss = Rtcss::Smclk;
-    
+
     #[cfg(feature = "rtc_aclk")]
     fn apply_sys_config() {
         // Ensure the mux is set to SMCLK (0) (RTCCKSEL: SLAU445I Table 1-26, p. 77; SLAU445I Table 1-31,
@@ -204,10 +204,9 @@ impl<SRC: RtcClockSrc> Rtc<SRC> {
         // Table 3-11, p. 121); XT1CLK is RTCSS = 10b (SLAU445I Table 15-2, p. 420).
         #[cfg(feature = "erratum_rtc15")]
         let leaving_stopped_xt1 = {
-            let xt1clk = u8::from(Rtcss::Xt1clk);
             let cs = unsafe { _pac::Cs::steal() };
-            self.periph.rtcctl().read().rtcss().bits() == xt1clk
-                && u8::from(SRC::CLK_SRC) != xt1clk
+            self.periph.rtcctl().read().rtcss().is_xt1clk()
+                && SRC::CLK_SRC != Rtcss::Xt1clk
                 && cs.csctl7().read().xt1offg().bit_is_set()
         };
         // Select the clock first, then reset the counter, which also loads `count` into the

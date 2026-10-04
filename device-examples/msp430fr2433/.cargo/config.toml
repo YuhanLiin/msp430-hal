@@ -15,6 +15,8 @@ rustflags = [
     # and PM5CTL0 at offset 10h of the PMM's 0120h (SLASE59F Table 6-24, p. 62; SLASE59F Table 6-26, p. 62).
     # MPY_TYPE comes from msp430-gcc, not from a TI document listed in REFERENCES.md.
     "-C", "link-arg=-lmul_f5",
+    # If linking fails with duplicate definitions of __muldi3, uncomment this:
+    #"-C", "link-arg=-Wl,--allow-multiple-definition", # Prevent __muldi3 dupe errors
     
     # libgcc must be linked after everything that depends on it (e.g. lmul_f5)
     "-C", "link-arg=-lgcc",

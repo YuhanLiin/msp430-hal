@@ -1,5 +1,6 @@
 use crate::ecomp::{
-    BufferSel, ComparatorDac, DacVRef, FilterStrength, Hysteresis, OutputPolarity, PowerMode,
+    BufferSel, ComparatorDac, ComparatorVector, DacVRef, FilterStrength, Hysteresis, OutputPolarity,
+    PowerMode,
 };
 
 /// Trait that links input and output types to keep business logic device independent.
@@ -74,13 +75,15 @@ pub trait ECompPeriph {
     fn en_cpiie();
     /// Clear CPIIE in CPxCTL1 (SLAU445I Table 18-3, p. 510)
     fn dis_cpiie();
-    /// CPxINT: CPIFG in bit 0, CPIIFG in bit 1 (SLAU445I Table 18-4, p. 511)
-    fn int_flags() -> u16;
-    /// Clear the CPxINT flags in `mask`. They clear by writing 1 (SLAU445I Table 18-4, p. 511: "Write 1 to
-    /// clear this bit", and measured on an MSP430FR2476: writing 0 leaves them set).
-    fn clear_int_flags(mask: u16);
+    /// Read CPIFG in CPxINT (SLAU445I Table 18-4, p. 511)
+    fn rising_flag() -> bool;
+    /// Read CPIIFG in CPxINT (SLAU445I Table 18-4, p. 511)
+    fn falling_flag() -> bool;
+    /// Clear CPIFG and CPIIFG. They clear by writing 1 (SLAU445I Table 18-4, p. 511: "Write 1 to clear this
+    /// bit", and measured on an MSP430FR2476: writing 0 leaves them set).
+    fn clear_edge_flags();
     /// Read CPxIV, which clears the highest-priority enabled flag (SLAU445I Table 18-5, p. 512)
-    fn iv() -> u16;
+    fn iv() -> ComparatorVector;
 }
 
 // Marker trait for an eCOMP DAC. Since the DAC has a typestate (hardware/software double buffer)
@@ -230,23 +233,33 @@ macro_rules! impl_ecomp {
                     comp.$cpctl1().clear_bits(|w| w.cpiie().clear_bit())
                 }
             }
-            // CPxINT (SLAU445I Table 18-4, p. 511)
+            // CPIFG in CPxINT (SLAU445I Table 18-4, p. 511)
             #[inline(always)]
-            fn int_flags() -> u16 {
+            fn rising_flag() -> bool {
                 let comp = unsafe { $COMP::steal() };
-                comp.$cpint().read().bits()
+                comp.$cpint().read().cpifg().bit()
+            }
+            // CPIIFG in CPxINT (SLAU445I Table 18-4, p. 511)
+            #[inline(always)]
+            fn falling_flag() -> bool {
+                let comp = unsafe { $COMP::steal() };
+                comp.$cpint().read().cpiifg().bit()
             }
             // CPIIFG and CPIFG clear when written with 1 (SLAU445I Table 18-4, p. 511)
             #[inline(always)]
-            fn clear_int_flags(mask: u16) {
+            fn clear_edge_flags() {
                 let comp = unsafe { $COMP::steal() };
-                comp.$cpint().write(|w| unsafe { w.bits(mask) });
+                comp.$cpint().write(|w| w.cpifg().set_bit().cpiifg().set_bit());
             }
             // CPxIV (SLAU445I Table 18-5, p. 512)
             #[inline(always)]
-            fn iv() -> u16 {
+            fn iv() -> ComparatorVector {
                 let comp = unsafe { $COMP::steal() };
-                comp.$cpiv().read().bits()
+                let r = comp.$cpiv().read();
+                let iv = r.cpiv();
+                if iv.is_cpifg() { ComparatorVector::RisingEdge }
+                else if iv.is_cpiifg() { ComparatorVector::FallingEdge }
+                else { ComparatorVector::None }
             }
         }
     };
