@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(abi_msp430_interrupt)]
 
 // Demonstrates a non-blocking master implementation, and a polling-based slave.
 // The master sends a byte to the slave, then switches to read mode. The slave receives the value and echoes it back to the master.

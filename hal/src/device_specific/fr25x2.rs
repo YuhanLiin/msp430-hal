@@ -179,8 +179,7 @@ mod i2c {
 
     /// I2C SCL pin for eUSCI B0 (remapped mapping)
     pub struct UsciB0SCLPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_i2c_pin!(UsciB0SCLPinRemapped, P2, Pin6, Alternate2);
+    impl_i2c_pin!(UsciB0SCLPinRemapped, P2, Pin6, Alternate2);
 
     /// I2C SDA pin for eUSCI B0 (default mapping)
     pub struct UsciB0SDAPinDefault;
@@ -188,8 +187,7 @@ mod i2c {
 
     /// I2C SDA pin for eUSCI B0 (remapped mapping)
     pub struct UsciB0SDAPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_i2c_pin!(UsciB0SDAPinRemapped, P2, Pin5, Alternate2);
+    impl_i2c_pin!(UsciB0SDAPinRemapped, P2, Pin5, Alternate2);
 
     /// UCLKI pin for eUSCI B0. Used as an external clock source. (default mapping)
     pub struct UsciB0UCLKIPinDefault;
@@ -197,8 +195,7 @@ mod i2c {
 
     /// UCLKI pin for eUSCI B0. Used as an external clock source. (remapped mapping)
     pub struct UsciB0UCLKIPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_i2c_pin!(UsciB0UCLKIPinRemapped, P2, Pin4, Alternate2);
+    impl_i2c_pin!(UsciB0UCLKIPinRemapped, P2, Pin4, Alternate2);
 
     impl I2cUsci<DefaultMapping> for EUsciB0 {
         type ClockPin = UsciB0SCLPinDefault;
@@ -270,6 +267,7 @@ mod serial {
         uca0statw,
         uca0rxbuf,
         uca0txbuf,
+        uca0abctl,
         uca0ie,
         uca0ifg,
         uca0iv,
@@ -456,8 +454,7 @@ mod spi {
 
     /// SPI MISO pin for eUSCI B0 (P2.6) (remapped mapping)
     pub struct UsciB0MISOPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_spi_pin!(UsciB0MISOPinRemapped, P2, Pin6, Alternate2);
+    impl_spi_pin!(UsciB0MISOPinRemapped, P2, Pin6, Alternate2);
 
     /// SPI MOSI pin for eUSCI B0 (P1.2) (default mapping)
     pub struct UsciB0MOSIPinDefault;
@@ -465,8 +462,7 @@ mod spi {
 
     /// SPI MOSI pin for eUSCI B0 (P2.5) (remapped mapping)
     pub struct UsciB0MOSIPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_spi_pin!(UsciB0MOSIPinRemapped, P2, Pin5, Alternate2);
+    impl_spi_pin!(UsciB0MOSIPinRemapped, P2, Pin5, Alternate2);
 
     /// SPI SCLK pin for eUSCI B0 (P1.1) (default mapping)
     pub struct UsciB0SCLKPinDefault;
@@ -474,8 +470,7 @@ mod spi {
 
     /// SPI SCLK pin for eUSCI B0 (P2.4) (remapped mapping)
     pub struct UsciB0SCLKPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_spi_pin!(UsciB0SCLKPinRemapped, P2, Pin4, Alternate2);
+    impl_spi_pin!(UsciB0SCLKPinRemapped, P2, Pin4, Alternate2);
 
     /// SPI STE pin for eUSCI B0 (P1.0) (default mapping)
     pub struct UsciB0STEPinDefault;
@@ -483,8 +478,7 @@ mod spi {
 
     /// SPI STE pin for eUSCI B0 (P2.3) (remapped mapping)
     pub struct UsciB0STEPinRemapped;
-    // TODO: support other mapping then only Alternate1
-    // impl_spi_pin!(UsciB0STEPinRemapped, P2, Pin3, Alternate2);
+    impl_spi_pin!(UsciB0STEPinRemapped, P2, Pin3, Alternate2);
 }
 
 /* Timer */
