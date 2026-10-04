@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+- Fixed the MSP430FR2476 `gpio` and `gpio_interrupts` examples, which used the wrong LED pins, and the LED and button descriptions of the MSP430FR2355 examples, per the LaunchPad guides. The LED variable names of the MSP430FR2476 examples match the board.
+
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
   - On the old `msp430fr2x5c-hal` crate, this added a build error telling users to switch to the new `msp430-hal` crate.
