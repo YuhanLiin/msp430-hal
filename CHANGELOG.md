@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+- Fixed `delay_ns()` and `delay_us()`, which waited whole milliseconds, at most 1 ms. They now wait the requested time, counted in MCLK cycles, plus about 60 MCLK cycles for the call. `SysDelay` also implements the embedded-hal 0.2 `DelayUs` now.
+
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
   - On the old `msp430fr2x5c-hal` crate, this added a build error telling users to switch to the new `msp430-hal` crate.
