@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Breaking: the MSP430FR25x2 ADC is 10-bit with a 1.5 V reference only, so 12-bit results and the 2.0 V and 2.5 V references are not available there. Its analog inputs are now enabled with `to_adc_mode()` (SYSCFG2.ADCPCTLx), as on the MSP430FR2433; alternate function 3 selected CapTIvate.
 - Fixed on the MSP430FR25x2: 256 bytes of information memory, pin functions as in the data sheet (CAP1.x only on the MSP430FR2522), and the MODCLK frequency constant, now the data sheet's typical 4.8 MHz.
 - The MSP430FR25x2 capture and alternate examples capture on CCR2 and output SMCLK on P1.2.
+- Breaking: the SAC amplifier modes only accept the inputs the user's guide supports (SLAU445I Table 20-1). `PositiveInput`, for the open-loop and non-inverting modes, no longer has a `Dac` variant; the inverting amplifier takes a `BiasInput` (OA+ or the DAC) and the buffer a `BufferInput` (OA+, the DAC or the paired amplifier).
+- Add `DacConfig::configure_with_interrupts()` and `Dac::data_loaded()`, for the SAC DAC interrupt that requests new data after a timer-triggered load.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
