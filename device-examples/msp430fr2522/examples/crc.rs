@@ -9,8 +9,10 @@ use panic_msp430 as _;
 #[entry]
 fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
+    // Halt the watchdog, which runs from every PUC (SLAU445I 12.2.2, p. 363)
     let _wdt = Wdt::constrain(periph.wdt_a);
 
+    // Pmm::new clears LOCKLPM5, so the pins take on their configuration (SLAU445I 8.3.1, p. 316)
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
     let mut led = p1.pin0.to_output();
@@ -21,7 +23,8 @@ fn main() -> ! {
         0x9599, 0xc58c, 0xd1e2, 0xe144, 0xb691,
     ];
 
-    // Configure the hardware CRC module, pass in the data and retrieve the signature.
+    // Configure the hardware CRC module, pass in the data and retrieve the signature. The module uses the
+    // CRC-16-CCITT polynomial x^16 + x^12 + x^5 + 1 (SLASEE4C 6.10.6, p. 53).
     let mut crc_hw = Crc::new(periph.crc, 0xFFFF);
     crc_hw.add_words_lsb(&crc_input);
     let hw_sig = crc_hw.result();
@@ -30,6 +33,8 @@ fn main() -> ! {
     let sw_sig = calculate_software_sig(0xFFFF, &crc_input);
 
     // Turn on the LED if the signatures match
+    // No board document covers an LED on P1.0: there is none for the MSP430FR25x2. P1.0 is a GPIO output,
+    // P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
     led.set_state((sw_sig == hw_sig).into()).ok();
 
     loop {
