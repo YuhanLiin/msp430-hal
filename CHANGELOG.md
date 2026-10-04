@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Document the CRC module and its examples with references to the user's guide.
 - Fixed `delay_ns()` and `delay_us()`, which waited whole milliseconds, at most 1 ms. They now wait the requested time, counted in MCLK cycles, plus about 60 MCLK cycles for the call. `SysDelay` also implements the embedded-hal 0.2 `DelayUs` now.
 - Add `delay::delay_cycles()`, which busy-waits for at least a number of MCLK cycles, like TI's `__delay_cycles()`. It needs no configured clock and works in steps of 3 cycles: the count is rounded up to a multiple of 3, so a count above 0 waits at least 3 cycles.
+- Add `Pmm::take_reset_cause()`, which reports why the device reset, `Pmm::software_bor()` and `Pmm::software_por()`, and `Pmm::set_svsh()` to turn the high-side supply voltage supervisor off in LPM2 to LPM4.
+- Add `Pmm::take_reset_cause()`, which reports why the device reset, `Pmm::trigger_bor_reset()` and `Pmm::trigger_por_reset()`, and `Pmm::set_voltage_supervisor_in_deep_lpm()` to turn the high-side supply voltage supervisor off in LPM2 to LPM4.
+- The PMM is unlocked and locked again around each register write, and `enable_internal_reference()` waits until the reference has settled.
+- Add `Pmm::enable_vref_output()`, which outputs the 1.2 V reference on the VREF+ pin. It starts the buffered bandgap (REFBGEN) and waits until it is ready (REFBGRDY).
+- `Pmm::new()` and `Pmm::new_locked()` document the data sheets' order: configure the ports, then clear LOCKLPM5.
+- Add the `reset_cause` example for the MSP430FR2476.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
