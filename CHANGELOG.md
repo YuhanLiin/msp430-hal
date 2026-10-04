@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - A pin in an alternate function can switch directly to another one with `to_alternate1()`, `to_alternate2()` and `to_alternate3()`, without passing through GPIO. Before, these methods existed but couldn't be called on a single pin.
 - Fixed `to_alternate1()`, `to_alternate2()` and `to_alternate3()` not being callable on a pin in an alternate function when its `ToAlternateN` impl only exists for one direction, such as MCLK on P1.3 of the MSP430FR247x. The pin switches directly to the other function, without passing through GPIO.
 - Add the `gpio_alternate_switch` example for the MSP430FR2476.
+- Add `TimerConfig::vloclk()`, for the timers that can be clocked from the VLO: TA0 and TA2 on the MSP430FR247x, and TA0 on the MSP430FR25x2.
+- Add timer cascading: `TimerConfig::cascade()` clocks a timer from the CCR2 output of another timer, set up with `SubTimer::into_cascade_output()` or `PwmUninit::into_cascade_output()`, so that it counts the periods of that timer. Available for TA1 (from TA0) and TA3 (from TA2) on the MSP430FR247x, TA1 (from TA0) on the MSP430FR25x2, and TB1 (from TB0) on the MSP430FR2x5x.
+- Add `TimerParts2` for timers with two capture/compare registers: TA2 and TA3 on the MSP430FR2433, which couldn't be used before. They aren't connected to any pins, so they work as timers only.
+- `Timer::count()` takes the median of three reads, for timers clocked asynchronously to MCLK.
+- Add `TimerConfig::high_impedance_trigger()`. After reset, a high eCOMP output switches the outputs of some Timer_B peripherals to high impedance (eCOMP0 those of TB0 and TB1, eCOMP1 those of TB2 and TB3), which stops their PWM; this selects the TBxTRG pin instead, or nothing.
+- Add `TimerConfig::counter_length()` for Timer_B, and `Timer::start_up_down()` for up/down counting. `Timer::resume()` now keeps the counting mode instead of switching to up mode.
+- Add `TimerConfig::compare_latch_groups()` for Timer_B (TBCLGRP), which loads the compare latches of a group of capture/compare registers together, once all of them are written, for example PWM duty cycles that must change in the same period. Measured on an MSP430FR2476, the grouping works with center-aligned PWM, and not with edge-aligned PWM, whose compare latches load when the timer reaches the old duty cycle. The MSP430FR2476 example `pwm_center_aligned` groups the two outputs of its half bridge.
+- Add the `timer_cascade` example for the MSP430FR2355, the `timer` example for the MSP430FR2433, the `timer_b_high_impedance`, `timer_b_modes`, `timer_cascade`, `timer_external_clock` and `timer_vloclk` examples for the MSP430FR2476 and the `timer_cascade` and `timer_vloclk` examples for the MSP430FR2522.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
