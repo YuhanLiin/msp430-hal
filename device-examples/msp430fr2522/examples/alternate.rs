@@ -15,9 +15,9 @@ fn main() -> ! {
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
 
-    // Convert P1.7 to SMCLK output
-    // Expect red LED to light up
-    p1.pin7.to_output().to_alternate1();
+    // Convert P1.2 to SMCLK output
+    // Expect a square wave on P1.2
+    p1.pin2.to_output().to_alternate2();
 
     loop {
         msp430::asm::nop();

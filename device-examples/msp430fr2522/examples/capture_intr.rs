@@ -36,7 +36,7 @@ static VECTOR: Mutex<UnsafeCell<Option<TBxIV<msp430fr25x2::Ta0, DefaultMapping>>
 static RED_LED: Mutex<UnsafeCell<Option<Pin<P1, Pin0, Output>>>> =
     Mutex::new(UnsafeCell::new(None));
 
-// Connect push button input to P1.6. When button is pressed, red LED should toggle. No debouncing,
+// Connect push button input to P1.5. When button is pressed, red LED should toggle. No debouncing,
 // so sometimes inputs are missed.
 #[entry]
 fn main() -> ! {
@@ -57,7 +57,7 @@ fn main() -> ! {
     let (_smclk, aclk, _delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_1MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
-        .aclk_vloclk()
+        .aclk_refoclk()
         .freeze(&mut fram);
 
     let captures = CaptureParts3::config(periph.ta0, TimerConfig::aclk(&aclk))

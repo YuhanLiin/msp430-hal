@@ -26,11 +26,11 @@ fn main() -> ! {
 
     // ADC setup.
     // Temp sensor needs >= 30 us sample time.
-    // MODCLK is < ~4.6MHz, so 256 cycles / 4.6 MHz = 55 us sample time.
+    // MODCLK is at most 5.8 MHz, so 256 cycles / 5.8 MHz = 44 us sample time.
     let mut adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,
-        Resolution::_12BIT,
+        Resolution::_10BIT,
         SamplingRate::_200KSPS,
         SampleTime::_256,
     )
