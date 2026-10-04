@@ -2,16 +2,16 @@
 //!
 //! The Smart Analog Combo (SAC) integrates an operational amplifier, a programmable gain amplifier with up to 33x
 //! gain, and a 12-bit Digital to Analog Converter (DAC) core. The SAC can be used for signal
-//! conditioning for either the input or output path.
+//! conditioning for either the input or output path. (SLAU445I chapter 20, p. 518)
 //!
-//! Only available on the MSP430FR235x.
+//! Only available on the MSP430FR235x (SLASEC4D 6.10.15, p. 79).
 //!
 //! There are four SAC modules, forming two pairs (SAC0 and SAC2, SAC1 and SAC3).
 //! The amplifiers in each pair can be fed the output of the other (e.g. SAC0 may use the output of SAC2,
 //! and SAC2 may use the output of SAC0). Both amplifiers can be fed into the respective
 //! enhanced comparator module (eCOMP) - SAC0 and SAC2 into eCOMP0, and SAC1 and SAC3 into eCOMP1.
 //!
-//! Each SAC can be put into one of four modes:
+//! Each SAC can be put into one of four modes (SLAU445I 20.2.2, p. 521):
 //! - An open-loop operational amplifier (no internal feedback):
 #![allow(rustdoc::bare_urls)] // SVG files trigger false positives
 #![doc= include_str!("../docs/sac_open_loop.svg")]
@@ -22,7 +22,7 @@
 //! - A unity-gain buffer / voltage follower:
 #![doc= include_str!("../docs/sac_buffer.svg")]
 //!
-//! In all modes the positive input to the amplifier can be connected to:
+//! In all modes the positive input to the amplifier can be connected to (SLAU445I 20.2.1.1, p. 521):
 //! - The external pin OA+,
 //! - An internal 12-bit DAC,
 //! - The output of the paired SAC opamp.
@@ -37,7 +37,7 @@
 //! To begin configuration, call [`SacConfig::begin()`]. This returns configuration objects for the DAC
 //! and for the amplifier. If the DAC is not used then it need not be configured.
 //!
-//! Pins used:
+//! Pins used (SLASEC4D Table 6-27, p. 79, to Table 6-30, p. 80):
 //!
 //! |        |   OA+  |  OA--  |   OAO   |
 //! |:------:|:------:|:------:|:-------:|
@@ -73,7 +73,18 @@ impl<SAC: SacPeriph> DacConfig<SAC> {
     /// Initialise the DAC within this SAC with the provided values.
     #[inline(always)]
     pub fn configure<'a>(self, vref: VRef<'a>, load_trigger: LoadTrigger<'_>) -> Dac<'a, SAC> {
-        SAC::configure_dac(load_trigger.into(), vref.into());
+        SAC::configure_dac(load_trigger.into(), vref.into(), false);
+        Dac { sac: PhantomData, vref_lifetime: PhantomData }
+    }
+
+    /// Initialise the DAC like [`configure()`](Self::configure), and request an interrupt each time the DAC loads a
+    /// new value: `SAC0_SAC2` for SAC0 and SAC2, `SAC1_SAC3` for SAC1 and SAC3.
+    /// Only the timer load triggers load values this way, so the interrupt is never requested with
+    /// [`LoadTrigger::Immediate`] (SLAU445I 20.2.3.5, p. 529).
+    /// Clear the request with [`Dac::data_loaded()`].
+    #[inline(always)]
+    pub fn configure_with_interrupts<'a>(self, vref: VRef<'a>, load_trigger: LoadTrigger<'_>) -> Dac<'a, SAC> {
+        SAC::configure_dac(load_trigger.into(), vref.into(), true);
         Dac { sac: PhantomData, vref_lifetime: PhantomData }
     }
 }
@@ -129,6 +140,16 @@ impl<SAC: SacPeriph> Dac<'_, SAC> {
     /// The value is masked with `0xFFF` before being written to the register.
     #[inline(always)]
     pub fn set_count(&mut self, count: u16) { SAC::set_dac_count(count); }
+
+    /// Whether the DAC has loaded the value set with [`set_count()`](Self::set_count) since the last call (DACIFG),
+    /// so the next value can be set. This clears the flag, and the interrupt request of
+    /// [`DacConfig::configure_with_interrupts()`].
+    ///
+    /// Only the timer load triggers set the flag: with [`LoadTrigger::Immediate`] this is always `false`
+    /// (SLAU445I 20.2.3.5, p. 529).
+    // SACxIV = 04h means DACIFG (SLAU445I Table 20-11, p. 537)
+    #[inline(always)]
+    pub fn data_loaded(&mut self) -> bool { SAC::dac_iv() == 0x04 }
 }
 
 /// A builder for configuring a Smart Analog Combo (SAC) unit's amplifier
@@ -149,7 +170,8 @@ impl<SAC: SacPeriph> AmpConfig<NoModeSet, SAC> {
         AmpConfig { mode: PhantomData, reg: PhantomData }
     }
 
-    /// Begin configuring this SAC as an inverting amplifier.
+    /// Begin configuring this SAC as an inverting amplifier. The positive input sets the bias of the output
+    /// (SLAU445I 20.2.2.4, p. 525).
     #[inline(always)]
     pub fn inverting_amplifier(
         self,
@@ -295,9 +317,9 @@ pub enum NoninvertingGain {
 /// Power mode setting for the SAC. Controls power consumption and opamp slew rate
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PowerMode {
-    /// High slew rate, high power consumption - 3 V/us @ 1mA
+    /// High slew rate, high power consumption - 3 V/us @ 350 uA (SLASEC4D Table 5-25, p. 55)
     HighPerformance,
-    /// Low slew rate, low power consumption - 1 V/us @ 200uA
+    /// Low slew rate, low power consumption - 1 V/us @ 120 uA (SLASEC4D Table 5-25, p. 55)
     LowPower,
 }
 impl From<PowerMode> for bool {
