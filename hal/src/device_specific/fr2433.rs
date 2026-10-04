@@ -91,7 +91,9 @@ mod adc {
 }
 
 /* Backup Memory */
-/// Size of the Backup Memory segment on this device, in bytes
+/// Size of the Backup Memory segment on this device, in bytes (SLASE59F 6.10.10, p. 52: "This device
+/// provides up to 32 bytes"; SLASE59F Table 6-24, p. 62: base 0660h, size 0020h; BAKMEM0 to BAKMEM15:
+/// SLASE59F Table 6-43, p. 68 and SLAU445I Table 7-1, p. 310)
 pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */

@@ -150,7 +150,9 @@ mod adc {
 }
 
 /* Backup Memory */
-/// Size of the Backup Memory segment on this device, in bytes
+/// Size of the Backup Memory segment on this device, in bytes (SLASEO7C 9.10.10, p. 61: "This device
+/// provides up to 32 bytes that are retained during LPM3.5"; BAKMEM0 to BAKMEM15:
+/// SLASEO7C Table 9-54, p. 81)
 pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */
