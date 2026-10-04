@@ -92,10 +92,10 @@ erratum_rtc15 = [] # The RTC hangs when moved off a stopped XT1CLK (SLAZ695J RTC
 [dependencies]
 defmt = {version = "1.0", optional = true }
 msp430 = "0.4.0"
-msp430fr2355 = { version = "0.7.0", path = "../../msp430fr2355", features = ["rt", "critical-section"], optional = true }
-msp430fr2433 = { version = "0.3.0", path = "../../msp430fr2433", features = ["rt", "critical-section"], optional = true }
-msp430fr247x = { version = "0.4.0", path = "../../msp430fr247x", features = ["rt", "critical-section"], optional = true }
-msp430fr25x2 = { version = "0.4.0", path = "../../msp430fr25x2", features = ["rt", "critical-section"], optional = true }
+msp430fr2355 = { version = "0.7.0", features = ["rt", "critical-section"], optional = true }
+msp430fr2433 = { version = "0.3.0", features = ["rt", "critical-section"], optional = true }
+msp430fr247x = { version = "0.4.0", features = ["rt", "critical-section"], optional = true }
+msp430fr25x2 = { version = "0.4.0", features = ["rt", "critical-section"], optional = true }
 nb = "1.1"
 critical-section = "1.0.0"
 void = { version = "1.0.2", default-features = false, optional = true }
