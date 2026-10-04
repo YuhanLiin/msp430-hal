@@ -847,9 +847,10 @@ fn xt1_hf_fll_ref_divider(freq: u32) -> (u32, Fllrefdiv) {
         // them /512 is the closest available.
         #[cfg(feature = "enhanced_cs")]
         let res = if freq <= 22_000_000 {
-            (freq / 640, Fllrefdiv::_640)
+            // The PAC doesn't name these two values (FLLREFDIV = 110b and 111b) by their divider yet
+            (freq / 640, Fllrefdiv::Fllrefdiv6)
         } else {
-            (freq / 768, Fllrefdiv::_768)
+            (freq / 768, Fllrefdiv::Fllrefdiv7)
         };
         #[cfg(not(feature = "enhanced_cs"))]
         let res = (freq / 512, Fllrefdiv::_512);

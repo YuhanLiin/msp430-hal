@@ -14,7 +14,9 @@ use msp430_hal::{
 use panic_msp430 as _;
 
 // Red LED blinks 2 seconds on, 2 off
+// (The RTC counts VLOCLK, 10 kHz typical (SLASEC4D Table 5-8, p. 40), divided by 10, up to 2000.)
 // Pressing P2.3 button toggles red LED
+// (LED1, red, on P1.0; button S2 on P2.3, which connects the pin to GND: SLAU680 Figure 18, p. 26)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
