@@ -262,26 +262,26 @@ pub const INFO_MEM_SIZE: usize = 512;
 mod pwm {
     use crate::{gpio::*, pac::*, pwm::*};
 
+    // Each compare output on its pin in the timer function, P1SELx = 10 with P1DIR = 1 (SLASE59F
+    // Table 6-11, p. 50, and SLASE59F Table 6-12, p. 51; SLASE59F Table 6-17, p. 55). CCR0 has no pin
+    // (SLASE59F 6.10.8, p. 50).
     // TA0
     impl PwmPeriph<CCR1> for Timer0A3 {
-        type Gpio = Pin<P1, Pin1, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin1, Alternate2<Output>>; // TA0.1 on P1.1: P1SELx = 10, P1DIR = 1
     }
     impl PwmPeriph<CCR2> for Timer0A3 {
-        type Gpio = Pin<P1, Pin2, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin2, Alternate2<Output>>; // TA0.2 on P1.2: P1SELx = 10, P1DIR = 1
     }
 
     // TA1
     impl PwmPeriph<CCR1> for Timer1A3 {
-        type Gpio = Pin<P1, Pin5, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin5, Alternate2<Output>>; // TA1.1 on P1.5: P1SELx = 10, P1DIR = 1
     }
     impl PwmPeriph<CCR2> for Timer1A3 {
-        type Gpio = Pin<P1, Pin4, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin4, Alternate2<Output>>; // TA1.2 on P1.4: P1SELx = 10, P1DIR = 1
     }
 
+    // TA2 and TA3 are "only internally connected and do not support PWM output" (SLASE59F 6.10.8, p. 51)
     // TA2
     // None
 

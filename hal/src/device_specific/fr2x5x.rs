@@ -497,60 +497,51 @@ pub const INFO_MEM_SIZE: usize = 512;
 mod pwm {
     use crate::{gpio::*, pac::*, pwm::*};
 
-    // TB0
+    // Compare outputs TBx.n (SLASEC4D Tables 6-16 to 6-19, p. 73 to p. 75), on the pins with PxDIR = 1
+    // in the pin function tables. CCR0 sets the period and has no pin (SLASEC4D 6.10.9, p. 73).
+
+    // TB0: P1SELx = 10 (SLASEC4D Table 6-16, p. 73; SLASEC4D Table 6-63, p. 96)
     impl PwmPeriph<CCR1> for Tb0 {
-        type Gpio = Pin<P1, Pin6, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin6, Alternate2<Output>>; // TB0.1, P1SELx = 10
     }
     impl PwmPeriph<CCR2> for Tb0 {
-        type Gpio = Pin<P1, Pin7, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin7, Alternate2<Output>>; // TB0.2, P1SELx = 10
     }
 
-    // TB1
+    // TB1: P2SELx = 01 (SLASEC4D Table 6-17, p. 74; SLASEC4D Table 6-64, p. 98)
     impl PwmPeriph<CCR1> for Tb1 {
-        type Gpio = Pin<P2, Pin0, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P2, Pin0, Alternate1<Output>>; // TB1.1, P2SELx = 01
     }
     impl PwmPeriph<CCR2> for Tb1 {
-        type Gpio = Pin<P2, Pin1, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P2, Pin1, Alternate1<Output>>; // TB1.2, P2SELx = 01
     }
 
-    // TB2
+    // TB2: P5SELx = 01 (SLASEC4D Table 6-18, p. 74; SLASEC4D Table 6-67, p. 104)
     impl PwmPeriph<CCR1> for Tb2 {
-        type Gpio = Pin<P5, Pin0, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P5, Pin0, Alternate1<Output>>; // TB2.1, P5SELx = 01
     }
     impl PwmPeriph<CCR2> for Tb2 {
-        type Gpio = Pin<P5, Pin1, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P5, Pin1, Alternate1<Output>>; // TB2.2, P5SELx = 01
     }
 
-    // TB3
+    // TB3: P6SELx = 01 (SLASEC4D Table 6-19, p. 75; SLASEC4D Table 6-68, p. 106)
     impl PwmPeriph<CCR1> for Tb3 {
-        type Gpio = Pin<P6, Pin0, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin0, Alternate1<Output>>; // TB3.1, P6SELx = 01
     }
     impl PwmPeriph<CCR2> for Tb3 {
-        type Gpio = Pin<P6, Pin1, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin1, Alternate1<Output>>; // TB3.2, P6SELx = 01
     }
     impl PwmPeriph<CCR3> for Tb3 {
-        type Gpio = Pin<P6, Pin2, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin2, Alternate1<Output>>; // TB3.3, P6SELx = 01
     }
     impl PwmPeriph<CCR4> for Tb3 {
-        type Gpio = Pin<P6, Pin3, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin3, Alternate1<Output>>; // TB3.4, P6SELx = 01
     }
     impl PwmPeriph<CCR5> for Tb3 {
-        type Gpio = Pin<P6, Pin4, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin4, Alternate1<Output>>; // TB3.5, P6SELx = 01
     }
     impl PwmPeriph<CCR6> for Tb3 {
-        type Gpio = Pin<P6, Pin5, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin5, Alternate1<Output>>; // TB3.6, P6SELx = 01
     }
 }
 

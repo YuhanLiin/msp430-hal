@@ -14,6 +14,8 @@ use msp430_hal::{
 use panic_msp430 as _;
 
 // P6.4 LED should be bright, P6.3 LED should be dim
+// (LEDs connected externally: the LaunchPad's LEDs are on P1.0 and P6.6 (SLAU680 Figure 18, p. 26), and
+// P6.4 and P6.3 are pins 35 and 36 of the BoosterPack header (SLAU680 Figure 10, p. 15).)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -31,6 +33,8 @@ fn main() -> ! {
         .freeze(&mut fram);
 
     let pwm = PwmParts7::new(periph.tb3, TimerConfig::smclk(&smclk), 5000);
+    // TB3.4 on P6.3 and TB3.5 on P6.4, P6SELx = 01 with P6DIR = 1 (SLASEC4D Table 6-68, p. 106;
+    // SLASEC4D Table 6-19, p. 75)
     let mut pwm4 = pwm.pwm4.init(p6.pin3.to_output().to_alternate1());
     let mut pwm5 = pwm.pwm5.init(p6.pin4.to_output().to_alternate1());
 

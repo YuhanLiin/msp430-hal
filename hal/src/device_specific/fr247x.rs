@@ -586,84 +586,99 @@ pub const INFO_MEM_SIZE: usize = 512;
 
 /* PWM */
 mod pwm {
-    use crate::{gpio::*, pac::*, pwm::*};
+    use crate::{gpio::*, pac::*, pin_mapping::RemappedMapping, pwm::*};
 
-    // TA0
+    // TA2 and TA3 outputs with TAxRMP set (SLASEO7C Table 9-16, p. 60; TA2RMP and TA3RMP are SYSCFG3
+    // bits 2 and 3, SLAU445I Table 1-32, p. 83). PxSELx values:
+    // SLASEO7C Tables 9-26 to 9-28, p. 68 to p. 70.
+    impl PwmPeriph<CCR0, RemappedMapping> for Ta2 {
+        type Gpio = Pin<P5, Pin6, Alternate2<Output>>; // P5.6 TA2.0, P5SELx = 10, TA2RMP = 1
+    }
+    impl PwmPeriph<CCR1, RemappedMapping> for Ta2 {
+        type Gpio = Pin<P5, Pin7, Alternate1<Output>>; // P5.7 TA2.1, P5SELx = 01, TA2RMP = 1
+    }
+    impl PwmPeriph<CCR2, RemappedMapping> for Ta2 {
+        type Gpio = Pin<P6, Pin0, Alternate1<Output>>; // P6.0 TA2.2, P6SELx = 01, TA2RMP = 1
+    }
+    // TA3 outputs with TA3RMP set (SLASEO7C Table 9-16, p. 60; pins: SLASEO7C Table 9-26, p. 68;
+    // SLASEO7C Table 9-27, p. 69)
+    impl PwmPeriph<CCR0, RemappedMapping> for Ta3 {
+        type Gpio = Pin<P5, Pin3, Alternate2<Output>>; // P5.3 TA3.0, P5SELx = 10, TA3RMP = 1
+    }
+    impl PwmPeriph<CCR1, RemappedMapping> for Ta3 {
+        type Gpio = Pin<P4, Pin6, Alternate2<Output>>; // P4.6 TA3.1, P4SELx = 10, TA3RMP = 1
+    }
+    impl PwmPeriph<CCR2, RemappedMapping> for Ta3 {
+        type Gpio = Pin<P4, Pin5, Alternate2<Output>>; // P4.5 TA3.2, P4SELx = 10, TA3RMP = 1
+    }
+
+    // TA0 (SLASEO7C Table 9-12, p. 55; pins: SLASEO7C Table 9-23, p. 65). TA0 and TA1 have no CCR0
+    // output pin ("Not used": SLASEO7C Table 9-12, p. 55; SLASEO7C Table 9-13, p. 56).
+    // SLASEO7C 9.10.8, p. 55 names TA0 and TA2 as the timers whose CCR0 is "not externally connected",
+    // but SLASEO7C Table 9-14, p. 58 and SLASEO7C Table 9-24, p. 66 put TA2.0 on P2.3.
     impl PwmPeriph<CCR1> for Ta0 {
-        type Gpio = Pin<P1, Pin1, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin1, Alternate2<Output>>; // P1.1 TA0.1, P1SELx = 10
     }
     impl PwmPeriph<CCR2> for Ta0 {
-        type Gpio = Pin<P1, Pin2, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin2, Alternate2<Output>>; // P1.2 TA0.2, P1SELx = 10
     }
 
-    // TA1
+    // TA1 (SLASEO7C Table 9-13, p. 56; pins: SLASEO7C Table 9-23, p. 65)
     impl PwmPeriph<CCR1> for Ta1 {
-        type Gpio = Pin<P1, Pin5, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin5, Alternate2<Output>>; // P1.5 TA1.1, P1SELx = 10
     }
     impl PwmPeriph<CCR2> for Ta1 {
-        type Gpio = Pin<P1, Pin4, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P1, Pin4, Alternate2<Output>>; // P1.4 TA1.2, P1SELx = 10
     }
 
-    // TA2
+    // TA2, default pins, TA2RMP = 0 (SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-16, p. 60; pins:
+    // SLASEO7C Table 9-24, p. 66; SLASEO7C Table 9-25, p. 67)
     impl PwmPeriph<CCR0> for Ta2 {
-        type Gpio = Pin<P2, Pin3, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P2, Pin3, Alternate1<Output>>; // P2.3 TA2.0, P2SELx = 01, TA2RMP = 0
     }
     impl PwmPeriph<CCR1> for Ta2 {
-        type Gpio = Pin<P3, Pin3, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P3, Pin3, Alternate1<Output>>; // P3.3 TA2.1, P3SELx = 01, TA2RMP = 0
     }
     impl PwmPeriph<CCR2> for Ta2 {
-        type Gpio = Pin<P3, Pin0, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P3, Pin0, Alternate1<Output>>; // P3.0 TA2.2, P3SELx = 01, TA2RMP = 0
     }
 
-    // TA3
+    // TA3, default pins, TA3RMP = 0 (SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-16, p. 60; pins:
+    // SLASEO7C Table 9-25, p. 67; SLASEO7C Table 9-26, p. 68)
     impl PwmPeriph<CCR0> for Ta3 {
-        type Gpio = Pin<P4, Pin1, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P4, Pin1, Alternate1<Output>>; // P4.1 TA3.0, P4SELx = 01, TA3RMP = 0
     }
     impl PwmPeriph<CCR1> for Ta3 {
-        type Gpio = Pin<P4, Pin0, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P4, Pin0, Alternate1<Output>>; // P4.0 TA3.1, P4SELx = 01, TA3RMP = 0
     }
     impl PwmPeriph<CCR2> for Ta3 {
-        type Gpio = Pin<P3, Pin7, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P3, Pin7, Alternate1<Output>>; // P3.7 TA3.2, P3SELx = 01, TA3RMP = 0
     }
 
-    // TB0
+    // TB0 (SLASEO7C Table 9-15, p. 59; pins: SLASEO7C Table 9-26, p. 68; SLASEO7C Table 9-27, p. 69;
+    // SLASEO7C Table 9-28, p. 70). SLASEO7C Figure 9-3, p. 60 labels the CCR5 and CCR6 outputs P5.3
+    // and P5.4; SLASEO7C Table 9-15, p. 59, SLASEO7C Table 9-26, p. 68 and SLASEO7C Table 7-2, p. 18
+    // give P4.3 and P4.4.
     impl PwmPeriph<CCR0> for Tb0 {
-        type Gpio = Pin<P6, Pin2, Alternate1<Output>>;
-        const ALT: Alt = Alt::Alt1;
+        type Gpio = Pin<P6, Pin2, Alternate1<Output>>; // P6.2 TB0.0, P6SELx = 01 (SLASEO7C Table 9-28, p. 70)
     }
     impl PwmPeriph<CCR1> for Tb0 {
-        type Gpio = Pin<P4, Pin7, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P4, Pin7, Alternate2<Output>>; // P4.7 TB0.1, P4SELx = 10 (SLASEO7C Table 9-26, p. 68)
     }
     impl PwmPeriph<CCR2> for Tb0 {
-        type Gpio = Pin<P5, Pin0, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P5, Pin0, Alternate2<Output>>; // P5.0 TB0.2, P5SELx = 10 (SLASEO7C Table 9-27, p. 69)
     }
     impl PwmPeriph<CCR3> for Tb0 {
-        type Gpio = Pin<P5, Pin1, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P5, Pin1, Alternate2<Output>>; // P5.1 TB0.3, P5SELx = 10 (SLASEO7C Table 9-27, p. 69)
     }
     impl PwmPeriph<CCR4> for Tb0 {
-        type Gpio = Pin<P5, Pin2, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P5, Pin2, Alternate2<Output>>; // P5.2 TB0.4, P5SELx = 10 (SLASEO7C Table 9-27, p. 69)
     }
     impl PwmPeriph<CCR5> for Tb0 {
-        type Gpio = Pin<P4, Pin3, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P4, Pin3, Alternate2<Output>>; // P4.3 TB0.5, P4SELx = 10 (SLASEO7C Table 9-26, p. 68)
     }
     impl PwmPeriph<CCR6> for Tb0 {
-        type Gpio = Pin<P4, Pin4, Alternate2<Output>>;
-        const ALT: Alt = Alt::Alt2;
+        type Gpio = Pin<P4, Pin4, Alternate2<Output>>; // P4.4 TB0.6, P4SELx = 10 (SLASEO7C Table 9-26, p. 68)
     }
 }
 

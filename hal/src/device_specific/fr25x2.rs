@@ -276,21 +276,17 @@ mod pwm {
     // TA0: TA0.1 on P1.4 and TA0.2 on P1.5 (SLASEE4C Table 6-15, p. 58)
     impl PwmPeriph<CCR1> for Ta0 {
         type Gpio = Pin<P1, Pin4, Alternate2<Output>>; // TA0.1, P1SELx = 10, P1DIR = 1
-        const ALT: Alt = Alt::Alt2;
     }
     impl PwmPeriph<CCR2> for Ta0 {
         type Gpio = Pin<P1, Pin5, Alternate2<Output>>; // TA0.2, P1SELx = 10, P1DIR = 1
-        const ALT: Alt = Alt::Alt2;
     }
 
     // TA1: TA1.1 on P2.2 and TA1.2 on P2.3 (SLASEE4C Table 6-16, p. 60)
     impl PwmPeriph<CCR1> for Ta1 {
         type Gpio = Pin<P2, Pin2, Alternate1<Output>>; // TA1.1, P2SELx = 01, P2DIR = 1
-        const ALT: Alt = Alt::Alt1;
     }
     impl PwmPeriph<CCR2> for Ta1 {
         type Gpio = Pin<P2, Pin3, Alternate1<Output>>; // TA1.2, P2SELx = 01, P2DIR = 1
-        const ALT: Alt = Alt::Alt1;
     }
 }
 
