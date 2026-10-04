@@ -9,11 +9,15 @@ use panic_msp430 as _;
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2433::Peripherals::take().unwrap();
+    // Hold the watchdog (WDTHOLD, SLAU445I Table 12-2, p. 366: after a PUC the WDT runs, SLAU445I 12.2.2,
+    // p. 363)
     let _wdt = Wdt::constrain(periph.watchdog_timer);
 
+    // Pmm::new clears LOCKLPM5 (SLAU445I Table 2-7, p. 97). SLASE59F 6.10.3, p. 46 sets the ports up before
+    // that; clearing it first leaves the pins inputs until they are set up (SLAU445I 8.3.1, p. 316).
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
-    let mut led = p1.pin0.to_output();
+    let mut led = p1.pin0.to_output(); // Red LED1 (SLAU739 Figure 18, p. 23)
     led.set_low().ok();
 
     // Some random data to create a signature over. Can be modified.
@@ -25,6 +29,8 @@ fn main() -> ! {
     ];
 
     // Configure the hardware CRC module, pass in the data and retrieve the signature.
+    // (The seed goes into CRCINIRES, the data into CRCDI or CRCDIRB, and the signature is read from
+    // CRCINIRES: SLAU445I 11.3, p. 354.)
     let mut crc_hw = Crc::new(periph.crc16, 0xFFFF);
     crc_hw.add_words_lsb(&crc_input);
     let hw_sig = crc_hw.result();
@@ -46,6 +52,7 @@ fn calculate_software_sig(seed: u16, data: &[u16]) -> u16 {
     for val in data {
         let low_byte = (val & 0xFF) as u8;
         let high_byte = (val >> 8) as u8;
+        // The CRC module processes the lower byte of a word first (SLAU445I 11.3.1, p. 354)
         ccitt_update(&mut sig, low_byte);
         ccitt_update(&mut sig, high_byte);
     }
@@ -53,7 +60,8 @@ fn calculate_software_sig(seed: u16, data: &[u16]) -> u16 {
     sig
 }
 
-// Software algorithm - CCITT CRC16 code. Derived from msp430fr235x_CRC.c, at:
+// Software algorithm - CCITT CRC16 code, polynomial x^16 + x^12 + x^5 + 1 like the CRC module's (SLAU445I
+// 11.1, Equation 12, p. 353; SLASE59F 6.10.6, p. 49). Derived from msp430fr235x_CRC.c, at:
 // https://dev.ti.com/tirex/explore/node?node=A__AIgIaFR0j9SeqBvdp6wD2w__msp430ware__IOGqZri__LATEST
 fn ccitt_update(sig: &mut u16, input: u8) {
     let mut new = *sig;
