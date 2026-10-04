@@ -19,6 +19,9 @@ fn main() -> ! {
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
+    // UCA0SIMO on P1.7, UCA0SOMI on P1.6 and UCA0CLK on P1.5, P1SELx = 01 (SLASEC4D Table 6-14, p. 72;
+    // SLASEC4D Table 6-63, p. 96). They are pins 4, 3 and 2 of the BoosterPack header, and P1.4, the
+    // chip select, is pin 23 (SLAU680 Figure 10, p. 15).
     let mosi   = p1.pin7.to_alternate1();
     let miso   = p1.pin6.to_alternate1();
     let sck    = p1.pin5.to_alternate1();
@@ -34,7 +37,10 @@ fn main() -> ! {
     // In single master mode SCK and MOSI are always outputs.
     // Multi-master mode allows another master to control whether this device's SCK
     // and MOSI pins are outputs or high impedance via the STE pin.
+    // (SLAU445I 23.3.3.1, p. 608: with UCxSTE master-inactive, "UCxSIMO and UCxCLK are set to inputs and
+    // no longer drive the bus". See also SLAZ695J USCI50 for that 4-pin master mode.)
     let mut spi = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
+        // fBitClock = fBRCLK / UCBRx (SLAU445I 23.3.6, Equation 15, p. 609)
         .to_master_using_smclk(&smclk, 16) // 8MHz / 16 = 500kHz
         .single_master_bus(miso, mosi, sck);
 
@@ -51,6 +57,8 @@ fn main() -> ! {
         // These methods do return errors, but because we haven't used the non-blocking
         // API (from embedded-hal-nb) or interrupts the Rx buffer should never overrun because
         // the blocking interface automatically reads after every write.
+        // (UCOE is set "when a character is transferred into UCxRXBUF before the previous character was
+        // read": SLAU445I 23.4.3, p. 615)
         spi.write(&[0x12]).unwrap();
         spi.read(&mut recv[0..2]).unwrap();
         spi.transfer(&mut recv[2..], &[0x34, 0x56]).unwrap();

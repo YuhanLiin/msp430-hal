@@ -21,6 +21,7 @@ use panic_msp430 as _;
 use panic_never as _;
 
 // Prints "HELLO" when started then echos on UART1
+// (eUSCI_A1, the LaunchPad's backchannel UART to the host: SLAU680 2.2.4, p. 11)
 // Serial settings are listed in the code
 #[entry]
 fn main() -> ! {
@@ -50,6 +51,8 @@ fn main() -> ! {
             9600,
         )
         .use_aclk(&aclk)
+        // UCA1TXD on P4.3 and UCA1RXD on P4.2, P4SELx = 01 (SLASEC4D Table 6-66, p. 102), wired to the
+        // eZ-FET as BCL_TXD and BCL_RXD (SLAU680 Figure 18, p. 26)
         .split(p4.pin3.to_alternate1(), p4.pin2.to_alternate1());
 
         led.set_high().ok();
@@ -62,6 +65,7 @@ fn main() -> ! {
                 Err(RecvError::Parity)      => b'!',
                 Err(RecvError::Overrun(_))  => b'}',
                 Err(RecvError::Framing)     => b'?',
+                Err(RecvError::Break)       => b'#',
             };
             block!(tx.write(ch)).unwrap();
         }

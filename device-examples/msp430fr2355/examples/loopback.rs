@@ -38,6 +38,8 @@ where
 
 // Echoes serial input on UART1 by roundtripping to UART0
 // Only UART1 settings matter for the host
+// (UART1, eUSCI_A1, is the backchannel UART to the host: SLAU680 2.2.4, p. 11. UART0 runs in loopback
+// mode, in which "UCAxTXD is internally fed back to the receiver": SLAU445I 22.4.5, p. 596.)
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -56,6 +58,7 @@ fn main() -> ! {
     let mut led = p1.pin0.to_output();
     led.set_low().ok();
 
+    // UCA0TXD on P1.7 and UCA0RXD on P1.6, P1SELx = 01 (SLASEC4D Table 6-63, p. 96)
     let (mut tx0, mut rx0) = setup_uart(
         periph.e_usci_a0,
         p1.pin7.to_alternate1().into(),
@@ -66,6 +69,8 @@ fn main() -> ! {
         &smclk,
     );
 
+    // UCA1TXD on P4.3 and UCA1RXD on P4.2, P4SELx = 01 (SLASEC4D Table 6-66, p. 102), wired to the
+    // eZ-FET backchannel (SLAU680 Figure 18, p. 26)
     let (mut tx1, mut rx1) = setup_uart(
         periph.e_usci_a1,
         p4.pin3.to_alternate1().into(),

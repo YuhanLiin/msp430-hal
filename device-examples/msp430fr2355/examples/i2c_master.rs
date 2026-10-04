@@ -24,10 +24,15 @@ fn main() -> ! {
     let _wdt = Wdt::constrain(periph.wdt_a);
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
+    // LED1 (red) on P1.0, LED2 (green) on P6.6 (SLAU680 Figure 18, p. 26)
     let mut red_led = Batch::new(periph.p1).split(&pmm).pin0.to_output();
     let mut green_led = Batch::new(periph.p6).split(&pmm).pin6.to_output();
     let p4 = Batch::new(periph.p4).split(&pmm);
 
+    // UCB1SCL on P4.7 and UCB1SDA on P4.6, P4SELx = 01 (SLASEC4D Table 6-66, p. 102), pins 14 and 15 of
+    // the BoosterPack header (SLAU680 Figure 10, p. 15). SDA and SCL "must be connected to a positive
+    // supply voltage using a pullup resistor" (SLAU445I 24.3, p. 629); the internal pull-ups are 20 to
+    // 50 kOhm (SLASEC4D Table 5-11, p. 43).
     let scl = p4.pin7.pullup().to_alternate1(); // You may need stronger external pullup resistors
     let sda = p4.pin6.pullup().to_alternate1();
 
@@ -39,7 +44,7 @@ fn main() -> ! {
 
     let mut i2c = I2cConfig::new(periph.e_usci_b1, GlitchFilter::Max50ns)
         .as_single_master()
-        .use_smclk(&smclk, 80) // 8MHz / 80 = 100kHz
+        .use_smclk(&smclk, 80) // 8MHz / 80 = 100kHz (fBitClock = fBRCLK/UCBRx: SLAU445I 24.3.7, p. 642)
         .configure(scl, sda);
 
     loop {
@@ -58,7 +63,8 @@ fn main() -> ! {
         }
 
         // Blocking write. Write two bytes (length of buffer) to address 0x12.
-        // If a NACK is recieved the transmission is aborted.
+        // If a NACK is recieved the transmission is aborted. (On a NACK "The master must react with either
+        // a STOP condition or a repeated START condition": SLAU445I 24.3.5.2.1, p. 637)
         let wr_res = i2c.write(0x12_u8, &send_buf);
         if wr_res.is_err() {
             is_ok = false;
@@ -66,6 +72,8 @@ fn main() -> ! {
 
         // Blocking read. Read one byte from address 0x12.
         // Each byte recieved is automatically ACKed, except for the last one which is NACKed.
+        // (SLAU445I 24.3.5.2.2, p. 639: after UCTXSTP is set, "The next byte received from the slave is
+        // followed by a NACK and a STOP condition.")
         let mut recv = [0];
         let rd_res = i2c.read(0x12_u8, &mut recv);
         if rd_res.is_err() {
@@ -75,6 +83,7 @@ fn main() -> ! {
         // Do a write then a read within one transaction.
         // Commonly used to read a specific register from the slave.
         // There is no 'stop' between the write and read, only a repeated start.
+        // ("Setting UCTXSTT generates a repeated START condition": SLAU445I 24.3.5.2.1, p. 637)
         let wr_rd_res = i2c.write_read(0x12_u8, &send_buf, &mut recv);
         if wr_rd_res.is_err() {
             is_ok = false;

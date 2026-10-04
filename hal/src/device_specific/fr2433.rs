@@ -130,6 +130,8 @@ mod eusci {
         pac::*,
     };
 
+    // eUSCI_A0 and eUSCI_A1 (UART or SPI) and eUSCI_B0 (SPI or I2C) (SLASE59F 6.10.7, p. 49; SLASE59F
+    // Table 6-24, p. 62)
     eusci_steal_impl!(UsciA0SpiMode);
     eusci_steal_impl!(UsciA0UartMode);
 
@@ -149,6 +151,13 @@ mod i2c {
         pac::*,
     };
 
+    // eUSCI_B0 registers (SLASE59F Table 6-42, p. 67), in I2C mode: UCBxCTLW0 (SLAU445I Table 24-4,
+    // p. 649), UCBxCTLW1 (SLAU445I Table 24-5, p. 651), UCBxBRW and UCBxSTATW (SLAU445I Tables 24-6 and
+    // 24-7, p. 653), UCBxTBCNT (SLAU445I Table 24-8, p. 654), UCBxRXBUF and UCBxTXBUF (SLAU445I Tables
+    // 24-9 and 24-10, p. 655), UCBxI2COA0 to UCBxI2COA3 (SLAU445I Tables 24-11 to 24-14, p. 656 to
+    // p. 658), UCBxADDRX (SLAU445I Table 24-15, p. 658), UCBxADDMASK and UCBxI2CSA (SLAU445I Tables 24-16
+    // and 24-17, p. 659), UCBxIE (SLAU445I Table 24-18, p. 660), UCBxIFG (SLAU445I Table 24-19, p. 662)
+    // and UCBxIV (SLAU445I Table 24-20, p. 664)
     eusci_i2c_impl!(
         UsciB0I2cMode,
         ucb0ctlw0,
@@ -171,15 +180,19 @@ mod i2c {
         crate::pac::usci_b0_i2c_mode::ucb0ifg_i2c::R,
     );
 
-    /// I2C SCL pin for eUSCI B0 (P1.3)
+    // The pins in their eUSCI_B0 function, P1SELx = 01 (SLASE59F Table 6-10, p. 49; SLASE59F Table 6-17,
+    // p. 55)
+    /// I2C SCL pin for eUSCI B0 (P1.3, UCB0SCL, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciB0SCLPin;
     impl_i2c_pin!(UsciB0SCLPin, P1, Pin3);
 
-    /// I2C SDA pin for eUSCI B0 (P1.2)
+    /// I2C SDA pin for eUSCI B0 (P1.2, UCB0SDA, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciB0SDAPin;
     impl_i2c_pin!(UsciB0SDAPin, P1, Pin2);
 
-    /// UCLKI pin for eUSCI B0. Used as an external clock source. (P1.1)
+    /// UCLKI pin for eUSCI B0. Used as an external clock source. (P1.1, UCB0CLK, P1SELx = 01: SLASE59F
+    /// Table 6-17, p. 55; UCSSELx = 00b selects it: SLASE59F Table 6-7, p. 46 and SLAU445I Table 24-4,
+    /// p. 649)
     pub struct UsciB0UCLKIPin;
     impl_i2c_pin!(UsciB0UCLKIPin, P1, Pin1);
 
@@ -229,6 +242,12 @@ mod pwm {
 mod serial {
     use crate::{gpio::*, hw_traits::eusci::*, pac::*, serial::*};
 
+    // eUSCI_A0 and eUSCI_A1 registers (SLASE59F Table 6-40, p. 66, and SLASE59F Table 6-41, p. 67), in
+    // UART mode: UCAxCTLW0 (SLAU445I Table 22-8, p. 593), UCAxCTLW1 (SLAU445I Table 22-9, p. 594), UCAxBRW
+    // and UCAxMCTLW (SLAU445I Tables 22-10 and 22-11, p. 595), UCAxSTATW (SLAU445I Table 22-12, p. 596),
+    // UCAxRXBUF and UCAxTXBUF (SLAU445I Tables 22-13 and 22-14, p. 597), UCAxABCTL (SLAU445I Table 22-15,
+    // p. 598), UCAxIE (SLAU445I Table 22-17, p. 600), UCAxIFG
+    // (SLAU445I Table 22-18, p. 601) and UCAxIV (SLAU445I Table 22-19, p. 602)
     eusci_uart_impl!(
         UsciA0UartMode,
         uca0ctlw0,
@@ -238,6 +257,7 @@ mod serial {
         uca0statw,
         uca0rxbuf,
         uca0txbuf,
+        uca0abctl,
         uca0ie,
         uca0ifg,
         uca0iv,
@@ -253,13 +273,14 @@ mod serial {
         uca1statw,
         uca1rxbuf,
         uca1txbuf,
+        uca1abctl,
         uca1ie,
         uca1ifg,
         uca1iv,
         crate::pac::usci_a1_uart_mode::uca1statw::R
     );
 
-    impl SerialUsci for UsciA0UartMode {
+    impl SerialUsci for UsciA0UartMode{
         type ClockPin = UsciA0ClockPin;
         type TxPin = UsciA0TxPin;
         type RxPin = UsciA0RxPin;
@@ -269,27 +290,31 @@ mod serial {
         type TxPin = UsciA1TxPin;
         type RxPin = UsciA1RxPin;
     }
-    /// UCLK pin for E_USCI_A0 (P1.6)
+    // The pins in their eUSCI_A function, PxSELx = 01 (SLASE59F Table 6-10, p. 49; SLASE59F Table 6-17,
+    // p. 55, and SLASE59F Table 6-19, p. 58). UCLK is the external clock input that UCSSELx = 00b selects
+    // (SLASE59F Table 6-7, p. 46; UCSSELx in UCAxCTLW0: SLAU445I Table 22-8, p. 593).
+    /// UCLK pin for E_USCI_A0 (P1.6, UCA0CLK, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0ClockPin;
     impl_serial_pin!(UsciA0ClockPin, P1, Pin6);
 
-    /// Tx pin for E_USCI_A0 (P1.4)
+    /// Tx pin for E_USCI_A0 (P1.4, UCA0TXD, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0TxPin;
     impl_serial_pin!(UsciA0TxPin, P1, Pin4);
 
-    /// Rx pin for E_USCI_A0 (P1.5)
+    /// Rx pin for E_USCI_A0 (P1.5, UCA0RXD, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0RxPin;
     impl_serial_pin!(UsciA0RxPin, P1, Pin5);
 
-    /// UCLK pin for E_USCI_A1 (P2.4)
+    /// UCLK pin for E_USCI_A1 (P2.4, UCA1CLK, P2SELx = 01: SLASE59F Table 6-19, p. 58; not in the DSBGA
+    /// package: SLASE59F Table 4-1, p. 11)
     pub struct UsciA1ClockPin;
     impl_serial_pin!(UsciA1ClockPin, P2, Pin4);
 
-    /// Tx pin for E_USCI_A1 (P2.6)
+    /// Tx pin for E_USCI_A1 (P2.6, UCA1TXD, P2SELx = 01: SLASE59F Table 6-19, p. 58)
     pub struct UsciA1TxPin;
     impl_serial_pin!(UsciA1TxPin, P2, Pin6);
 
-    /// Rx pin for E_USCI_A1 (P2.5)
+    /// Rx pin for E_USCI_A1 (P2.5, UCA1RXD, P2SELx = 01: SLASE59F Table 6-19, p. 58)
     pub struct UsciA1RxPin;
     impl_serial_pin!(UsciA1RxPin, P2, Pin5);
 }
@@ -298,6 +323,13 @@ mod serial {
 mod spi {
     use crate::{gpio::*, hw_traits::eusci::*, pac::*, spi::*};
 
+    // eUSCI registers (SLASE59F Table 6-40, p. 66, and SLASE59F Tables 6-41 and 6-42, p. 67). In SPI mode,
+    // eUSCI_A: UCAxCTLW0 (SLAU445I Table 23-3, p. 613), UCAxBRW (SLAU445I Table 23-4, p. 614), UCAxSTATW
+    // (SLAU445I Table 23-5, p. 615), UCAxRXBUF and UCAxTXBUF (SLAU445I Tables 23-6 and 23-7, p. 616), UCAxIE
+    // and UCAxIFG (SLAU445I Tables 23-8 and 23-9, p. 617), UCAxIV (SLAU445I Table 23-10, p. 618).
+    // eUSCI_B: UCBxCTLW0 (SLAU445I Table 23-12, p. 620), UCBxBRW (SLAU445I Table 23-13, p. 621), UCBxSTATW
+    // (SLAU445I Table 23-14, p. 622), UCBxRXBUF and UCBxTXBUF (SLAU445I Tables 23-15 and 23-16, p. 623),
+    // UCBxIE and UCBxIFG (SLAU445I Tables 23-17 and 23-18, p. 624), UCBxIV (SLAU445I Table 23-19, p. 625).
     eusci_spi_impl!(
         UsciA0SpiMode,
         uca0ctlw0_spi,
@@ -356,49 +388,54 @@ mod spi {
         type STE = UsciB0STEPin;
     }
 
-    /// SPI MISO pin for eUSCI A0 (P1.5)
+    // The pins in their eUSCI function, PxSELx = 01 (SLASE59F Table 6-10, p. 49; SLASE59F Table 6-17,
+    // p. 55, SLASE59F Table 6-19, p. 58, and SLASE59F Table 6-20, p. 59)
+    /// SPI MISO pin for eUSCI A0 (P1.5, UCA0SOMI, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0MISOPin;
     impl_spi_pin!(UsciA0MISOPin, P1, Pin5);
 
-    /// SPI MOSI pin for eUSCI A0 (P1.4)
+    /// SPI MOSI pin for eUSCI A0 (P1.4, UCA0SIMO, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0MOSIPin;
     impl_spi_pin!(UsciA0MOSIPin, P1, Pin4);
 
-    /// SPI SCLK pin for eUSCI A0 (P1.6)
+    /// SPI SCLK pin for eUSCI A0 (P1.6, UCA0CLK, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0SCLKPin;
     impl_spi_pin!(UsciA0SCLKPin, P1, Pin6);
 
-    /// SPI STE pin for eUSCI A0 (P1.7)
+    /// SPI STE pin for eUSCI A0 (P1.7, UCA0STE, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciA0STEPin;
     impl_spi_pin!(UsciA0STEPin, P1, Pin7);
 
-    /// SPI MISO pin for eUSCI A1 (P2.5)
+    /// SPI MISO pin for eUSCI A1 (P2.5, UCA1SOMI, P2SELx = 01: SLASE59F Table 6-19, p. 58)
     pub struct UsciA1MISOPin;
     impl_spi_pin!(UsciA1MISOPin, P2, Pin5);
 
-    /// SPI MOSI pin for eUSCI A1 (P2.6)
+    /// SPI MOSI pin for eUSCI A1 (P2.6, UCA1SIMO, P2SELx = 01: SLASE59F Table 6-19, p. 58)
     pub struct UsciA1MOSIPin;
     impl_spi_pin!(UsciA1MOSIPin, P2, Pin6);
 
-    /// SPI SCLK pin for eUSCI A1 (P2.4)
+    /// SPI SCLK pin for eUSCI A1 (P2.4, UCA1CLK, P2SELx = 01: SLASE59F Table 6-19, p. 58; not in the
+    /// DSBGA package: SLASE59F Table 4-1, p. 11)
     pub struct UsciA1SCLKPin;
     impl_spi_pin!(UsciA1SCLKPin, P2, Pin4);
-    /// SPI STE pin for eUSCI A1. This pin does not exist for the MSP430FR2433.
+    /// SPI STE pin for eUSCI A1 (P3.1, UCA1STE, P3SELx = 01: SLASE59F Table 6-20, p. 59; not in the
+    /// DSBGA package: SLASE59F Table 4-1, p. 11)
     pub struct UsciA1STEPin;
+    impl_spi_pin!(UsciA1STEPin, P3, Pin1);
 
-    /// SPI MISO pin for eUSCI B0 (P1.3)
+    /// SPI MISO pin for eUSCI B0 (P1.3, UCB0SOMI, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciB0MISOPin;
     impl_spi_pin!(UsciB0MISOPin, P1, Pin3);
 
-    /// SPI MOSI pin for eUSCI B0 (P1.2)
+    /// SPI MOSI pin for eUSCI B0 (P1.2, UCB0SIMO, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciB0MOSIPin;
     impl_spi_pin!(UsciB0MOSIPin, P1, Pin2);
 
-    /// SPI SCLK pin for eUSCI B0 (P1.1)
+    /// SPI SCLK pin for eUSCI B0 (P1.1, UCB0CLK, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciB0SCLKPin;
     impl_spi_pin!(UsciB0SCLKPin, P1, Pin1);
 
-    /// SPI STE pin for eUSCI B0 (P1.0)
+    /// SPI STE pin for eUSCI B0 (P1.0, UCB0STE, P1SELx = 01: SLASE59F Table 6-17, p. 55)
     pub struct UsciB0STEPin;
     impl_spi_pin!(UsciB0STEPin, P1, Pin0);
 }

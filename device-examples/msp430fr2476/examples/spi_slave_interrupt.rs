@@ -4,14 +4,16 @@
 
 // This example demonstrates an SPI slave using interrupts.
 // Another eUSCI peripheral is configured as an SPI master to drive the bus.
-// P6.6 (green LED) should turn on and stay on
-// P1.0 (red LED) should blink with each sent SPI transaction
+// LED1 on P1.0, which is green, should turn on and stay on while the slave's replies are right
+// (SLAU802 Figure 19, p. 25)
 
-// Connect:
-// P1.7 <--> P4.6,
-// P1.6 <--> P4.7,
-// P1.5 <--> P4.5,
-// P1.4 <--> P4.4
+// Connect the master (eUSCI_B1) to the slave (eUSCI_A0, remapped) (SLASEO7C Table 9-11, p. 54;
+// header pins: SLAU802 Figure 10, p. 13):
+// P3.2, UCB1SIMO, J2 pin 15 <--> P5.2, UCA0SIMO, J4 pin 40
+// P3.6, UCB1SOMI, J2 pin 14 <--> P5.1, UCA0SOMI, J4 pin 39
+// P3.5, UCB1CLK,  J1 pin 7  <--> P5.0, UCA0CLK,  J4 pin 38
+// P2.7, GPIO,     J2 pin 12 <--> P4.7, UCA0STE,  J4 pin 37
+// P5.0, P5.1 and P4.7 also drive LED2 through J8 (SLAU802 Figure 19, p. 25).
 
 use core::cell::RefCell;
 
@@ -34,6 +36,7 @@ fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();
 
     let mut fram = Fram::new(periph.frctl);
+    // Stop the watchdog (WDTHOLD = 1: SLAU445I Table 12-2, p. 366)
     let _wdt = Wdt::constrain(periph.wdt_a);
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
@@ -42,20 +45,28 @@ fn main() -> ! {
     let p3 = Batch::new(periph.p3).split(&pmm);
     let p4 = Batch::new(periph.p4).split(&pmm);
     let p5 = Batch::new(periph.p5).split(&pmm);
+    // Slave, eUSCI_A0 remapped: UCA0SIMO, UCA0SOMI, UCA0CLK and UCA0STE with PxSEL = 01
+    // (SLASEO7C Table 9-27, p. 69; SLASEO7C Table 9-26, p. 68)
     let sl_mosi = p5.pin2.to_alternate1();
     let sl_miso = p5.pin1.to_alternate1();
     let sl_sclk = p5.pin0.to_alternate1();
     let sl_ste  = p4.pin7.to_alternate1();
 
+    // Master, eUSCI_B1: UCB1SIMO, UCB1SOMI and UCB1CLK with P3SEL = 01 (SLASEO7C Table 9-25, p. 67).
+    // P2.7 stays a GPIO that drives the slave's STE.
     let mosi = p3.pin2.to_alternate1();
     let miso = p3.pin6.to_alternate1();
     let sclk = p3.pin5.to_alternate1();
     let mut ste = p2.pin7.to_output();
     ste.set_high().ok();
 
-    let mut red_led = p1.pin0.to_output();
+    // LED1 on P1.0 is green, whatever the variable name says (SLAU802 Figure 19, p. 25)
+    let mut led1 = p1.pin0.to_output();
     // let mut green_led = Batch::new(periph.p6).split(&pmm).pin6.to_output();
 
+    // MCLK = SMCLK = DCOCLKDIV in the 8 MHz range (SELMS = 000b: SLAU445I Table 3-8, p. 117; DIVM,
+    // DIVS: SLAU445I Table 3-9, p. 118). ACLK from the VLO: SLASEO7C 9.10.2, p. 49; SLAU445I
+    // Table 3-1, p. 98 lists that for the enhanced clock system only, and the HAL follows the data sheet.
     let (smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
         .mclk_dcoclk(DcoclkFreqSel::_8MHz, MclkDiv::_1)
         .smclk_on(SmclkDiv::_1)
@@ -66,20 +77,27 @@ fn main() -> ! {
     // It can be configured for either a shared or exclusive bus depending on whether
     // there are other slaves on the bus. On an exclusive bus MISO is always an output.
     // On a shared bus the STE pin is used to control whether this slave's MISO is an output or high impedance pin.
+    // (While STE is inactive, "UCxSOMI is set to the input direction": SLAU445I 23.3.4.1, p. 609)
+    // UCMST = 0 makes it a slave, and UCMODE = 10b is "4-pin SPI with UCxSTE active low"; MODE_0 and
+    // MSB first are UCCKPH = 1, UCCKPL = 0, UCMSB = 1 (SLAU445I Table 23-3, p. 613).
     let mut spi_slave = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
         .to_slave()
         .shared_bus(sl_miso, sl_mosi, sl_sclk, sl_ste, StePolarity::EnabledWhenLow);
 
     // Configure another as an SPI master to drive the bus.
+    // (UCMST = 1, same clock phase and polarity: SLAU445I Table 23-12, p. 620. SMCLK is UCSSEL = 10b:
+    // SLASEO7C Table 9-8, p. 50; fBitClock = fBRCLK / UCBRx: SLAU445I 23.3.6, p. 609)
     let mut spi: Spi<_, DefaultMapping> = SpiConfig::new(periph.e_usci_b1, MODE_0, true)
-        .to_master_using_smclk(&smclk, 800) // 8MHz / 80 = 100kHz
+        .to_master_using_smclk(&smclk, 800) // 8MHz / 800 = 10kHz
         .single_master_bus(miso, mosi, sclk);
 
+    // UCRXIE enables the receive interrupt (SLAU445I Table 23-8, p. 617)
     critical_section::with(|cs| {
         spi_slave.set_rx_interrupt();
         SPI_SLAVE.replace(cs, Some(spi_slave));
     });
 
+    // Set GIE, which masks every maskable interrupt while clear (SLAU445I 1.3.3, p. 33)
     unsafe { msp430::interrupt::enable() };
 
     loop {
@@ -94,9 +112,9 @@ fn main() -> ! {
 
         ste.set_high().ok(); // Make slave MISO high impedance
 
-        // Green LED on if result matches expected
-        red_led.set_state( (recv_buf[1..] == [13, 15, 00]).into() ).ok();
-        // red_led.toggle().ok();
+        // Green LED on if result matches expected (LED1: SLAU802 Figure 19, p. 25)
+        led1.set_state( (recv_buf[1..] == [13, 15, 00]).into() ).ok();
+        // led1.toggle().ok();
 
         delay.delay_ms(1000);
     }
@@ -104,6 +122,9 @@ fn main() -> ! {
 
 static SPI_SLAVE: Mutex<RefCell<Option<SpiSlave<EUsciA0, RemappedMapping>>>> = Mutex::new(RefCell::new(None));
 
+// The eUSCI_A0 vector, UCRXIFG and UCTXIFG in SPI mode through UCA0IV (FFE0h: SLASEO7C Table 9-2,
+// p. 46). A byte that arrives before the previous one was read sets UCOE (SLAU445I 23.4.3, p. 615),
+// reported as `SpiErr::Overrun`.
 #[interrupt]
 fn EUSCI_A0() {
     critical_section::with(|cs| {

@@ -329,6 +329,7 @@ mod eusci {
         pac::*,
     };
 
+    // eUSCI_A0, eUSCI_A1, eUSCI_B0 and eUSCI_B1 (SLASEC4D 6.10.8, p. 72)
     eusci_steal_impl!(EUsciA0);
     eusci_steal_impl!(EUsciA1);
     eusci_steal_impl!(EUsciB0);
@@ -344,6 +345,8 @@ mod i2c {
         pac::*,
     };
 
+    // eUSCI_B registers in I2C mode (SLAU445I Table 24-3, p. 648): eUSCI_B0 at 0540h (SLASEC4D
+    // Table 6-51, p. 90)
     eusci_i2c_impl!(
         EUsciB0,
         ucb0ctlw0,
@@ -365,6 +368,7 @@ mod i2c {
         ucb0iv,
         crate::pac::e_usci_b0::ucb0ifg::R,
     );
+    // eUSCI_B1 at 05C0h (SLASEC4D Table 6-53, p. 91)
     eusci_i2c_impl!(
         EUsciB1,
         ucb1ctlw0,
@@ -386,27 +390,34 @@ mod i2c {
         ucb1iv,
         crate::pac::e_usci_b1::ucb1ifg::R,
     );
-    /// I2C SCL pin for eUSCI B0
+    // I2C pins, each in its PxSELx = 01 function, the macro's default Alternate1 (SLASEC4D Table 6-14,
+    // p. 72; SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-66, p. 102). UCLKI is the UCSSELx = 00b clock
+    // source (SLAU445I 24.4.1, p. 649), "Externally provided clock on the eUSCI_B SPI clock input pin"
+    // (SLAU445I Figure 24-1, p. 628), so it is the UCBxCLK pin.
+
+    /// I2C SCL pin for eUSCI B0: P1.3, UCB0SCL (P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0SCLPin;
     impl_i2c_pin!(UsciB0SCLPin, P1, Pin3);
 
-    /// I2C SDA pin for eUSCI B0
+    /// I2C SDA pin for eUSCI B0: P1.2, UCB0SDA (P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0SDAPin;
     impl_i2c_pin!(UsciB0SDAPin, P1, Pin2);
 
-    /// UCLKI pin for eUSCI B0. Used as an external clock source.
+    /// UCLKI pin for eUSCI B0. Used as an external clock source. P1.1, UCB0CLK (P1SELx = 01:
+    /// SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0UCLKIPin;
     impl_i2c_pin!(UsciB0UCLKIPin, P1, Pin1);
 
-    /// I2C SCL pin for eUSCI B1
+    /// I2C SCL pin for eUSCI B1: P4.7, UCB1SCL (P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1SCLPin;
     impl_i2c_pin!(UsciB1SCLPin, P4, Pin7);
 
-    /// I2C SDA pin for eUSCI B1
+    /// I2C SDA pin for eUSCI B1: P4.6, UCB1SDA (P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1SDAPin;
     impl_i2c_pin!(UsciB1SDAPin, P4, Pin6);
 
-    /// UCLKI pin for eUSCI B1. Used as an external clock source.
+    /// UCLKI pin for eUSCI B1. Used as an external clock source. P4.5, UCB1CLK (P4SELx = 01:
+    /// SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1UCLKIPin;
     impl_i2c_pin!(UsciB1UCLKIPin, P4, Pin5);
 
@@ -526,6 +537,8 @@ mod sac {
 mod serial {
     use crate::{gpio::*, hw_traits::eusci::*, pac::*, serial::*};
 
+    // eUSCI_A registers in UART mode (SLAU445I Table 22-7, p. 592): eUSCI_A0 at 0500h (SLASEC4D
+    // Table 6-50, p. 90)
     eusci_uart_impl!(
         EUsciA0,
         uca0ctlw0,
@@ -535,12 +548,14 @@ mod serial {
         uca0statw,
         uca0rxbuf,
         uca0txbuf,
+        uca0abctl,
         uca0ie,
         uca0ifg,
         uca0iv,
         crate::pac::e_usci_a0::uca0statw::R
     );
 
+    // eUSCI_A1 at 0580h (SLASEC4D Table 6-52, p. 91)
     eusci_uart_impl!(
         EUsciA1,
         uca1ctlw0,
@@ -550,6 +565,7 @@ mod serial {
         uca1statw,
         uca1rxbuf,
         uca1txbuf,
+        uca1abctl,
         uca1ie,
         uca1ifg,
         uca1iv,
@@ -566,35 +582,51 @@ mod serial {
         type TxPin = UsciA1TxPin;
         type RxPin = UsciA1RxPin;
     }
-    /// UCLK pin for E_USCI_A0
+    // UART pins, each in its PxSELx = 01 function, the macro's default Alternate1 (SLASEC4D Table 6-14,
+    // p. 72; SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-66, p. 102). UCSSELx = 00b selects UCLK as
+    // the clock source (SLAU445I 22.4.1, p. 593), an external clock of up to 24 MHz (SLASEC4D
+    // Table 5-14, p. 45). The UCLK pins are taken to be the UCAxCLK pins: no document names the pin for
+    // UART mode, and SLASEC4D Table 6-14, p. 72 lists no UART function on them.
+
+    /// UCLK pin for E_USCI_A0: P1.5, UCA0CLK (P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0ClockPin;
     impl_serial_pin!(UsciA0ClockPin, P1, Pin5);
 
-    /// Tx pin for E_USCI_A0
+    /// Tx pin for E_USCI_A0: P1.7, UCA0TXD (P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0TxPin;
     impl_serial_pin!(UsciA0TxPin, P1, Pin7);
 
-    /// Rx pin for E_USCI_A0
+    /// Rx pin for E_USCI_A0: P1.6, UCA0RXD (P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0RxPin;
     impl_serial_pin!(UsciA0RxPin, P1, Pin6);
 
-    /// UCLK pin for E_USCI_A1
+    /// UCLK pin for E_USCI_A1: P4.1, UCA1CLK (P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciA1ClockPin;
     impl_serial_pin!(UsciA1ClockPin, P4, Pin1);
 
-    /// Tx pin for E_USCI_A1
+    /// Tx pin for E_USCI_A1: P4.3, UCA1TXD (P4SELx = 01), or inverted (P4SELx = 10) (SLASEC4D
+    /// Table 6-66, p. 102)
     pub struct UsciA1TxPin;
     impl_serial_pin!(UsciA1TxPin, P4, Pin3);
+    // Alternate function 2 inverts the polarity of TXD and RXD (SLASEC4D 6.10.8, p. 73: "When PSEL = 10b,
+    // the inverted UART mode is enabled"; SLASEC4D Table 6-66, p. 102: inverted UCA1TXD on P4.3 and
+    // inverted UCA1RXD on P4.2 with P4SELx = 10. SLASEC4D Table 6-15, p. 73 gives RXD as P4.4, but
+    // SLASEC4D Table 6-14, p. 72 and SLASEC4D Table 6-66, p. 102 put UCA1RXD on P4.2.)
+    impl_serial_pin!(UsciA1TxPin, P4, Pin3, Alternate2);
 
-    /// Rx pin for E_USCI_A1
+    /// Rx pin for E_USCI_A1: P4.2, UCA1RXD (P4SELx = 01), or inverted (P4SELx = 10) (SLASEC4D
+    /// Table 6-66, p. 102)
     pub struct UsciA1RxPin;
     impl_serial_pin!(UsciA1RxPin, P4, Pin2);
+    impl_serial_pin!(UsciA1RxPin, P4, Pin2, Alternate2); // 10: UCA1RXD, inverted
 }
 
 /* SPI */
 mod spi {
     use crate::{gpio::*, hw_traits::eusci::*, pac::*, spi::*};
 
+    // eUSCI_A registers in SPI mode (SLAU445I Table 23-2, p. 612): eUSCI_A0 at 0500h (SLASEC4D
+    // Table 6-50, p. 90)
     eusci_spi_impl!(
         EUsciA0,
         uca0ctlw0_spi,
@@ -607,6 +639,7 @@ mod spi {
         uca0iv,
         crate::pac::e_usci_a0::uca0statw_spi::R
     );
+    // eUSCI_A1 at 0580h (SLASEC4D Table 6-52, p. 91)
     eusci_spi_impl!(
         EUsciA1,
         uca1ctlw0_spi,
@@ -619,6 +652,8 @@ mod spi {
         uca1iv,
         crate::pac::e_usci_a1::uca1statw_spi::R
     );
+    // eUSCI_B registers in SPI mode (SLAU445I Table 23-11, p. 619): eUSCI_B0 at 0540h (SLASEC4D
+    // Table 6-51, p. 90)
     eusci_spi_impl!(
         EUsciB0,
         ucb0ctlw0_spi,
@@ -631,6 +666,7 @@ mod spi {
         ucb0iv,
         crate::pac::e_usci_b0::ucb0statw_spi::R
     );
+    // eUSCI_B1 at 05C0h (SLASEC4D Table 6-53, p. 91)
     eusci_spi_impl!(
         EUsciB1,
         ucb1ctlw0_spi,
@@ -671,66 +707,70 @@ mod spi {
         type SCLK = UsciB1SCLKPin;
         type STE = UsciB1STEPin;
     }
-    /// SPI MISO pin for eUSCI A0 (P1.6)
+
+    // SPI pins, each in its PxSELx = 01 function, the macro's default Alternate1 (SLASEC4D Table 6-14,
+    // p. 72; SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-66, p. 102)
+
+    /// SPI MISO pin for eUSCI A0 (P1.6, UCA0SOMI, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0MISOPin;
     impl_spi_pin!(UsciA0MISOPin, P1, Pin6);
 
-    /// SPI MOSI pin for eUSCI A0 (P1.7)
+    /// SPI MOSI pin for eUSCI A0 (P1.7, UCA0SIMO, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0MOSIPin;
     impl_spi_pin!(UsciA0MOSIPin, P1, Pin7);
 
-    /// SPI SCLK pin for eUSCI A0 (P1.5)
+    /// SPI SCLK pin for eUSCI A0 (P1.5, UCA0CLK, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0SCLKPin;
     impl_spi_pin!(UsciA0SCLKPin, P1, Pin5);
 
-    /// SPI STE pin for eUSCI A0 (P1.4)
+    /// SPI STE pin for eUSCI A0 (P1.4, UCA0STE, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0STEPin;
     impl_spi_pin!(UsciA0STEPin, P1, Pin4);
 
-    /// SPI MISO pin for eUSCI A1 (P4.2)
+    /// SPI MISO pin for eUSCI A1 (P4.2, UCA1SOMI, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciA1MISOPin;
     impl_spi_pin!(UsciA1MISOPin, P4, Pin2);
 
-    /// SPI MOSI pin for eUSCI A1 (P4.3)
+    /// SPI MOSI pin for eUSCI A1 (P4.3, UCA1SIMO, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciA1MOSIPin;
     impl_spi_pin!(UsciA1MOSIPin, P4, Pin3);
 
-    /// SPI SCLK pin for eUSCI A1 (P4.1)
+    /// SPI SCLK pin for eUSCI A1 (P4.1, UCA1CLK, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciA1SCLKPin;
     impl_spi_pin!(UsciA1SCLKPin, P4, Pin1);
-    /// SPI STE pin for eUSCI A1 (P4.0)
+    /// SPI STE pin for eUSCI A1 (P4.0, UCA1STE, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciA1STEPin;
     impl_spi_pin!(UsciA1STEPin, P4, Pin0);
 
-    /// SPI MISO pin for eUSCI B0 (P1.3)
+    /// SPI MISO pin for eUSCI B0 (P1.3, UCB0SOMI, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0MISOPin;
     impl_spi_pin!(UsciB0MISOPin, P1, Pin3);
 
-    /// SPI MOSI pin for eUSCI B0 (P1.2)
+    /// SPI MOSI pin for eUSCI B0 (P1.2, UCB0SIMO, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0MOSIPin;
     impl_spi_pin!(UsciB0MOSIPin, P1, Pin2);
 
-    /// SPI SCLK pin for eUSCI B0 (P1.1)
+    /// SPI SCLK pin for eUSCI B0 (P1.1, UCB0CLK, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0SCLKPin;
     impl_spi_pin!(UsciB0SCLKPin, P1, Pin1);
 
-    /// SPI STE pin for eUSCI B0 (P1.0)
+    /// SPI STE pin for eUSCI B0 (P1.0, UCB0STE, P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciB0STEPin;
     impl_spi_pin!(UsciB0STEPin, P1, Pin0);
 
-    /// SPI MISO pin for eUSCI B1 (P4.7)
+    /// SPI MISO pin for eUSCI B1 (P4.7, UCB1SOMI, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1MISOPin;
     impl_spi_pin!(UsciB1MISOPin, P4, Pin7);
 
-    /// SPI MOSI pin for eUSCI B1 (P4.6)
+    /// SPI MOSI pin for eUSCI B1 (P4.6, UCB1SIMO, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1MOSIPin;
     impl_spi_pin!(UsciB1MOSIPin, P4, Pin6);
 
-    /// SPI SCLK pin for eUSCI B1 (P4.5)
+    /// SPI SCLK pin for eUSCI B1 (P4.5, UCB1CLK, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1SCLKPin;
     impl_spi_pin!(UsciB1SCLKPin, P4, Pin5);
 
-    /// SPI STE pin for eUSCI B1 (P4.4)
+    /// SPI STE pin for eUSCI B1 (P4.4, UCB1STE, P4SELx = 01: SLASEC4D Table 6-66, p. 102)
     pub struct UsciB1STEPin;
     impl_spi_pin!(UsciB1STEPin, P4, Pin4);
 }
