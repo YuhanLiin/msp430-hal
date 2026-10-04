@@ -31,11 +31,12 @@ pub trait GpioPeriph: Steal {
     fn pxsel1_set(&self, bits: u8);
     fn pxsel1_clear(&self, bits: u8);
 
-    #[cfg(not(feature = "sac"))]
+    // ADCPCTL0 to ADCPCTL7 are bits 0 to 7 of SYSCFG2 (SLAU445I Table 1-31, p. 82)
+    #[cfg(feature = "adcpctl")]
     fn adcpctl_set(&self, mask: u16) {
         unsafe { crate::_pac::Sys::steal().syscfg2().set_bits(|w| w.bits(mask)) };
     }
-    #[cfg(not(feature = "sac"))]
+    #[cfg(feature = "adcpctl")]
     fn adcpctl_clr(&self, mask: u16) {
         unsafe { crate::_pac::Sys::steal().syscfg2().clear_bits(|w| w.bits(mask)) };
     }

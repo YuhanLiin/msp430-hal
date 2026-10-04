@@ -258,31 +258,69 @@ impl<PORT: PortNum, PIN: PinNum, DIR> MaskRegisters for PinProxy<PORT, PIN, DIR>
 }
 
 trait InterruptOperations {
-    fn maybe_set_pxie(&self, b: u8);
+    fn maybe_write_pxie(&self, b: u8);
 }
 
 impl<P: GpioPeriph> InterruptOperations for P {
     #[inline(always)]
-    default fn maybe_set_pxie(&self, _b: u8) {}
+    default fn maybe_write_pxie(&self, _b: u8) {}
 }
 
 impl<P: IntrPeriph> InterruptOperations for P {
     #[inline(always)]
-    fn maybe_set_pxie(&self, b: u8) { self.pxie_set(b); }
+    fn maybe_write_pxie(&self, b: u8) { self.pxie_wr(b); }
 }
 
-impl<P: PortNum>
-    Batch<
-        P,
-        Input<Floating>,
-        Input<Floating>,
-        Input<Floating>,
-        Input<Floating>,
-        Input<Floating>,
-        Input<Floating>,
-        Input<Floating>,
-        Input<Floating>,
-    >
+/// What the terminating methods of [`Batch`] make of a pin's typestate: [`pulldown_all`](Batch::pulldown_all)
+/// and [`pullup_all`](Batch::pullup_all). The slots of pins the device doesn't have stay [`Unavailable`].
+#[doc(hidden)]
+pub trait Termination {
+    /// After `pulldown_all`
+    type Pulldown;
+    /// After `pullup_all`
+    type Pullup;
+}
+
+impl Termination for Input<Floating> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl Termination for Input<Pulldown> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl Termination for Input<Pullup> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl Termination for Output {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl<DIR> Termination for Alternate1<DIR> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl<DIR> Termination for Alternate2<DIR> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl<DIR> Termination for Alternate3<DIR> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+#[cfg(feature = "adcpctl")]
+impl<DIR> Termination for AdcMode<DIR> {
+    type Pulldown = Pd;
+    type Pullup = Pu;
+}
+impl Termination for Unavailable {
+    type Pulldown = Unavailable;
+    type Pullup = Unavailable;
+}
+
+impl<P: PortNum + PortPins>
+    Batch<P, P::Init0, P::Init1, P::Init2, P::Init3, P::Init4, P::Init5, P::Init6, P::Init7>
 {
     /// Split into a batch of individual GPIO pin proxies
     pub fn new(_port: P) -> Self { Self::create() }
@@ -370,8 +408,16 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
             .set_mask(self.pin7.pxsel1_mask());
 
         let p = unsafe { PORT::steal() };
-        // Turn off interrupts first so nothing fires during subsequent register writes
-        p.maybe_set_pxie(0);
+        // Turn off interrupts first so nothing fires during subsequent register writes, which can set
+        // PxIFG flags (SLAU445I 8.2.6, p. 315)
+        p.maybe_write_pxie(0);
+        // Pins whose PxSEL0 and PxSEL1 bits both change switch through PxSELC, so they don't pass
+        // through another function on the way (SLAU445I 8.2.5, p. 314). After that, every
+        // remaining change is a single bit.
+        let both = (p.pxsel0_rd() ^ pxsel0) & (p.pxsel1_rd() ^ pxsel1);
+        if both != 0 {
+            p.pxselc_wr(both);
+        }
         p.pxsel0_wr(pxsel0);
         p.pxsel1_wr(pxsel1);
 
@@ -559,32 +605,27 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     }
 
     /// Set all pins to inputs with pulldowns. Leaving unused pins as floating massively increases power usage (relatively speaking).
+    /// Call it first, then configure the pins you use (SLAU445I 8.3.2, p. 317).
     #[inline(always)]
-    pub fn pulldown_all(self) -> Batch<PORT, Pd, Pd, Pd, Pd, Pd, Pd, Pd, Pd> {
-        Batch {
-            pin0: make_proxy!(),
-            pin1: make_proxy!(),
-            pin2: make_proxy!(),
-            pin3: make_proxy!(),
-            pin4: make_proxy!(),
-            pin5: make_proxy!(),
-            pin6: make_proxy!(),
-            pin7: make_proxy!(),
-        }
+    pub fn pulldown_all(
+        self,
+    ) -> Batch<PORT, DIR0::Pulldown, DIR1::Pulldown, DIR2::Pulldown, DIR3::Pulldown, DIR4::Pulldown, DIR5::Pulldown, DIR6::Pulldown, DIR7::Pulldown>
+    where
+        DIR0: Termination, DIR1: Termination, DIR2: Termination, DIR3: Termination,
+        DIR4: Termination, DIR5: Termination, DIR6: Termination, DIR7: Termination,
+    {
+        Batch::create()
     }
 
     /// Set all pins to inputs with pullups. Leaving unused pins as floating massively increases power usage (relatively speaking).
     #[inline(always)]
-    pub fn pullup_all(self) -> Batch<PORT, Pu, Pu, Pu, Pu, Pu, Pu, Pu, Pu> {
-        Batch {
-            pin0: make_proxy!(),
-            pin1: make_proxy!(),
-            pin2: make_proxy!(),
-            pin3: make_proxy!(),
-            pin4: make_proxy!(),
-            pin5: make_proxy!(),
-            pin6: make_proxy!(),
-            pin7: make_proxy!(),
-        }
+    pub fn pullup_all(
+        self,
+    ) -> Batch<PORT, DIR0::Pullup, DIR1::Pullup, DIR2::Pullup, DIR3::Pullup, DIR4::Pullup, DIR5::Pullup, DIR6::Pullup, DIR7::Pullup>
+    where
+        DIR0: Termination, DIR1: Termination, DIR2: Termination, DIR3: Termination,
+        DIR4: Termination, DIR5: Termination, DIR6: Termination, DIR7: Termination,
+    {
+        Batch::create()
     }
 }

@@ -101,6 +101,14 @@ pub mod gpio {
     gpio_impl!(p4: P4 => p4in, p4out, p4dir, p4ren, p4selc, p4sel0, p4sel1, [p4ies, p4ie, p4ifg, p4iv]);
     gpio_impl!(p5: P5 => p5in, p5out, p5dir, p5ren, p5selc, p5sel0, p5sel1, [p5ies, p5ie, p5ifg, p5iv]);
     gpio_impl!(p6: P6 => p6in, p6out, p6dir, p6ren, p6selc, p6sel0, p6sel1, [p6ies, p6ie, p6ifg, p6iv]);
+
+    // Pins per port (SLASEO7C 9.10.3, p. 51; P6 in Table 9-28, p. 70)
+    impl_port_pins!(P1, 8);
+    impl_port_pins!(P2, 8);
+    impl_port_pins!(P3, 8);
+    impl_port_pins!(P4, 8);
+    impl_port_pins!(P5, 8);
+    impl_port_pins!(P6, 3);
 }
 
 /* ADC */
