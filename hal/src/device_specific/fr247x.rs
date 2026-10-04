@@ -155,74 +155,95 @@ pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */
 mod capture {
-    use crate::{capture::CapturePeriph, gpio::*, pac::*, pin_mapping::*};
+    use crate::{capture::{CapturePeriph, NoCapturePin}, gpio::*, pac::*, pin_mapping::*};
 
+    // The capture input A (CCIxA) pin of each capture/compare register, from the timer signal
+    // connections (SLASEO7C Tables 9-12 to 9-16, p. 55 to p. 60) and the pin function tables
+    // (SLASEO7C Tables 9-23 to 9-28, p. 65 to p. 70). `()` is a register without a CCIxA pin, or one the
+    // timer doesn't have: TA0 to TA3 have CCR0 to CCR2 (SLASEO7C 9.10.8, p. 55), TB0 has CCR0 to CCR6
+    // (SLASEO7C Table 9-15, p. 59).
+
+    // TA0 (SLASEO7C Table 9-12, p. 55, titled Timer0_A0; pins: SLASEO7C Table 9-23, p. 65): CCI0A is
+    // ACLK, internal
     impl CapturePeriph for Ta0 {
         type Gpio0 = ();
-        type Gpio1 = Pin<P1, Pin1, Alternate2<Input<Floating>>>;
-        type Gpio2 = Pin<P1, Pin2, Alternate2<Input<Floating>>>;
+        type Gpio1 = Pin<P1, Pin1, Alternate2<Input<Floating>>>; // P1.1 TA0.CCI1A, P1SELx = 10
+        type Gpio2 = Pin<P1, Pin2, Alternate2<Input<Floating>>>; // P1.2 TA0.CCI2A, P1SELx = 10
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
 
+    // TA1 (SLASEO7C Table 9-13, p. 56, titled Timer0_A1; pins: SLASEO7C Table 9-23, p. 65): CCI0A isn't
+    // connected (N/A), so input A of capture pin 0 is `NoCapturePin`, which can't be selected
     impl CapturePeriph for Ta1 {
-        type Gpio0 = ();
-        type Gpio1 = Pin<P1, Pin5, Alternate2<Input<Floating>>>;
-        type Gpio2 = Pin<P1, Pin4, Alternate2<Input<Floating>>>;
+        type Gpio0 = NoCapturePin;
+        type Gpio1 = Pin<P1, Pin5, Alternate2<Input<Floating>>>; // P1.5 TA1.CCI1A, P1SELx = 10
+        type Gpio2 = Pin<P1, Pin4, Alternate2<Input<Floating>>>; // P1.4 TA1.CCI2A, P1SELx = 10
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
 
+    // TA2, default pins, TA2RMP = 0 (SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-16, p. 60; pins:
+    // SLASEO7C Table 9-24, p. 66; SLASEO7C Table 9-25, p. 67)
     impl CapturePeriph<DefaultMapping> for Ta2 {
-        type Gpio0 = Pin<P2, Pin3, Alternate1<Input<Floating>>>;
-        type Gpio1 = Pin<P3, Pin3, Alternate1<Input<Floating>>>;
-        type Gpio2 = Pin<P3, Pin0, Alternate1<Input<Floating>>>;
+        type Gpio0 = Pin<P2, Pin3, Alternate1<Input<Floating>>>; // P2.3 TA2.CCI0A, P2SELx = 01, TA2RMP = 0
+        type Gpio1 = Pin<P3, Pin3, Alternate1<Input<Floating>>>; // P3.3 TA2.CCI1A, P3SELx = 01, TA2RMP = 0
+        type Gpio2 = Pin<P3, Pin0, Alternate1<Input<Floating>>>; // P3.0 TA2.CCI2A, P3SELx = 01, TA2RMP = 0
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
+    // TA2, remapped pins, TA2RMP = 1 (SLASEO7C Table 9-16, p. 60; pins: SLASEO7C Table 9-27, p. 69;
+    // SLASEO7C Table 9-28, p. 70)
     impl CapturePeriph<RemappedMapping> for Ta2 {
-        type Gpio0 = Pin<P5, Pin6, Alternate2<Input<Floating>>>;
-        type Gpio1 = Pin<P5, Pin7, Alternate1<Input<Floating>>>;
-        type Gpio2 = Pin<P6, Pin0, Alternate1<Input<Floating>>>;
+        type Gpio0 = Pin<P5, Pin6, Alternate2<Input<Floating>>>; // P5.6 TA2.CCI0A, P5SELx = 10, TA2RMP = 1
+        type Gpio1 = Pin<P5, Pin7, Alternate1<Input<Floating>>>; // P5.7 TA2.CCI1A, P5SELx = 01, TA2RMP = 1
+        type Gpio2 = Pin<P6, Pin0, Alternate1<Input<Floating>>>; // P6.0 TA2.CCI2A, P6SELx = 01, TA2RMP = 1
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
 
+    // TA3, default pins, TA3RMP = 0 (SLASEO7C Table 9-14, p. 58; SLASEO7C Table 9-16, p. 60; pins:
+    // SLASEO7C Table 9-25, p. 67; SLASEO7C Table 9-26, p. 68)
     impl CapturePeriph<DefaultMapping> for Ta3 {
-        type Gpio0 = Pin<P4, Pin1, Alternate1<Input<Floating>>>;
-        type Gpio1 = Pin<P4, Pin0, Alternate1<Input<Floating>>>;
-        type Gpio2 = Pin<P3, Pin7, Alternate1<Input<Floating>>>;
+        type Gpio0 = Pin<P4, Pin1, Alternate1<Input<Floating>>>; // P4.1 TA3.CCI0A, P4SELx = 01, TA3RMP = 0
+        type Gpio1 = Pin<P4, Pin0, Alternate1<Input<Floating>>>; // P4.0 TA3.CCI1A, P4SELx = 01, TA3RMP = 0
+        type Gpio2 = Pin<P3, Pin7, Alternate1<Input<Floating>>>; // P3.7 TA3.CCI2A, P3SELx = 01, TA3RMP = 0
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
+    // TA3, remapped pins, TA3RMP = 1 (SLASEO7C Table 9-16, p. 60; pins: SLASEO7C Table 9-26, p. 68;
+    // SLASEO7C Table 9-27, p. 69)
     impl CapturePeriph<RemappedMapping> for Ta3 {
-        type Gpio0 = Pin<P5, Pin3, Alternate2<Input<Floating>>>;
-        type Gpio1 = Pin<P4, Pin6, Alternate2<Input<Floating>>>;
-        type Gpio2 = Pin<P4, Pin5, Alternate2<Input<Floating>>>;
+        type Gpio0 = Pin<P5, Pin3, Alternate2<Input<Floating>>>; // P5.3 TA3.CCI0A, P5SELx = 10, TA3RMP = 1
+        type Gpio1 = Pin<P4, Pin6, Alternate2<Input<Floating>>>; // P4.6 TA3.CCI1A, P4SELx = 10, TA3RMP = 1
+        type Gpio2 = Pin<P4, Pin5, Alternate2<Input<Floating>>>; // P4.5 TA3.CCI2A, P4SELx = 10, TA3RMP = 1
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
 
+    // TB0 (SLASEO7C Table 9-15, p. 59, which names the CCR3 to CCR6 inputs CCI1A;
+    // SLASEO7C Table 9-26, p. 68, SLASEO7C Table 9-27, p. 69 and SLASEO7C Table 7-2, p. 18 give CCI3A
+    // to CCI6A; pins also: SLASEO7C Table 9-28, p. 70)
     impl CapturePeriph for Tb0 {
-        type Gpio0 = Pin<P6, Pin2, Alternate1<Input<Floating>>>;
-        type Gpio1 = Pin<P4, Pin7, Alternate2<Input<Floating>>>;
-        type Gpio2 = Pin<P5, Pin0, Alternate2<Input<Floating>>>;
-        type Gpio3 = Pin<P5, Pin1, Alternate2<Input<Floating>>>;
-        type Gpio4 = Pin<P5, Pin2, Alternate2<Input<Floating>>>;
-        type Gpio5 = Pin<P4, Pin3, Alternate2<Input<Floating>>>;
-        type Gpio6 = Pin<P4, Pin6, Alternate2<Input<Floating>>>;
+        type Gpio0 = Pin<P6, Pin2, Alternate1<Input<Floating>>>; // P6.2 TB0.CCI0A, P6SELx = 01
+        type Gpio1 = Pin<P4, Pin7, Alternate2<Input<Floating>>>; // P4.7 TB0.CCI1A, P4SELx = 10
+        type Gpio2 = Pin<P5, Pin0, Alternate2<Input<Floating>>>; // P5.0 TB0.CCI2A, P5SELx = 10
+        type Gpio3 = Pin<P5, Pin1, Alternate2<Input<Floating>>>; // P5.1 TB0.CCI3A, P5SELx = 10
+        type Gpio4 = Pin<P5, Pin2, Alternate2<Input<Floating>>>; // P5.2 TB0.CCI4A, P5SELx = 10
+        type Gpio5 = Pin<P4, Pin3, Alternate2<Input<Floating>>>; // P4.3 TB0.CCI5A, P4SELx = 10
+        type Gpio6 = Pin<P4, Pin4, Alternate2<Input<Floating>>>; // P4.4 TB0.CCI6A, P4SELx = 10
     }
 }
 

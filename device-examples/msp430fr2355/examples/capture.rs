@@ -19,6 +19,9 @@ use panic_msp430 as _;
 
 // Connect push button input to P1.6. When button is pressed, putty should print the # of cycles
 // since the last press. Sometimes we get 2 consecutive readings due to lack of debouncing.
+// P1.6 is pin 3 of the BoosterPack header (SLAU680 Figure 10, p. 15). The output goes to the
+// backchannel UART, "the UART on eUSCI_A1" (SLAU680 2.2.4, p. 11), whose TXD is P4.3 (SLAU680
+// Figure 18, p. 26).
 #[entry]
 fn main() -> ! {
     let periph = msp430fr2355::Peripherals::take().unwrap();
@@ -28,6 +31,7 @@ fn main() -> ! {
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p4 = Batch::new(periph.p4).split(&pmm);
+    // P1.0 drives LED1, red (SLAU680 Figure 18, p. 26)
     let mut p1 = Batch::new(periph.p1)
         .config_pin0(|p| p.to_output())
         .split(&pmm);
@@ -48,10 +52,10 @@ fn main() -> ! {
         9600,
     )
     .use_smclk(&smclk)
-    .tx_only(p4.pin3.to_alternate1());
+    .tx_only(p4.pin3.to_alternate1()); // UCA1TXD, P4SELx = 01 (SLASEC4D Table 6-66, p. 102)
 
     let captures = CaptureParts3::config(periph.tb0, TimerConfig::aclk(&aclk))
-        .config_cap1_input_A(p1.pin6.to_alternate2())
+        .config_cap1_input_A(p1.pin6.to_alternate2()) // TB0.CCI1A, P1SELx = 10 (SLASEC4D Table 6-63, p. 96)
         .config_cap1_trigger(CapTrigger::FallingEdge)
         .commit();
     let mut capture = captures.cap1;
@@ -62,6 +66,7 @@ fn main() -> ! {
             Ok(cap) => {
                 let diff = cap.wrapping_sub(last_cap);
                 last_cap = cap;
+                // LED1 on P1.0 (SLAU680 Figure 18, p. 26)
                 p1.pin0.set_high().unwrap();
                 print_num(&mut tx, diff);
             }

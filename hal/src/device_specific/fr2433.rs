@@ -96,26 +96,56 @@ pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */
 mod capture {
-    use crate::{capture::CapturePeriph, gpio::*, pac::*};
+    use crate::{capture::{CapturePeriph, NoCapturePin}, gpio::*, pac::*};
 
-    impl CapturePeriph for Timer0A3 {
-        type Gpio0 = ();
-        type Gpio1 = Pin<P1, Pin1, Alternate2<Input<Floating>>>;
-        type Gpio2 = Pin<P1, Pin2, Alternate2<Input<Floating>>>;
+    // Capture input A (CCIxA) of each capture/compare register, on its pin in the timer function: PxSELx = 10
+    // with PxDIR = 0 (SLASE59F Table 6-11, p. 50, and SLASE59F Table 6-12, p. 51; SLASE59F Table 6-17,
+    // p. 55). Both signal connection tables leave the device input of CCI0A empty, and "The CCR0 registers
+    // on Timer0_A3 and Timer1_A3 are not externally connected" (SLASE59F 6.10.8, p. 50), so input A of
+    // capture pin 0 is `NoCapturePin`, which can't be selected. Gpio3 to Gpio6 are unused: these timers
+    // have CCR0 to CCR2 only (SLASE59F 6.10.8, p. 50). CCIS in TAxCCTLn selects 00b = CCIxA, 01b = CCIxB,
+    // 10b = GND, 11b = VCC (SLAU445I Table 13-6, p. 386).
+    impl CapturePeriph for Ta0 {
+        type Gpio0 = NoCapturePin;
+        type Gpio1 = Pin<P1, Pin1, Alternate2<Input<Floating>>>; // TA0.CCI1A on P1.1: P1SELx = 10, P1DIR = 0
+        type Gpio2 = Pin<P1, Pin2, Alternate2<Input<Floating>>>; // TA0.CCI2A on P1.2: P1SELx = 10, P1DIR = 0
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
     }
 
-    impl CapturePeriph for Timer1A3 {
-        type Gpio0 = ();
-        type Gpio1 = Pin<P2, Pin5, Alternate2<Input<Floating>>>;
-        type Gpio2 = Pin<P2, Pin4, Alternate2<Input<Floating>>>;
+    impl CapturePeriph for Ta1 {
+        type Gpio0 = NoCapturePin;
+        type Gpio1 = Pin<P1, Pin5, Alternate2<Input<Floating>>>; // TA1.CCI1A on P1.5: P1SELx = 10, P1DIR = 0
+        type Gpio2 = Pin<P1, Pin4, Alternate2<Input<Floating>>>; // TA1.CCI2A on P1.4: P1SELx = 10, P1DIR = 0
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
         type Gpio6 = ();
+    }
+
+    // TA2 and TA3 have no pins. Input B of TA3's capture pins 0 and 1 are the CCR0 and CCR1 outputs of
+    // TA2 (SLASE59F Table 6-13, p. 51, and SLASE59F Table 6-14, p. 52, which call TA3 "Timer3_A3"), and both
+    // timers can capture from software (SLAU445I 13.2.4.1.1, p. 376).
+    impl CapturePeriph for Ta2 {
+        type Gpio0 = NoCapturePin;
+        type Gpio1 = NoCapturePin;
+        type Gpio2 = NoCapturePin;
+        type Gpio3 = NoCapturePin;
+        type Gpio4 = NoCapturePin;
+        type Gpio5 = NoCapturePin;
+        type Gpio6 = NoCapturePin;
+    }
+
+    impl CapturePeriph for Ta3 {
+        type Gpio0 = NoCapturePin;
+        type Gpio1 = NoCapturePin;
+        type Gpio2 = NoCapturePin;
+        type Gpio3 = NoCapturePin;
+        type Gpio4 = NoCapturePin;
+        type Gpio5 = NoCapturePin;
+        type Gpio6 = NoCapturePin;
     }
 }
 

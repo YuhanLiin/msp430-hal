@@ -37,7 +37,8 @@ static RED_LED: Mutex<UnsafeCell<Option<Pin<P1, Pin0, Output>>>> =
     Mutex::new(UnsafeCell::new(None));
 
 // Connect push button input to P1.6. When button is pressed, red LED should toggle. No debouncing,
-// so sometimes inputs are missed.
+// so sometimes inputs are missed. P1.6 is pin 3 of the BoosterPack header (SLAU680 Figure 10, p. 15),
+// and LED1, red, is on P1.0 (SLAU680 Figure 18, p. 26).
 #[entry]
 fn main() -> ! {
     let Some(periph) = msp430fr2355::Peripherals::take() else { loop {} };
@@ -59,7 +60,7 @@ fn main() -> ! {
         .freeze(&mut fram);
 
     let captures = CaptureParts3::config(periph.tb0, TimerConfig::aclk(&aclk))
-        .config_cap1_input_A(p1.pin6.to_alternate2())
+        .config_cap1_input_A(p1.pin6.to_alternate2()) // TB0.CCI1A, P1SELx = 10 (SLASEC4D Table 6-63, p. 96)
         .config_cap1_trigger(CapTrigger::FallingEdge)
         .commit();
     let mut capture = captures.cap1;
@@ -79,6 +80,8 @@ fn setup_capture<T: CapCmp<C>, C>(capture: &mut Capture<T, C>) {
     capture.enable_interrupts();
 }
 
+// The vector at FFF6h shared by TB0CCR1, TB0CCR2 and TB0IFG, decoded with TB0IV (SLASEC4D Table 6-2,
+// p. 63)
 #[interrupt]
 fn TIMER0_B1() {
     with(|cs| {

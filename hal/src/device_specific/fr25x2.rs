@@ -111,7 +111,7 @@ pub const BAK_MEM_SIZE: usize = 32;
 // A of TA0's CCR0 is ACLK, selected with `()`, and TA1's isn't connected, so it is `NoCapturePin`, which
 // can't be selected (SLASEE4C Figure 6-2, p. 54).
 mod capture {
-    use crate::{capture::CapturePeriph, gpio::*, pac::*};
+    use crate::{capture::{CapturePeriph, NoCapturePin}, gpio::*, pac::*};
 
     // TA0.CCI1A on P1.4 and TA0.CCI2A on P1.5 (SLASEE4C Table 6-15, p. 58)
     impl CapturePeriph for Ta0 {
@@ -126,7 +126,7 @@ mod capture {
 
     // TA1.CCI1A on P2.2 and TA1.CCI2A on P2.3 (SLASEE4C Table 6-16, p. 60)
     impl CapturePeriph for Ta1 {
-        type Gpio0 = ();
+        type Gpio0 = NoCapturePin;
         type Gpio1 = Pin<P2, Pin2, Alternate1<Input<Floating>>>; // TA1.CCI1A, P2SELx = 01, P2DIR = 0
         type Gpio2 = Pin<P2, Pin3, Alternate1<Input<Floating>>>; // TA1.CCI2A, P2SELx = 01, P2DIR = 0
         type Gpio3 = ();
