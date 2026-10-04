@@ -105,7 +105,7 @@ mod capture {
     // capture pin 0 is `NoCapturePin`, which can't be selected. Gpio3 to Gpio6 are unused: these timers
     // have CCR0 to CCR2 only (SLASE59F 6.10.8, p. 50). CCIS in TAxCCTLn selects 00b = CCIxA, 01b = CCIxB,
     // 10b = GND, 11b = VCC (SLAU445I Table 13-6, p. 386).
-    impl CapturePeriph for Ta0 {
+    impl CapturePeriph for Timer0A3 {
         type Gpio0 = NoCapturePin;
         type Gpio1 = Pin<P1, Pin1, Alternate2<Input<Floating>>>; // TA0.CCI1A on P1.1: P1SELx = 10, P1DIR = 0
         type Gpio2 = Pin<P1, Pin2, Alternate2<Input<Floating>>>; // TA0.CCI2A on P1.2: P1SELx = 10, P1DIR = 0
@@ -115,7 +115,7 @@ mod capture {
         type Gpio6 = ();
     }
 
-    impl CapturePeriph for Ta1 {
+    impl CapturePeriph for Timer1A3 {
         type Gpio0 = NoCapturePin;
         type Gpio1 = Pin<P1, Pin5, Alternate2<Input<Floating>>>; // TA1.CCI1A on P1.5: P1SELx = 10, P1DIR = 0
         type Gpio2 = Pin<P1, Pin4, Alternate2<Input<Floating>>>; // TA1.CCI2A on P1.4: P1SELx = 10, P1DIR = 0
@@ -128,7 +128,7 @@ mod capture {
     // TA2 and TA3 have no pins. Input B of TA3's capture pins 0 and 1 are the CCR0 and CCR1 outputs of
     // TA2 (SLASE59F Table 6-13, p. 51, and SLASE59F Table 6-14, p. 52, which call TA3 "Timer3_A3"), and both
     // timers can capture from software (SLAU445I 13.2.4.1.1, p. 376).
-    impl CapturePeriph for Ta2 {
+    impl CapturePeriph for Timer2A2 {
         type Gpio0 = NoCapturePin;
         type Gpio1 = NoCapturePin;
         type Gpio2 = NoCapturePin;
@@ -138,7 +138,7 @@ mod capture {
         type Gpio6 = NoCapturePin;
     }
 
-    impl CapturePeriph for Ta3 {
+    impl CapturePeriph for Timer3A2 {
         type Gpio0 = NoCapturePin;
         type Gpio1 = NoCapturePin;
         type Gpio2 = NoCapturePin;
