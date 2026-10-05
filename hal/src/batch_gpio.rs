@@ -272,6 +272,40 @@ impl<PORT: PortNum, PIN: PinNum, DIR> MaskRegisters for PinProxy<PORT, PIN, DIR>
     fn pxsel1_mask(&self) -> u8 { (self.pxsel1_on() as u8) << PIN::NUM }
 }
 
+// SYSCFG2.ADCPCTLx, on the devices that select ADC inputs there (SLAU445I Table 1-31, p. 82): set for a pin
+// in `AdcMode`, cleared for another pin that has an ADC input, and left alone for the other pins
+#[cfg(feature = "adcpctl")]
+trait WriteAdcPctl {
+    // The bits to set, and the bits to keep (0 clears the bit)
+    fn adcpctl_set_mask(&self) -> u16;
+    fn adcpctl_keep_mask(&self) -> u16;
+}
+#[cfg(feature = "adcpctl")]
+impl<T> WriteAdcPctl for T {
+    #[inline(always)]
+    default fn adcpctl_set_mask(&self) -> u16 { 0 }
+    #[inline(always)]
+    default fn adcpctl_keep_mask(&self) -> u16 { !0 }
+}
+#[cfg(feature = "adcpctl")]
+impl<PORT: PortNum, PIN: PinNum, DIR> WriteAdcPctl for PinProxy<PORT, PIN, DIR>
+where Pin<PORT, PIN, DIR>: ToAdcPctl
+{
+    #[inline(always)]
+    default fn adcpctl_set_mask(&self) -> u16 { 0 }
+    #[inline(always)]
+    default fn adcpctl_keep_mask(&self) -> u16 { <Pin<PORT, PIN, DIR> as ToAdcPctl>::CLR_MASK }
+}
+#[cfg(feature = "adcpctl")]
+impl<PORT: PortNum, PIN: PinNum, DIR> WriteAdcPctl for PinProxy<PORT, PIN, AdcMode<DIR>>
+where Pin<PORT, PIN, AdcMode<DIR>>: ToAdcPctl
+{
+    #[inline(always)]
+    fn adcpctl_set_mask(&self) -> u16 { <Pin<PORT, PIN, AdcMode<DIR>> as ToAdcPctl>::SET_MASK }
+    #[inline(always)]
+    fn adcpctl_keep_mask(&self) -> u16 { !0 }
+}
+
 // Only ports with interrupts have PxIE (SLAU445I 8.2.6, p. 314)
 trait InterruptOperations {
     fn maybe_write_pxie(&self, b: u8);
@@ -348,18 +382,49 @@ impl Termination for Unavailable {
     type UnusedPulldown = Unavailable;
 }
 
+/// Where a [`Batch`] starts from: a port whose registers hold their reset values ([`FromReset`]), or
+/// pins configured before ([`FromParts`])
+#[doc(hidden)]
+pub trait BatchStart {
+    /// Whether the port's registers hold their reset values
+    const AFTER_RESET: bool;
+}
+
+/// A [`Batch`] made by [`Batch::new`], from a port whose registers hold their reset values
+pub struct FromReset;
+/// A [`Batch`] made by [`Parts::batch`], from pins configured before
+pub struct FromParts;
+
+impl BatchStart for FromReset {
+    const AFTER_RESET: bool = true;
+}
+impl BatchStart for FromParts {
+    const AFTER_RESET: bool = false;
+}
+
 impl<P: PortNum + PortPins>
-    Batch<P, P::Init0, P::Init1, P::Init2, P::Init3, P::Init4, P::Init5, P::Init6, P::Init7>
+    Batch<P, P::Init0, P::Init1, P::Init2, P::Init3, P::Init4, P::Init5, P::Init6, P::Init7, FromReset>
 {
     /// Split into a batch of individual GPIO pin proxies. The pin slots the device has no pin for
     /// start out [`Unavailable`]. The pins that exist start out as floating inputs, as after a reset
     /// (SLAU445I 8.3.1, p. 316).
+    ///
+    /// The batch writes only the register bits that differ from their reset values. After every reset,
+    /// PxDIR, PxREN, PxSEL0, PxSEL1 and PxIE are 00h (SLAU445I Table 8-4, p. 319; "After a POR or PUC
+    /// reset, all port pins are configured as inputs with their module function disabled", SLAU445I
+    /// 8.3.1, p. 316), and so are the ADCPCTLx bits of SYSCFG2 (SLAU445I Table 1-31, p. 82), also after a
+    /// wake-up from LPMx.5 ("Upon exit from LPMx.5, all peripheral registers are set to their default
+    /// conditions", SLAU445I 8.3.3, p. 318). If the program wrote the port's registers before, through
+    /// the PAC, configure the pins through [`Parts::batch`], which writes every register:
+    /// `Batch::new(port).split(&pmm).batch()`.
     pub fn new(_port: P) -> Self { Self::create() }
 }
 
 /// Collection of proxies for pins 0 to 7 of a specific port, used to commit configurations for
-/// all pins in a single step.
-pub struct Batch<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> {
+/// all pins in a single step. `START` is where it starts from: [`FromReset`] from [`Batch::new`],
+/// [`FromParts`] from [`Parts::batch`].
+pub struct Batch<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7, START = FromReset> {
+    _start: PhantomData<START>,
     pin0: PinProxy<PORT, Pin0, DIR0>,
     pin1: PinProxy<PORT, Pin1, DIR1>,
     pin2: PinProxy<PORT, Pin2, DIR2>,
@@ -373,8 +438,8 @@ pub struct Batch<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> 
 type Pd = Input<Pulldown>;
 type Pu = Input<Pullup>;
 
-impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
-    Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
+impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7, START: BatchStart>
+    Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7, START>
 {
     #[inline]
     fn write_regs(&self) {
@@ -439,35 +504,97 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
             .set_mask(self.pin7.pxsel1_mask());
 
         let p = unsafe { PORT::steal() };
+        // From the reset values (see `Batch::new`), only the bits that differ from them are written. The
+        // compiler knows which from the types.
+        let after_reset = START::AFTER_RESET;
         // Turn off interrupts first so nothing fires during subsequent register writes, which can set
-        // PxIFG flags (SLAU445I 8.2.6, p. 315). PxIE: SLAU445I Table 8-17, p. 336.
-        p.maybe_write_pxie(0);
+        // PxIFG flags (SLAU445I 8.2.6, p. 315). PxIE: SLAU445I Table 8-17, p. 336. They're off after a
+        // reset.
+        if !after_reset {
+            p.maybe_write_pxie(0);
+        }
         // Pins whose PxSEL0 and PxSEL1 bits both change switch through PxSELC, so they don't pass
         // through another function on the way (SLAU445I 8.2.5, p. 314). After that, every
         // remaining change is a single bit. PxSEL0, PxSEL1 and PxSELC: SLAU445I Tables 8-13 to 8-15,
         // p. 335 to p. 336.
-        let both = (p.pxsel0_rd() ^ pxsel0) & (p.pxsel1_rd() ^ pxsel1);
-        if both != 0 {
-            p.pxselc_wr(both);
+        if after_reset {
+            // From 00h, the bits that change are the ones set, and PxSELC leaves the pins of function 3
+            // with both of theirs, so PxSEL0 and PxSEL1 only need a write for other pins
+            let both = pxsel0 & pxsel1;
+            if both != 0 {
+                p.pxselc_wr(both);
+            }
+            if pxsel0 != both {
+                p.pxsel0_wr(pxsel0);
+            }
+            if pxsel1 != both {
+                p.pxsel1_wr(pxsel1);
+            }
+        } else {
+            let both = (p.pxsel0_rd() ^ pxsel0) & (p.pxsel1_rd() ^ pxsel1);
+            if both != 0 {
+                p.pxselc_wr(both);
+            }
+            p.pxsel0_wr(pxsel0);
+            p.pxsel1_wr(pxsel1);
         }
-        p.pxsel0_wr(pxsel0);
-        p.pxsel1_wr(pxsel1);
 
         // Only write to PxOUT if we need to match the pull resistor state to the typestate,
-        // otherwise keep it at it's previous value.
-        // Instead of a write(), use a set_bits() and a clear_bits() to allow for leaving unchanged.
-        // PxOUT: SLAU445I Table 8-10, p. 334.
-        p.pxout_set(pxout_set);
-        p.pxout_clear(pxout_clr);
+        // otherwise keep it at its previous value.
+        // Instead of a write(), use a set_bits() and a clear_bits() to allow for leaving unchanged,
+        // and skip each when no pin needs it (the masks follow from the typestates, so the compiler
+        // decides). PxOUT: SLAU445I Table 8-10, p. 334.
+        if pxout_set != 0 {
+            p.pxout_set(pxout_set);
+        }
+        if pxout_clr != !0 {
+            p.pxout_clear(pxout_clr);
+        }
 
-        // PxDIR (SLAU445I Table 8-11, p. 334) and PxREN (SLAU445I Table 8-12, p. 335)
-        p.pxdir_wr(pxdir);
-        p.pxren_wr(pxren);
+        // PxDIR (SLAU445I Table 8-11, p. 334) and PxREN (SLAU445I Table 8-12, p. 335), unless they keep
+        // their reset value
+        if !after_reset || pxdir != 0 {
+            p.pxdir_wr(pxdir);
+        }
+        if !after_reset || pxren != 0 {
+            p.pxren_wr(pxren);
+        }
+
+        // The ADC inputs among the pins (SYSCFG2.ADCPCTLx, SLAU445I Table 1-31, p. 82). Setting the bit
+        // "disables both the output driver and input Schmitt trigger" of the pin (SLASE59F Table 6-17,
+        // p. 55; SLASEE4C Table 6-15, p. 58).
+        #[cfg(feature = "adcpctl")]
+        {
+            let adc_set = self.pin0.adcpctl_set_mask()
+                | self.pin1.adcpctl_set_mask()
+                | self.pin2.adcpctl_set_mask()
+                | self.pin3.adcpctl_set_mask()
+                | self.pin4.adcpctl_set_mask()
+                | self.pin5.adcpctl_set_mask()
+                | self.pin6.adcpctl_set_mask()
+                | self.pin7.adcpctl_set_mask();
+            let adc_keep = self.pin0.adcpctl_keep_mask()
+                & self.pin1.adcpctl_keep_mask()
+                & self.pin2.adcpctl_keep_mask()
+                & self.pin3.adcpctl_keep_mask()
+                & self.pin4.adcpctl_keep_mask()
+                & self.pin5.adcpctl_keep_mask()
+                & self.pin6.adcpctl_keep_mask()
+                & self.pin7.adcpctl_keep_mask();
+            if adc_set != 0 {
+                p.adcpctl_set(adc_set);
+            }
+            // After a reset there are none to clear
+            if !after_reset && adc_keep != !0 {
+                p.adcpctl_clr(adc_keep);
+            }
+        }
     }
 
     #[inline(always)]
     pub(super) fn create() -> Self {
         Self {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -480,7 +607,8 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     }
 
     /// Commits all pin configurations to GPIO registers and returns GPIO parts and turns off all
-    /// interrupt enable bits (PxIE, SLAU445I Table 8-17, p. 336).
+    /// interrupt enable bits (PxIE, SLAU445I Table 8-17, p. 336), which are off already in a batch from
+    /// [`Batch::new`].
     ///
     /// Note that the pin's interrupt flags may become set as a result of
     /// this operation (SLAU445I 8.2.6, p. 315).
@@ -502,8 +630,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin0<NEW, F: FnOnce(PinProxy<PORT, Pin0, DIR0>) -> PinProxy<PORT, Pin0, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, NEW, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> {
+    ) -> Batch<PORT, NEW, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: f(self.pin0),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -520,8 +649,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin1<NEW, F: FnOnce(PinProxy<PORT, Pin1, DIR1>) -> PinProxy<PORT, Pin1, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, NEW, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> {
+    ) -> Batch<PORT, DIR0, NEW, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: f(self.pin1),
             pin2: make_proxy!(),
@@ -538,8 +668,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin2<NEW, F: FnOnce(PinProxy<PORT, Pin2, DIR2>) -> PinProxy<PORT, Pin2, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, DIR1, NEW, DIR3, DIR4, DIR5, DIR6, DIR7> {
+    ) -> Batch<PORT, DIR0, DIR1, NEW, DIR3, DIR4, DIR5, DIR6, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: f(self.pin2),
@@ -556,8 +687,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin3<NEW, F: FnOnce(PinProxy<PORT, Pin3, DIR3>) -> PinProxy<PORT, Pin3, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, DIR1, DIR2, NEW, DIR4, DIR5, DIR6, DIR7> {
+    ) -> Batch<PORT, DIR0, DIR1, DIR2, NEW, DIR4, DIR5, DIR6, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -574,8 +706,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin4<NEW, F: FnOnce(PinProxy<PORT, Pin4, DIR4>) -> PinProxy<PORT, Pin4, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, NEW, DIR5, DIR6, DIR7> {
+    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, NEW, DIR5, DIR6, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -592,8 +725,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin5<NEW, F: FnOnce(PinProxy<PORT, Pin5, DIR5>) -> PinProxy<PORT, Pin5, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, NEW, DIR6, DIR7> {
+    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, NEW, DIR6, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -610,8 +744,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin6<NEW, F: FnOnce(PinProxy<PORT, Pin6, DIR6>) -> PinProxy<PORT, Pin6, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, NEW, DIR7> {
+    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, NEW, DIR7, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -628,8 +763,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     pub fn config_pin7<NEW, F: FnOnce(PinProxy<PORT, Pin7, DIR7>) -> PinProxy<PORT, Pin7, NEW>>(
         self,
         f: F,
-    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, NEW> {
+    ) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, NEW, START> {
         Batch {
+            _start: PhantomData,
             pin0: make_proxy!(),
             pin1: make_proxy!(),
             pin2: make_proxy!(),
@@ -648,7 +784,7 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     #[inline(always)]
     pub fn pulldown_all(
         self,
-    ) -> Batch<PORT, DIR0::Pulldown, DIR1::Pulldown, DIR2::Pulldown, DIR3::Pulldown, DIR4::Pulldown, DIR5::Pulldown, DIR6::Pulldown, DIR7::Pulldown>
+    ) -> Batch<PORT, DIR0::Pulldown, DIR1::Pulldown, DIR2::Pulldown, DIR3::Pulldown, DIR4::Pulldown, DIR5::Pulldown, DIR6::Pulldown, DIR7::Pulldown, START>
     where
         DIR0: Termination, DIR1: Termination, DIR2: Termination, DIR3: Termination,
         DIR4: Termination, DIR5: Termination, DIR6: Termination, DIR7: Termination,
@@ -662,7 +798,7 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     #[inline(always)]
     pub fn pullup_all(
         self,
-    ) -> Batch<PORT, DIR0::Pullup, DIR1::Pullup, DIR2::Pullup, DIR3::Pullup, DIR4::Pullup, DIR5::Pullup, DIR6::Pullup, DIR7::Pullup>
+    ) -> Batch<PORT, DIR0::Pullup, DIR1::Pullup, DIR2::Pullup, DIR3::Pullup, DIR4::Pullup, DIR5::Pullup, DIR6::Pullup, DIR7::Pullup, START>
     where
         DIR0: Termination, DIR1: Termination, DIR2: Termination, DIR3: Termination,
         DIR4: Termination, DIR5: Termination, DIR6: Termination, DIR7: Termination,
@@ -696,6 +832,7 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
         DIR5::UnusedPulldown,
         DIR6::UnusedPulldown,
         DIR7::UnusedPulldown,
+        START,
     >
     where
         DIR0: Termination, DIR1: Termination, DIR2: Termination, DIR3: Termination,

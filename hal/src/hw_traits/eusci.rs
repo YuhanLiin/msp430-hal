@@ -421,6 +421,15 @@ pub trait EUsciI2C: Steal {
     fn ifg_wr(&self, reg: u16);
     fn ifg_rst(&self);
     fn ifg_clr_except_rx(&self);
+    // The flags a master transaction uses in UCBxIFG: UCRXIFG0 and UCTXIFG0, which in master mode are the
+    // master's (SLAU445I Table 24-19, p. 663), UCNACKIFG, "used in master mode only", and UCSTPIFG, which the
+    // master's own STOP sets too (SLAU445I Table 24-2, p. 646). clear_master_flags_keep_rx leaves UCRXIFG0.
+    // The other flags stay: UCSTTIFG and UCRXIFG1 to UCTXIFG3 are a slave's, UCALIFG marks the change to
+    // slave mode, and UCBCNTIFG, UCCLTOIFG and UCBIT9IFG are only the user's.
+    fn clear_master_flags(&self);
+    fn clear_master_flags_keep_rx(&self);
+    // UCALIFG in UCBxIFG (SLAU445I Table 24-19, p. 663)
+    fn clear_alifg(&self);
 
     // UCBxIV (SLAU445I Table 24-20, p. 664). Reading it clears the flag it reports (SLAU445I 24.3.11.5,
     // p. 646).
@@ -504,6 +513,9 @@ pub trait SpiStatw {
 /// UCBxIFG in I2C mode (SLAU445I Table 24-19, p. 662 to p. 663)
 pub trait I2CUcbIfgOut {
     /// Byte counter interrupt flag
+    // Unused for now. `allow` rather than `expect`: only older compilers, such as CI's nightly-2024-09-01,
+    // warn about it, and on newer ones an `expect` would warn instead.
+    #[allow(dead_code)]
     fn ucbcntifg(&self) -> bool;
     /// Not-acknowledge received interrupt flag
     fn ucnackifg(&self) -> bool;
@@ -644,6 +656,7 @@ macro_rules! eusci_spi_impl {
             fn iv_rd(&self) -> u16 { self.$ucxiv().read().bits() }
 
             // UCBUSY in UCxSTATW (SLAU445I Table 23-5, p. 615; SLAU445I Table 23-14, p. 622)
+            #[inline(always)]
             fn is_busy(&self) -> bool { self.$ucxstatw().read().ucbusy().bit() }
         }
 
@@ -1038,6 +1051,7 @@ macro_rules! eusci_i2c_impl {
             // UCBxI2COA0 to UCBxI2COA3: UCOAEN, the 10-bit address and, in UCBxI2COA0 only, UCGCEN
             // (SLAU445I Table 24-11, p. 656; SLAU445I Table 24-12, p. 657; SLAU445I Table 24-13, p. 657;
             // SLAU445I Table 24-14, p. 658)
+            #[inline(always)]
             fn i2coa_rd(&self, which: u8) -> UcbI2coa {
                 match which {
                     1 => {
@@ -1076,6 +1090,7 @@ macro_rules! eusci_i2c_impl {
             }
 
             // The same registers (SLAU445I Table 24-11, p. 656 to SLAU445I Table 24-14, p. 658)
+            #[inline(always)]
             fn i2coa_wr(&self, which: u8, reg: &UcbI2coa) {
                 match which {
                     1 => {
@@ -1161,6 +1176,35 @@ macro_rules! eusci_i2c_impl {
                         .ucrxifg3().set_bit())
                 };
             }
+
+            // UCRXIFG0, UCTXIFG0, UCNACKIFG and UCSTPIFG in UCBxIFG (SLAU445I Table 24-19, p. 662 to p. 663).
+            // The PAC's clear_bits starts with every bit set and ANDs the register with the result, so only
+            // the fields set to 0 here are cleared.
+            #[inline(always)]
+            fn clear_master_flags(&self) {
+                unsafe {
+                    self.$ucbxifg().clear_bits(|w| w
+                        .ucrxifg0().clear_bit()
+                        .uctxifg0().clear_bit()
+                        .ucnackifg().clear_bit()
+                        .ucstpifg().clear_bit())
+                }
+            }
+
+            // The same without UCRXIFG0
+            #[inline(always)]
+            fn clear_master_flags_keep_rx(&self) {
+                unsafe {
+                    self.$ucbxifg().clear_bits(|w| w
+                        .uctxifg0().clear_bit()
+                        .ucnackifg().clear_bit()
+                        .ucstpifg().clear_bit())
+                }
+            }
+
+            // UCALIFG in UCBxIFG (SLAU445I Table 24-19, p. 663)
+            #[inline(always)]
+            fn clear_alifg(&self) { unsafe { self.$ucbxifg().clear_bits(|w| w.ucalifg().clear_bit()) } }
 
             // UCBxIV (SLAU445I Table 24-20, p. 664)
             #[inline(always)]

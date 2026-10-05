@@ -6,8 +6,8 @@
 //! Table 6-22, p. 60 to p. 61; SLASEE4C Table 6-18, p. 61 to p. 62; the structure: SLAU445I 1.13, p. 57
 //! to p. 58; how to use the calibration values: SLAU445I 1.13.3, p. 59 to p. 60). In table order:
 //!
-//! - The information block: [`device_id()`], [`hardware_revision()`], [`firmware_revision()`], and the
-//!   CRC that [`crc_matches()`] checks the table against.
+//! - The information block: [`device_id()`], `hardware_revision()` (not on the MSP430FR247x and
+//!   MSP430FR25x2), [`firmware_revision()`], and the CRC that [`crc_matches()`] checks the table against.
 //! - The die record: [`die_record()`].
 //! - The ADC calibration: [`adc_gain_factor()`], [`adc_offset()`] and [`TempSensorCalibration`]. That
 //!   converts temperature sensor readings much more accurately than the typical sensor voltage and slope
@@ -44,8 +44,15 @@ fn tlv() -> &'static _pac::tlv::RegisterBlock { unsafe { &*_pac::Tlv::ptr() } }
 #[inline]
 pub fn device_id() -> u16 { tlv().device_id().read().bits() }
 
-/// The hardware revision, set per unit (SLASEC4D 6.13.1, p. 109: "The hardware revision is also stored in
-/// the Device Descriptor structure"). The errata sheet describes the revision marking on the package.
+/// The hardware revision of the die (SLASEC4D 6.13.1, p. 109: "The hardware revision is also stored in
+/// the Device Descriptor structure"): 20h for revision B of the MSP430FR2x5x (SLAZ695J 5.3, p. 5); 11h
+/// for revisions B and C and 10h for revision A of the MSP430FR2433 (SLAZ664S 5.3, p. 4 to p. 5). The
+/// errata sheets also describe the revision marking on the package.
+///
+/// Not on the MSP430FR247x and MSP430FR25x2: their data sheets list it at 1A06h, but their errata sheets
+/// say "This device does not support reading the hardware revision from memory" (SLAZ726B 5.3, p. 4;
+/// SLAZ705H 5.3, p. 4).
+#[cfg(feature = "tlv_hw_revision")]
 #[inline]
 pub fn hardware_revision() -> u8 { tlv().hw_revision().read().bits() }
 

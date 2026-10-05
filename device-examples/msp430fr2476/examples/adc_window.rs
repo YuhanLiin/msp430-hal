@@ -46,7 +46,7 @@ use panic_msp430 as _;
 
 /// The ADC's reference, AVCC (SLAU802 2.3.1, p. 10: the LaunchPad supplies 3.3 V)
 const AVCC_MV: u16 = 3300;
-/// The window, in counts of the 12-bit result: 4095 × voltage / 3.3 V (SLAU445I 21.2.1, p. 541)
+/// The window, in counts of the 12-bit result: 4096 × voltage / 3.3 V (SLAU445I 21.2.1, p. 541)
 const LOW: u16 = 1241; // 1.0 V
 const HIGH: u16 = 2482; // 2.0 V
 
@@ -142,8 +142,8 @@ fn main() -> ! {
         green.set_state((last == AdcVector::InsideWindow).into()).ok();
         blue.set_state((last == AdcVector::BelowWindow).into()).ok();
 
-        // count × 3300 / 4095, as `Adc::count_to_mv` works it out
-        let mv = (count as u32 * AVCC_MV as u32 / 4095) as u16;
+        // count × 3300 / 4096, as `Adc::count_to_mv` works it out
+        let mv = (count as u32 * AVCC_MV as u32 / 4096) as u16;
         writeln!(tx, "{} mV: {:?}\r", mv, last).ok();
         delay.delay_ms(500);
     }

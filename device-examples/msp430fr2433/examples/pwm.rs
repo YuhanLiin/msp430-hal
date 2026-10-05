@@ -59,7 +59,7 @@ fn main() -> ! {
 
     loop {
         for percent in (0..=100).chain((0..100).rev()) {
-            pwm1.set_duty_cycle_percent(percent);
+            pwm1.set_duty_cycle_percent(percent).unwrap();
             delay.delay_ms(5);
         }
     }

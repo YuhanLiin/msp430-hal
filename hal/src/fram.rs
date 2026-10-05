@@ -5,15 +5,18 @@
 //! controller can report those and the errors it can't correct (SLAU445I 6.3, p. 301: the ECC logic
 //! "can correct bit errors and detect multiple bit errors").
 //!
+//! [`Fram::new`] switches the bit error handling off, as a BOR does, so that a program doesn't inherit it
+//! from the program that ran before.
+//!
 //! On the MSP430FR2433 the bit error detection can report errors that don't exist:
-//! - after a wake-up from LPM1 to LPM4 (SLAZ664S GC5), which the low-power mode functions work around,
-//!   see [`request_lpm3`](crate::lpm::request_lpm3);
+//! - after a wake-up from LPM1 to LPM4 (SLAZ664S GC5, p. 10 to p. 11), which the low-power mode functions
+//!   work around, see [`request_lpm3`](crate::lpm::request_lpm3);
 //! - while running from FRAM with MCLK from the DCO at 16 MHz, or from a high-frequency clock above
-//!   12 MHz (SLAZ664S GC4). With [`UncorrectableBitError::Reset`] this resets the device, and SYSRSTIV
-//!   then reads 0, so [`Pmm::take_reset_cause()`](crate::pmm::Pmm::take_reset_cause) returns `None`. The
-//!   erratum's workarounds are to "Check the reset source for SYSRSTIV = 0 and ignore the reset", to
-//!   leave UBDRSTEN at 0 ([`UncorrectableBitError::Ignore`] or [`UncorrectableBitError::Interrupt`]), or
-//!   to "Set the MCLK to maximum 12MHz".
+//!   12 MHz (SLAZ664S GC4, p. 10). With [`UncorrectableBitError::Reset`] this resets the device, and
+//!   SYSRSTIV then reads 0, so [`Pmm::take_reset_cause()`](crate::pmm::Pmm::take_reset_cause) returns
+//!   `None`. The erratum's workarounds are to "Check the reset source for SYSRSTIV = 0 and ignore the
+//!   reset", to leave UBDRSTEN at 0 ([`UncorrectableBitError::Ignore`] or
+//!   [`UncorrectableBitError::Interrupt`]), or to "Set the MCLK to maximum 12MHz".
 
 use crate::_pac;
 
@@ -23,8 +26,37 @@ pub struct Fram {
 }
 
 impl Fram {
-    /// Turn FRCTL into `Fram`
-    pub fn new(fram: _pac::Frctl) -> Self { Fram { fram } }
+    /// Turn FRCTL into `Fram`, and switch the bit error handling off: no reset and no interrupts for
+    /// bit errors (UBDRSTEN, UBDIE and CBDIE = 0, SLAU445I Table 6-3, p. 307).
+    ///
+    /// Only a BOR resets these three bits (`rw-[0]`: SLAU445I Figure 6-4, p. 307, with the key in
+    /// SLAU445I Table 0-1, p. 28), so after any other reset, and when a debugger loads a program without
+    /// one, the program would otherwise start with the bit error handling left from before. (Measured on
+    /// an MSP430FR2476, SYSRIVECT, which also only a BOR resets, stayed set when mspdebug loaded a new
+    /// program, see [`InterruptVectors`](crate::sys::InterruptVectors).) On the MSP430FR2433, a UBDRSTEN
+    /// left set can reset the device at 16 MHz for bit errors that don't exist (SLAZ664S GC4, p. 10), see
+    /// the [module documentation](crate::fram). Select the handling with
+    /// [`Fram::set_uncorrectable_bit_error_action`] and [`Fram::enable_correctable_bit_error_interrupts`].
+    ///
+    /// The clearing takes about 50 bytes of program FRAM (measured in an MSP430FR2433 build of `blinky`).
+    /// [`Fram::new_raw`] writes nothing and saves them.
+    pub fn new(fram: _pac::Frctl) -> Self {
+        let mut fram = Self::new_raw(fram);
+        // GCCTL0 can only be written while the FRCTL password unlocks it, or the write causes a PUC
+        // (SLAU445I 6.10, p. 305), see `unlocked`
+        fram.unlocked(|fram| unsafe {
+            fram.gcctl0().clear_bits(|w| w.ubdrsten().clear_bit().ubdie().clear_bit().cbdie().clear_bit())
+        });
+        fram
+    }
+
+    /// Turn FRCTL into `Fram` without writing any register, so the bit error handling stays as it is:
+    /// UBDRSTEN, UBDIE and CBDIE are 0 after the last BOR, or as the program before this one left them if
+    /// there was no BOR since, see [`Fram::new`].
+    #[inline]
+    pub fn new_raw(fram: _pac::Frctl) -> Self {
+        Fram { fram }
+    }
 }
 
 /// FRAM wait states, `Wait0` to `Wait7` (NWAITS, SLAU445I Table 6-2, p. 306)
@@ -34,13 +66,14 @@ pub use crate::_pac::frctl::frctl0::Nwaits as WaitStates;
 /// SLAU445I Table 6-3, p. 307)
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UncorrectableBitError {
-    /// Nothing, as after reset (UBDRSTEN and UBDIE reset to 0, SLAU445I Table 6-3, p. 307)
+    /// Nothing, as after a BOR and after [`Fram::new`] (UBDRSTEN and UBDIE = 0, SLAU445I Table 6-3,
+    /// p. 307)
     Ignore,
     /// Reset the device with a PUC (UBDRSTEN, SLAU445I Table 6-3, p. 307).
     /// [`Pmm::take_reset_cause()`](crate::pmm::Pmm::take_reset_cause) then returns
     /// [`ResetCause::FramBitError`](crate::pmm::ResetCause::FramBitError). On the MSP430FR2433 with MCLK
     /// above 12 MHz it can also reset the device for errors that don't exist, with no reset cause
-    /// (SLAZ664S GC4), see the [module documentation](crate::fram).
+    /// (SLAZ664S GC4, p. 10), see the [module documentation](crate::fram).
     Reset,
     /// Request the `SYSNMI` interrupt (UBDIE, SLAU445I Table 6-3, p. 307; SLAU445I 1.3.1, p. 33).
     /// [`take_system_nmi()`](crate::sys::take_system_nmi) then returns
@@ -72,9 +105,16 @@ impl Fram {
     /// p. 27; SLASE59F 5.3, p. 16; SLASEO7C 8.3, p. 20; SLASEE4C 5.3, p. 17).
     #[inline]
     pub unsafe fn set_wait_states(&mut self, wait: WaitStates) {
-        self.unlocked(|fram| fram.frctl0().write(|w| w
-            .frctlpw().password()
-            .nwaits().variant(wait)));
+        // FRCTL0 itself takes the password in the same word write, so it needs no unlocking first, as
+        // only the other FRCTL registers do ("A write access to a register other than FRCTL while write
+        // access is not enabled causes a PUC", SLAU445I 6.10, p. 305; FRCTLPW, NWAITS: SLAU445I Table 6-2,
+        // p. 306). The write leaves them unlocked, so lock them again, as `unlocked` does.
+        critical_section::with(|_| {
+            self.fram.frctl0().write(|w| w
+                .frctlpw().password()
+                .nwaits().variant(wait));
+            self.fram.frctl0_h().write(|w| w.frctlpw().lock());
+        });
     }
 
     /// Select what happens when the FRAM detects a bit error it can't correct (UBDRSTEN, UBDIE:

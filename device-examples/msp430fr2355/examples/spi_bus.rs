@@ -51,7 +51,7 @@ fn main() -> ! {
     // Multi-master mode allows another master to control whether this device's SCK
     // and MOSI pins are outputs or high impedance via the STE pin.
     // (SLAU445I 23.3.3.1, p. 608: with UCxSTE master-inactive, "UCxSIMO and UCxCLK are set to inputs and
-    // no longer drive the bus". See also SLAZ695J USCI50 for that 4-pin master mode.)
+    // no longer drive the bus". See also SLAZ695J USCI50, p. 13, for that 4-pin master mode.)
     let mut spi = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
         // fBitClock = fBRCLK / UCBRx (SLAU445I 23.3.6, Equation 15, p. 609)
         .to_master_using_smclk(&smclk, 16) // 8MHz / 16 = 500kHz

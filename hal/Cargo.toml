@@ -23,7 +23,7 @@ msp430fr2353 = ["2x5x", "sac_l3"] # 16kB FRAM + SAC unit
 msp430fr2155 = ["2x5x"]           # 32kB FRAM
 msp430fr2153 = ["2x5x"]           # 16kB FRAM
 # MSP430FR2433: SLASE59F Table 3-1, p. 7
-msp430fr2433 = ["dep:msp430fr2433", "eusci_modclk", "adc", "adcpctl", "eusci_b", "info_mem", "lpm3_5_switch", "erratum_cs13", "erratum_pmm32", "erratum_gc5", "erratum_rtc15"]
+msp430fr2433 = ["dep:msp430fr2433", "eusci_modclk", "adc", "adcpctl", "eusci_b", "info_mem", "lpm3_5_switch", "tlv_hw_revision", "erratum_cs13", "erratum_pmm32", "erratum_gc5", "erratum_rtc15", "erratum_port28"]
 # MSP430FR247x: SLASEO7C Table 6-1, p. 6
 msp430fr2475 = ["247x"]           # 6kB RAM
 msp430fr2476 = ["247x"]           # 8kB RAM
@@ -32,7 +32,7 @@ msp430fr2512 = ["25x2"]           # 2kB RAM up to 4 self-capacitive or mutual-ca
 msp430fr2522 = ["25x2", "frwpoa"] # 2kB RAM up to 8 self-capacitive and 16 mutual-capacitive sensors
 
 # Derived features. Do not provide these.
-2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc", "ecomp", "eusci_b", "vloclk_source", "xt1_high_frequency", "enhanced_cs", "rtc_aclk", "frwpoa", "icc", "mfm", "timer_b", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
+2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc", "ecomp", "eusci_b", "vloclk_source", "xt1_high_frequency", "enhanced_cs", "rtc_aclk", "frwpoa", "icc", "mfm", "timer_b", "tlv_hw_revision", "erratum_cs13", "erratum_pmm32", "erratum_rtc15"]
 247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc", "ecomp", "eusci_b", "vloclk_source", "rtc_aclk", "timer_b", "remap"]
 25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "adc", "adcpctl", "eusci_b", "rtc_aclk", "lpm3_5_switch", "erratum_cs13", "erratum_pmm32", "erratum_rtc15", "remap"]
 # UCSSEL = 01b selects ACLK: SLASEC4D Table 6-9, p. 68; SLASEO7C Table 9-8, p. 50; SLASEE4C Table 6-8, p. 49
@@ -84,12 +84,32 @@ timer_b = []
 # FRWPOA is valid "only in the MSP430FR235x and MSP430FR215x devices" (SLAU445I Table 1-24, note 2, p. 75)
 # and "in MSP430FR2522 and MSP430FR2422 devices" (SLAU445I Table 1-29, note 3, p. 80)
 frwpoa = [] # Part of the program FRAM can be left writable, through SYSCFG0.FRWPOA
-# Silicon errata the HAL works around. The errata sheets are SLAZ695J (MSP430FR2355), SLAZ664S
-# (MSP430FR2433) and SLAZ705H (MSP430FR2522); SLAZ726B (MSP430FR2476) lists none of these.
-erratum_cs13 = []  # LPM3/LPM4 entry can lock up with the DCO above 2 MHz (SLAZ695J CS13, p. 8 to p. 9)
-erratum_pmm32 = [] # LPM3/LPM4 entry can lock up or run unintended code (SLAZ695J PMM32, p. 9 to p. 11)
-erratum_gc5 = []   # FRAM bit errors reported after LPM1 to LPM4 that don't exist (SLAZ664S GC5)
-erratum_rtc15 = [] # The RTC hangs when moved off a stopped XT1CLK (SLAZ695J RTC15, p. 11)
+# The hardware revision in the device descriptors (TLV, 1A06h). The errata sheets of the MSP430FR2x5x and
+# the MSP430FR2433 give its value (SLAZ695J 5.3, p. 5; SLAZ664S 5.3, p. 4); those of the MSP430FR247x and
+# the MSP430FR25x2 say "This device does not support reading the hardware revision from memory" (SLAZ726B
+# 5.3, p. 4; SLAZ705H 5.3, p. 4).
+tlv_hw_revision = []
+# Silicon errata the HAL works around. Each device has its own errata sheet, and the sheets of a family
+# list the same errata with the same text on the same pages, so the comments cite the first one:
+# - MSP430FR2x5x: SLAZ695J (MSP430FR2355), SLAZ696H (MSP430FR2353), SLAZ722H (MSP430FR2155), SLAZ723H
+#   (MSP430FR2153)
+# - MSP430FR2433: SLAZ664S
+# - MSP430FR247x: SLAZ726B (MSP430FR2476), SLAZ727B (MSP430FR2475), which list none of these errata
+# - MSP430FR25x2: SLAZ705H (MSP430FR2522), SLAZ708H (MSP430FR2512)
+# LPM3/LPM4 entry can lock up with the DCO above 2 MHz (SLAZ695J CS13, p. 8 to p. 9; SLAZ664S CS13, p. 9
+# to p. 10; SLAZ705H CS13, p. 7 to p. 8)
+erratum_cs13 = []
+# LPM3/LPM4 entry can lock up or run unintended code (SLAZ695J PMM32, p. 9 to p. 11; SLAZ664S PMM32, p. 11
+# to p. 12; SLAZ705H PMM32, p. 8 to p. 10)
+erratum_pmm32 = []
+# FRAM bit errors reported after LPM1 to LPM4 that don't exist (SLAZ664S GC5, p. 10 to p. 11)
+erratum_gc5 = []
+# The RTC hangs when moved off a stopped XT1CLK (SLAZ695J RTC15, p. 11; SLAZ664S RTC15, p. 13; SLAZ705H
+# RTC15, p. 10)
+erratum_rtc15 = []
+# Clearing SYSRSTRE also disables the TEST pin's pull-down, so `sys::RstPull` has no `None` (SLAZ664S
+# PORT28, p. 12 to p. 13)
+erratum_port28 = []
 
 [dependencies]
 defmt = {version = "1.0", optional = true }

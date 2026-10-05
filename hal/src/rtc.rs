@@ -196,19 +196,31 @@ impl<SRC: RtcClockSrc> Rtc<SRC> {
     /// always generates an overflow when the RTCMOD is set to either 0x0000 or 0x0001" (SLAU445I 15.2.3,
     /// p. 418). `count` goes to RTCMOD (SLAU445I Table 15-4, p. 422), and RTCSR resets the counter
     /// (SLAU445I Table 15-2, p. 420).
+    ///
+    /// Erratum RTC15 on the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2: moving the RTC off XT1CLK while
+    /// XT1 is stopped makes it hang (SLAZ695J RTC15, p. 11; SLAZ664S RTC15, p. 13; SLAZ705H RTC15, p. 10).
+    /// When `start()` moves the RTC off XT1CLK with the XT1 fault flag XT1OFFG set, it clears the flag,
+    /// which stays set after a fault has ended, and only if the hardware sets it again because the fault
+    /// persists (SLAU445I 3.2.13, p. 109) does it apply the erratum's workaround: XIN becomes a GPIO
+    /// output, toggles, and goes back to XT1. After a fault that has ended, the flag stays clear, so
+    /// [`Xt1clk::is_faulted`](crate::clock::Xt1clk::is_faulted) returns `false` from then on. OFIFG stays
+    /// set, so the clocks the fail-safe moved off XT1 stay on their fallback until
+    /// [`Xt1clk::clear_fault`](crate::clock::Xt1clk::clear_fault) clears it (SLAU445I 3.2.13, p. 110,
+    /// "Fault logic"). XT1 counts as faulted until its fault logic counter has reached its maximum count
+    /// after the oscillation resumed (SLAU445I 3.2.13, p. 110, "Fault logic counters"; see
+    /// `Xt1clk::clear_fault`), so after a fault that ended only just before, XIN is toggled although XT1
+    /// runs again: in bypass mode the pin then drives against the external clock while it toggles.
     pub fn start(&mut self, count: u16) {
         self.periph.rtcmod().write(|w| unsafe { w.bits(count) });
         SRC::apply_sys_config();
         // Erratum RTC15: moving the RTC off XT1CLK while XT1 is stopped hangs it (SLAZ695J RTC15, p. 11;
-        // SLAZ664S RTC15; SLAZ705H RTC15). XT1OFFG in CSCTL7 reports the stopped XT1 (SLAU445I
-        // Table 3-11, p. 121); XT1CLK is RTCSS = 10b (SLAU445I Table 15-2, p. 420).
+        // SLAZ664S RTC15, p. 13; SLAZ705H RTC15, p. 10). XT1CLK is RTCSS = 10b (SLAU445I Table 15-2,
+        // p. 420). The new clock is tested first: it is known when compiling, so an RTC started on XT1CLK
+        // reads nothing here.
         #[cfg(feature = "erratum_rtc15")]
-        let leaving_stopped_xt1 = {
-            let cs = unsafe { _pac::Cs::steal() };
-            self.periph.rtcctl().read().rtcss().is_xt1clk()
-                && SRC::CLK_SRC != Rtcss::Xt1clk
-                && cs.csctl7().read().xt1offg().bit_is_set()
-        };
+        let leaving_stopped_xt1 = SRC::CLK_SRC != Rtcss::Xt1clk
+            && self.periph.rtcctl().read().rtcss().is_xt1clk()
+            && xt1_stopped();
         // Select the clock first, then reset the counter, which also loads `count` into the
         // shadow register (SLAU445I 15.2.3, p. 417). The reset resynchronizes the count with the new
         // clock (SLAU445I 15.2.2, p. 417, note "Clock Source Selection": "TI recommends a software reset
@@ -240,6 +252,11 @@ impl<SRC: RtcClockSrc> Rtc<SRC> {
 
     #[inline]
     /// Pauses the timer by selecting no clock (RTCSS = 00b: SLAU445I Table 15-2, p. 420).
+    ///
+    /// `pause()` doesn't apply the workaround for erratum RTC15 that [`start()`](Rtc::start) applies on
+    /// the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2: the erratum names a change "from XT1CLK to a
+    /// different clock source while XT1CLK is stopped" (SLAZ695J RTC15, p. 11; SLAZ664S RTC15, p. 13;
+    /// SLAZ705H RTC15, p. 10). To move the RTC off a stopped XT1CLK, start it with the new clock instead.
     pub fn pause(&mut self) {
         // Bit pattern is all 0s, so we can use clear instead of modify (RTCSS = 00b, "No clock (Stop)":
         // SLAU445I Table 15-2, p. 420)
@@ -257,12 +274,30 @@ impl<SRC: RtcClockSrc> Rtc<SRC> {
     }
 }
 
+/// Whether XT1 is stopped, for erratum RTC15. XT1OFFG reports an XT1 fault, but "Once set, the fault bits
+/// remain set until software resets them, even if the fault condition no longer exists", so a set flag is
+/// cleared and read again: "If software clears the fault bits and the fault condition still exists, the
+/// fault bits are automatically set again; otherwise, they remain cleared" (SLAU445I 3.2.13, p. 109; "If
+/// the user clears XT1OFFG and the fault condition still exists, XT1OFFG remains set": SLAU445I
+/// Figure 3-6, p. 110; XT1OFFG: SLAU445I Table 3-11, p. 122). OFIFG is left as it is: while it is set, the
+/// clocks the fail-safe moved off XT1 stay on their fallback (SLAU445I 3.2.13, p. 110, "Fault logic").
+#[cfg(feature = "erratum_rtc15")]
+fn xt1_stopped() -> bool {
+    let cs = unsafe { _pac::Cs::steal() };
+    if cs.csctl7().read().xt1offg().bit_is_clear() {
+        return false;
+    }
+    // Clearing keeps the bits set in the mask, so only XT1OFFG is written 0
+    unsafe { cs.csctl7().clear_bits(|w| w.xt1offg().clear_bit()) };
+    cs.csctl7().read().xt1offg().bit_is_set()
+}
+
 /// The workaround for erratum RTC15, after the RTC was moved off a stopped XT1CLK: "Reconfigure the XIN
 /// pin as a GPIO output, then toggle the GPIO twice with at least 2 rising or falling edges. At this
-/// point the RTC Counter will be able to resume operation" (SLAZ695J RTC15, p. 11; SLAZ664S RTC15;
-/// SLAZ705H RTC15). It toggles four times, for two rising and two falling edges, and then gives the pin
-/// its direction and function back. GPIO output: PxSEL1 = PxSEL0 = 0, PxDIR = 1 (SLAU445I Table 8-1,
-/// p. 313; SLAU445I Table 8-3, p. 314).
+/// point the RTC Counter will be able to resume operation" (SLAZ695J RTC15, p. 11; SLAZ664S RTC15,
+/// p. 13; SLAZ705H RTC15, p. 10). It toggles four times, for two rising and two falling edges, and then
+/// gives the pin its direction and function back. GPIO output: PxSEL1 = PxSEL0 = 0, PxDIR = 1 (SLAU445I
+/// Table 8-1, p. 313; SLAU445I Table 8-3, p. 314).
 #[cfg(feature = "erratum_rtc15")]
 fn pulse_xin() {
     use crate::clock::Xt1Xin;

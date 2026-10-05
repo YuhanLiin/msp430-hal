@@ -49,6 +49,8 @@ fn main() -> ! {
     // Temp sensor needs >= 30 us sample time (SLASEE4C Table 5-22, p. 39: tSENSOR(sample) 30 µs minimum;
     // SLAU445I 21.2.7.8, p. 556).
     // MODCLK is at most 5.8 MHz, so 256 cycles take at least 44 us (SLASEE4C Table 5-9, p. 28).
+    // MODCLK in active mode also avoids erratum ADC50, which makes temperature sensor results wrong
+    // with ACLK as the ADC clock in LPM3 (SLAZ705H ADC50, p. 5).
     let adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,

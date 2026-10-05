@@ -53,6 +53,15 @@
 //! which is the eCOMP output: SLASEC4D Table 6-20, p. 76; SLASEO7C Table 9-17, p. 61, which lists only TB0,
 //! the MSP430FR247x's only Timer_B. A high level makes "all Timer_B outputs ... in a high-impedance state",
 //! as SLAU445I 14.2.5, p. 401, says for the TBOUTH pin.)
+//!
+//! The comparator output is also input B of a timer's capture pin 1, so a capture can time its edges
+//! (SLAU445I 18.1, p. 504: "Output provided to timer capture input"; see [`capture`](crate::capture)). On
+//! the MSP430FR2x5x eCOMP0 drives TB0's and eCOMP1 TB2's (SLASEC4D Table 6-16, p. 73; SLASEC4D
+//! Table 6-18, p. 74). On the MSP430FR247x eCOMP0 doesn't reach TB0's, erratum COMP12: "eCOMP0 output
+//! can not be selected internally to the Timer0_B7 CCI1B input (TB0CCTL1.CCIS = 01b)". Its workaround is
+//! to "Connect eCOMP0 output and Timer B capture input externally through GPIOs" (SLAZ726B COMP12, p. 5):
+//! route the output to P3.4 with [`ComparatorConfig::with_output_pin`], and wire that pin to a capture
+//! pin's input A, such as TB0.CCI1A on P4.7 (SLASEO7C Table 9-22, p. 63; SLASEO7C Table 9-15, p. 59).
 
 pub use crate::device_specific::ecomp::{NegativeInput, PositiveInput};
 use crate::{

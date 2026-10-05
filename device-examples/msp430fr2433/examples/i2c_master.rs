@@ -52,8 +52,8 @@ fn main() -> ! {
     // Red LED1 on P1.0 and green LED2 on P1.1 (SLAU739 Figure 18, p. 23)
     let mut red_led   = port1.pin0.to_output();
     let mut green_led = port1.pin1.to_output();
-    red_led.set_low();
-    green_led.set_low();
+    red_led.set_low().ok();
+    green_led.set_low().ok();
 
     // P1.2 UCB0SDA and P1.3 UCB0SCL: P1SELx = 01 (SLASE59F Table 6-17, p. 55), LaunchPad header pins
     // J1.10 and J1.9 (SLAU739 Figure 18, p. 23). Both lines need pullups (SLAU445I 24.3, p. 629); the

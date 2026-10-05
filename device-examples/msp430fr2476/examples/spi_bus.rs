@@ -63,7 +63,7 @@ fn main() -> ! {
     // Multi-master mode allows another master to control whether this device's SCK
     // and MOSI pins are outputs or high impedance via the STE pin.
     // (SLAU445I 23.3.3.1, p. 608. In that mode, only write the TX buffer while STE is active:
-    // SLAZ726B USCI50.)
+    // SLAZ726B USCI50, p. 8 to p. 9.)
     // MODE_0 captures data on the first clock edge with the clock idle low (UCCKPH = 1, UCCKPL = 0),
     // `true` sends the MSB first (UCMSB = 1), and UCMST = 1 makes it the master (SLAU445I Table 23-3,
     // p. 613). SMCLK is UCSSEL = 10b (SLASEO7C Table 9-8, p. 50), and fBitClock = fBRCLK / UCBRx

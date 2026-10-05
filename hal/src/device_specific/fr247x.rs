@@ -753,8 +753,8 @@ mod serial {
     // UART pins (SLASEO7C Table 9-11, p. 54), all PxSELx = 01, which `impl_serial_pin!` takes as
     // Alternate1 (SLASEO7C Table 9-23, p. 65; SLASEO7C Table 9-24, p. 66; SLASEO7C Table 9-27, p. 69).
     // "Only one selected port is valid at any time" (SLASEO7C Table 9-11 notes 1 and 2, p. 54). UCLK is
-    // the external clock that UCSSELx = 00b selects (SLAU445I Table 22-8, p. 593); the UCAxCLK pins are
-    // listed for SPI only (SLASEO7C Table 9-11, p. 54).
+    // the external clock that UCSSELx = 00b selects (SLAU445I Table 22-8, p. 593), on the UCAxCLK pin:
+    // "00b (UCA0CLK pin)" (SLASEO7C Table 9-8, p. 50).
 
     /// UCLK pin for E_USCI_A0 (default mapping)
     ///

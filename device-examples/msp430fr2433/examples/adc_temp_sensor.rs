@@ -49,8 +49,8 @@ fn main() -> ! {
     // MODCLK is at most 5.8 MHz (SLASE59F Table 5-9, p. 26), so 256 cycles / 5.8 MHz = 44 us sample time.
     // (ADCSSELx = 00b MODCLK: SLAU445I Table 21-4, p. 564; ADCSHTx = 1000b, 256 cycles: SLAU445I
     // Table 21-3, p. 561; ADCRES = 01b, 10 bits, and ADCSR = 0, 200 ksps: SLAU445I Table 21-5, p. 565.)
-    // MODCLK in active mode also avoids SLAZ664S ADC50, which makes temperature sensor results wrong
-    // with ACLK as the ADC clock in LPM3.
+    // MODCLK in active mode also avoids erratum ADC50, which makes temperature sensor results wrong
+    // with ACLK as the ADC clock in LPM3 (SLAZ664S ADC50, p. 6).
     let adc = AdcConfig::new(
         ClockDivider::_1,
         Predivider::_1,

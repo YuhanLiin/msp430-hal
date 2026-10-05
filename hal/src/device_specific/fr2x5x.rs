@@ -648,8 +648,7 @@ mod serial {
     // UART pins, each in its PxSELx = 01 function, the macro's default Alternate1 (SLASEC4D Table 6-14,
     // p. 72; SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-66, p. 102). UCSSELx = 00b selects UCLK as
     // the clock source (SLAU445I 22.4.1, p. 593), an external clock of up to 24 MHz (SLASEC4D
-    // Table 5-14, p. 45). The UCLK pins are taken to be the UCAxCLK pins: no document names the pin for
-    // UART mode, and SLASEC4D Table 6-14, p. 72 lists no UART function on them.
+    // Table 5-14, p. 45), on the UCAxCLK pin: "00b (UCA0CLK pin)" (SLASEC4D Table 6-9, p. 68).
 
     /// UCLK pin for E_USCI_A0: P1.5, UCA0CLK (P1SELx = 01: SLASEC4D Table 6-63, p. 96)
     pub struct UsciA0ClockPin;

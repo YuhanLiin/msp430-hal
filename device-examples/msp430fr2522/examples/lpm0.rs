@@ -83,7 +83,7 @@ fn main() -> ! {
     loop {
         // Since no peripherals were configured to use SMCLK / ACLK we could just as well enter LPM3 / LPM4 here
         // (SLASEE4C Table 6-1, p. 45: LPM3 stops SMCLK, LPM4 also ACLK, and I/O interrupts wake both).
-        // LPM3 and LPM4 entry has errata: SLAZ705H CS13 and SLAZ705H PMM32.
+        // LPM3 and LPM4 entry has errata: SLAZ705H CS13, p. 7 to p. 8, and PMM32, p. 8 to p. 10.
         enter_lpm0();
         green_led.toggle().ok();
 

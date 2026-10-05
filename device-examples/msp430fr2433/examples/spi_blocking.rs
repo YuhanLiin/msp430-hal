@@ -54,9 +54,9 @@ fn main() -> ! {
     let miso   = p2.pin5;
     let mosi   = p2.pin6;
     let mut cs = p1.pin3;
-    cs.set_high();
+    cs.set_high().ok();
     let mut red_led = p1.pin0; // Red LED1 (SLAU739 Figure 18, p. 23)
-    red_led.set_low();
+    red_led.set_low().ok();
 
     // MCLK = SMCLK = about 8 MHz: DCORSEL = 011b with the FLL locked to REFO (SLAU445I Table 3-5, p. 114;
     // SLAU445I 3.2.5, p. 104), DIVM and DIVS /1 (SLAU445I Table 3-9, p. 118); no FRAM wait state is needed
@@ -87,7 +87,7 @@ fn main() -> ! {
         // Send: 0x12, 0x00,    0x00,    0x34,    0x56,
         // Recv: N/A,  recv[0], recv[1], recv[2], N/A
         let mut recv = [0; 3];
-        cs.set_low();
+        cs.set_low().ok();
             // These methods do return errors, but because we haven't used the non-blocking
             // API (from embedded-hal-nb) or interrupts the Rx buffer should never overrun because
             // the blocking interface automatically reads after every write.
@@ -98,9 +98,9 @@ fn main() -> ! {
             spi.read(&mut recv[0..2]).unwrap();
             spi.transfer(&mut recv[2..], &[0x34, 0x56]).unwrap();
             spi.flush().unwrap();
-        cs.set_high();
+        cs.set_high().ok();
 
-        red_led.toggle();
+        red_led.toggle().ok();
         delay.delay_ms(1000);
     }
 }

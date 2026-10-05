@@ -48,6 +48,7 @@
 #![feature(abi_msp430_interrupt)]
 #![allow(stable_features)] // Feature flags used on older compiler versions
 #![feature(const_option)]
+#![feature(const_refs_to_cell)] // Register addresses from the PAC at compile time (hw_traits/gpio.rs)
 #![deny(missing_docs)]
 
 // The hardware modules and where the documents describe them. A module behind a feature exists only on

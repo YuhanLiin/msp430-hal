@@ -71,9 +71,9 @@ fn main() -> ! {
     // Configure another peripheral as an SPI master to drive the bus. It is configured before the slave:
     // MODE_0 is UCCKPH = 1, "Data is captured on the first UCLK edge" (SLAU445I 23.4.1, p. 613), and an
     // SPI slave with UCCKPH = 1 goes wrong if its clock pin isn't at the idle level when it leaves reset
-    // (SLAZ695J USCI47). The erratum's workaround: "The SPI master must set the clock pin at the
-    // appropriate idle level (low for UCCKPL = 0, high for UCCKPL = 1) before SPI slave is reset (UCSWRST
-    // bit is cleared)". With the master running, SCLK idles low (UCCKPL = 0 in MODE_0).
+    // (SLAZ695J USCI47, p. 12 to p. 13). The erratum's workaround: "The SPI master must set the clock
+    // pin at the appropriate idle level (low for UCCKPL = 0, high for UCCKPL = 1) before SPI slave is
+    // reset (UCSWRST bit is cleared)". With the master running, SCLK idles low (UCCKPL = 0 in MODE_0).
     let mut spi = SpiConfig::new(periph.e_usci_b1, MODE_0, true)
         // fBitClock = fBRCLK / UCBRx (SLAU445I 23.3.6, Equation 15, p. 609)
         .to_master_using_smclk(&smclk, 800) // 8MHz / 800 = 10kHz

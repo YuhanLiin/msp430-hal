@@ -34,8 +34,9 @@
 //! write-read, and generic transactions. Additionally, slave detection is provided through [`is_slave_present()`](I2cRoleMaster::is_slave_present()).
 //!
 //! A non-blocking or interrupt-based implementation is possible using [`I2cSingleMaster::send_start()`],
-//! [`write_tx_buf()`](I2cSingleMaster::write_tx_buf), [`read_rx_buf()`](I2cSingleMaster::read_rx_buf), and
-//! [`schedule_stop()`](I2cRoleMaster::schedule_stop).
+//! [`write_tx_buf()`](I2cSingleMaster::write_tx_buf), [`read_rx_buf()`](I2cSingleMaster::read_rx_buf),
+//! [`tx_buf_empty()`](I2cRoleMaster::tx_buf_empty), [`schedule_stop()`](I2cRoleMaster::schedule_stop) and
+//! [`stop_sent()`](I2cRoleMaster::stop_sent).
 //!
 //! ## [`I2cMultiMaster`]
 //! [`I2cMultiMaster`] acts similarly to [`I2cSingleMaster`], but with the addition of bus arbitration logic.
@@ -48,14 +49,22 @@
 //! It broadly combines the functionality of [`I2cSlave`] and [`I2cMultiMaster`], providing a blocking master implementation via
 //! [`embedded_hal::i2c::I2c`], and a non-blocking or interrupt-based interface via methods similar to [`I2cMultiMaster`]:
 //! [`I2cMasterSlave::send_start()`], [`write_tx_buf_as_master()`](I2cMasterSlave::write_tx_buf_as_master),
-//! [`read_rx_buf_as_master()`](I2cMasterSlave::read_rx_buf_as_master), and [`schedule_stop()`](I2cRoleMaster::schedule_stop).
+//! [`read_rx_buf_as_master()`](I2cMasterSlave::read_rx_buf_as_master),
+//! [`tx_buf_empty()`](I2cRoleMaster::tx_buf_empty), [`schedule_stop()`](I2cRoleMaster::schedule_stop) and
+//! [`stop_sent()`](I2cRoleMaster::stop_sent).
 //!
 //! The MSP430 hardware automatically fails over from master to slave mode when arbitration is lost or the device is
 //! addressed as a slave (UCALIFG, SLAU445I Table 24-2, p. 646), so the master-related methods check for this
 //! before attempting master-related operations, returning an error if so.
 //! The device can be restored to master mode via [`return_to_master()`](I2cRoleMulti::return_to_master). If arbitration is lost this
 //! method may be called immediately, however if the device is addressed as a slave then this slave transaction must be resolved
-//! before the device can be returned to master mode.
+//! before the device can be returned to master mode. The arbitration lost flag, UCALIFG, stays set until
+//! then, and `return_to_master()` clears it.
+//!
+//! The device's own STOP as a master sets the same flag as the STOP that ends a slave transaction (UCSTPIFG,
+//! SLAU445I Table 24-2, p. 646). The blocking methods clear it once the STOP is on the bus, as
+//! [`stop_sent()`](I2cRoleMaster::stop_sent) does in the non-blocking interface, and in master mode
+//! [`poll()`](I2cRoleSlave::poll) reports no events.
 //!
 //! The slave interface is much the same as what is provided by [`I2cSlave`]: Bus events can be discovered using
 //! [`interrupt_source()`](I2cRoleCommon::interrupt_source()) for an interrupt-based implementation, or [`poll()`](I2cRoleSlave::poll())
@@ -80,11 +89,6 @@
 //! SLASE59F Table 6-10, p. 49 (MSP430FR2433), SLASEO7C Table 9-11, p. 54 (MSP430FR247x) and
 //! SLASEE4C Table 6-11, p. 53 (MSP430FR25x2). The external clock pin is the one listed as SCLK in their
 //! SPI column.
-//!
-//! On the MSP430FR2433 the PAC exposes each eUSCI once per mode, for example `usci_a0_uart_mode` and
-//! `usci_a0_spi_mode`. Both are the same hardware, so only use one of them for each eUSCI (the data sheet
-//! lists one register block per eUSCI: SLASE59F Table 6-40, p. 66; SLASE59F Table 6-41, p. 67;
-//! SLASE59F Table 6-42, p. 67).
 //!
 
 use core::convert::Infallible;
@@ -457,12 +461,16 @@ where
     /// Configures this peripheral to use MODCLK (UCSSELx = 01b, which is MODCLK on the MSP430FR2433:
     /// SLASE59F Table 6-7, p. 46)
     ///
+    /// This also sets MODOSCREQEN, so that MODCLK runs for the eUSCI whichever kind of request it makes
+    /// (SLAU445I 3.2.15.1, p. 111; SLAU445I Table 3-12, p. 123).
+    ///
     /// # Panics
     ///
     /// If `clk_divisor` is below the user's guide minimum (SLAU445I 24.3.7, p. 642): 4 for a single master,
     /// 8 with several masters.
     #[inline]
     pub fn use_modclk(mut self, clk_divisor: u16) -> I2cConfig<USCI, ClockSet, ROLE, M> {
+        crate::clock::enable_modosc_conditional_requests();
         self.set_clock(Ucssel::DeviceSpecific, clk_divisor);
         return_self_config!(self)
     }
@@ -724,6 +732,55 @@ mod sealed {
             self.usci().set_ucsla10(mode.into())
         }
 
+        /// Send a START, or a repeated START (UCTXSTT: SLAU445I 24.3.5.2.1, p. 637; SLAU445I 24.3.5.2.2,
+        /// p. 639). The flags of earlier transactions are cleared first, as the eUSCI doesn't clear them
+        /// (SLAU445I 24.3.11, p. 645): the START discards UCBxTXBUF and then sets UCTXIFG0 (SLAU445I
+        /// Figure 24-12, p. 638), so a byte written on an old UCTXIFG0 would be lost, and an old UCSTPIFG
+        /// would end the wait for this transaction's STOP. The slave's flags and UCALIFG stay
+        /// (`EUsciI2C::clear_master_flags`).
+        fn generate_start(&mut self) {
+            self.usci().clear_master_flags();
+            self.usci().transmit_start();
+        }
+
+        /// Whether this transaction's STOP is on the bus. "UCTXSTP is automatically cleared after STOP is
+        /// generated" (SLAU445I Table 24-4, p. 650), and the next START has to wait for that (SLAU445I
+        /// 24.3.5.2.2, p. 639). The STOP then sets UCSTPIFG ("If a STOP condition was generated by the
+        /// eUSCI_B module, the UCSTPIFG is set": SLAU445I 24.3.5.2.2, p. 639) and clears UCBBUSY (SLAU445I
+        /// 24.3.2, p. 630). UCBBUSY shows it when an interrupt handler has cleared UCSTPIFG already, by
+        /// reading the vector (SLAU445I 24.3.11.5, p. 646).
+        fn stop_done(&self, ifg: &<Self::USCI as EUsciI2C>::IfgOut) -> bool {
+            !self.usci().uctxstp_rd() && (ifg.ucstpifg() || !self.usci().is_bus_busy())
+        }
+
+        /// Wait until the STOP of this transaction is on the bus (`stop_done`), then clear the
+        /// transaction's flags: UCSTPIFG is the flag of a slave's STOP too (SLAU445I Table 24-2, p. 646), so
+        /// a master-slave's `poll()` would report it later. A NACK discards the STOP instead ("Any set
+        /// UCTXSTT or UCTXSTP is also discarded": SLAU445I 24.3.5.2.1, p. 637), and `handle_errs` sends it
+        /// then.
+        fn wait_for_stop(&mut self, idx: usize) -> Result<(), Self::ErrorType> {
+            loop {
+                let ifg = self.usci().ifg_rd();
+                self.handle_errs(&ifg, idx)?;
+                if self.stop_done(&ifg) {
+                    break;
+                }
+            }
+            self.usci().clear_master_flags_keep_rx();
+            Ok(())
+        }
+
+        /// After a NACK "The master must react with either a STOP condition or a repeated START condition"
+        /// (SLAU445I 24.3.5.2.1, p. 637): send the STOP, wait until it's on the bus, and clear the
+        /// transaction's flags, the NACK's too (as `wait_for_stop`).
+        fn stop_after_nack(&mut self) {
+            self.usci().transmit_stop();
+            while !self.stop_done(&self.usci().ifg_rd()) {
+                asm::nop();
+            }
+            self.usci().clear_master_flags_keep_rx();
+        }
+
         fn blocking_read_unchecked(
             &mut self,
             address: u16,
@@ -735,19 +792,17 @@ mod sealed {
             // received byte (SLAU445I 24.3.5.2.2, p. 639; UCTXSTP, SLAU445I Table 24-4, p. 650).
             if buffer.is_empty() { return Ok(()) }
 
-            // Clear any flags from previous transactions (they aren't cleared automatically:
-            // SLAU445I 24.3.11, p. 645)
-            self.usci().ifg_rst();
             // Master receiver: UCBxI2CSA and UCTR = 0, then UCTXSTT (SLAU445I 24.3.5.2.2, p. 639)
             self.usci().i2csa_wr(address);
             self.usci().set_uctr(TransmissionMode::Receive.into());
 
             if send_start {
-                self.usci().transmit_start();
+                self.generate_start();
                 // Wait for initial address byte and (N)ACK to complete. ("The UCTXSTT flag is cleared as
-                // soon as the complete address is sent", SLAU445I 24.3.5.2.2, p. 639.)
+                // soon as the complete address is sent", SLAU445I 24.3.5.2.2, p. 639.) A lost arbitration
+                // ends the wait too.
                 while self.usci().uctxstt_rd() {
-                    asm::nop();
+                    self.handle_errs(&self.usci().ifg_rd(), 0)?;
                 }
             }
 
@@ -769,10 +824,7 @@ mod sealed {
             }
 
             if send_stop {
-                // UCTXSTP clears once the STOP is generated (SLAU445I Table 24-4, p. 650)
-                while self.usci().uctxstp_rd() {
-                    asm::nop();
-                }
+                self.wait_for_stop(len)?;
             }
 
             Ok(())
@@ -785,9 +837,6 @@ mod sealed {
             send_start: bool,
             send_stop: bool,
         ) -> Result<(), Self::ErrorType> {
-            // Clear any flags from previous transactions (they aren't cleared automatically:
-            // SLAU445I 24.3.11, p. 645)
-            self.usci().ifg_rst();
             // Master transmitter: UCBxI2CSA and UCTR = 1, then UCTXSTT (SLAU445I 24.3.5.2.1, p. 637)
             self.usci().i2csa_wr(address);
             self.usci().set_uctr(TransmissionMode::Transmit.into());
@@ -797,15 +846,18 @@ mod sealed {
             }
 
             if send_start {
-                self.usci().transmit_start();
+                self.generate_start();
             }
 
             // UCTXIFG0 is set when the START is generated, so the first byte goes into the buffer before the
-            // address is acknowledged (SLAU445I 24.3.5.2.1, p. 637)
+            // address is acknowledged (SLAU445I 24.3.5.2.1, p. 637). Without a START the write before left
+            // UCTXIFG0 set, and the bus is held "until data is written into UCBxTXBUF" (SLAU445I 24.3.5.2.1,
+            // p. 637).
             for (idx, &byte) in bytes.iter().enumerate() {
                 loop {
                     let ifg = self.usci().ifg_rd();
-                    self.handle_errs(&ifg, idx.saturating_sub(1))?; // Subtract index because buffer fills before any NACKs come through
+                    // Subtract index because buffer fills before any NACKs come through
+                    self.handle_errs(&ifg, idx.saturating_sub(1))?;
                     if ifg.uctxifg0() {
                         break;
                     }
@@ -818,12 +870,9 @@ mod sealed {
             }
 
             if send_stop {
-                // The STOP follows the next acknowledge (SLAU445I 24.3.5.2.1, p. 637), and UCBBUSY is
-                // "cleared after a STOP" (SLAU445I 24.3.2, p. 630)
+                // The STOP follows the next acknowledge (SLAU445I 24.3.5.2.1, p. 637)
                 self.usci().transmit_stop();
-                while self.usci().is_bus_busy() {
-                    self.handle_errs(&self.usci().ifg_rd(), bytes.len())?;
-                }
+                self.wait_for_stop(bytes.len())?;
             }
 
             Ok(())
@@ -831,18 +880,17 @@ mod sealed {
 
         fn zero_byte_write(&mut self) -> Result<(), Self::ErrorType> {
             // To send only the address, set UCTXSTT and UCTXSTP at the same time (user's guide:
-            // SLAU445I 24.3.8.2, p. 644)
+            // SLAU445I 24.3.8.2, p. 644), after clearing the flags of earlier transactions, as
+            // `generate_start` does
+            self.usci().clear_master_flags();
             self.usci().transmit_start_stop();
-            // An earlier note said "Bus stalls if nothing in Tx, even if a stop is scheduled", but
-            // SLAU445I 24.3.5.2.1, p. 637 says a STOP set while the eUSCI waits for data comes "even if no
-            // data was transmitted", and with UCTXSTP set before the data starts "only the address is
+            // An earlier note here said that the bus stalls with nothing in Tx, even with a stop scheduled,
+            // but SLAU445I 24.3.5.2.1, p. 637 says a STOP set while the eUSCI waits for data comes "even if
+            // no data was transmitted", and with UCTXSTP set before the data starts "only the address is
             // transmitted", so this byte isn't sent.
             self.usci().uctxbuf_wr(0);
-            while self.usci().uctxstt_rd() || self.usci().uctxstp_rd() {
-                self.handle_errs(&self.usci().ifg_rd(), 0)?;
-            }
-            self.handle_errs(&self.usci().ifg_rd(), 0)?;
-            Ok(())
+            // "In this case, the UCSTPIFG is set" (SLAU445I 24.3.5.2.1, p. 637)
+            self.wait_for_stop(0)
         }
 
         #[inline]
@@ -856,19 +904,25 @@ mod sealed {
             self.set_addressing_mode(SevenOrTenBit::addr_type());
             self.usci().set_uctr(mode.into());
             self.usci().i2csa_wr(address.into());
-            self.usci().transmit_start();
+            self.generate_start();
         }
 
         /// In multi-operation transactions update the NACK byte error count to match *total* bytes sent
+        /// (wrapping, as in release builds: it only numbers the byte)
         #[inline]
         fn add_nack_count(err: Self::ErrorType, bytes_already_sent: usize) -> Self::ErrorType {
+            let total = |n: usize| n.wrapping_add(bytes_already_sent);
             match err.nack_type() {
                 None => err,
-                Some(NackType::Address(n)) => Self::ErrorType::nack(NackType::Address(n + bytes_already_sent)),
-                Some(NackType::Data(n))    => Self::ErrorType::nack(NackType::Data(n + bytes_already_sent)),
+                Some(NackType::Address(n)) => Self::ErrorType::nack(NackType::Address(total(n))),
+                Some(NackType::Data(n))    => Self::ErrorType::nack(NackType::Data(total(n))),
             }
         }
 
+        // The blocking transfers clear only the flags of their own transaction, at its START and after its
+        // STOP: after a lost arbitration the flags are the slave role's (UCSTTIFG, UCRXIFG0, UCTXIFG0:
+        // SLAU445I Figure 24-12, p. 638; SLAU445I Figure 24-13, p. 640), and `return_to_master()` clears
+        // UCALIFG.
         #[inline]
         fn blocking_write(
             &mut self,
@@ -878,9 +932,7 @@ mod sealed {
             send_stop: bool,
         ) -> Result<(), Self::ErrorType> {
             self.can_proceed(address)?;
-            let res = self.blocking_write_unchecked(address, bytes, send_start, send_stop);
-            self.usci().ifg_rst();
-            res
+            self.blocking_write_unchecked(address, bytes, send_start, send_stop)
         }
 
         #[inline]
@@ -892,12 +944,11 @@ mod sealed {
             send_stop: bool,
         ) -> Result<(), Self::ErrorType> {
             self.can_proceed(address)?;
-            let res = self.blocking_read_unchecked(address, buffer, send_start, send_stop);
-            self.usci().ifg_rst();
-            res
+            self.blocking_read_unchecked(address, buffer, send_start, send_stop)
         }
 
-        /// blocking write then blocking read
+        /// blocking write then blocking read. A read without bytes puts nothing on the bus (see
+        /// `blocking_read_unchecked`), so with an empty `buffer` the write sends the STOP.
         #[inline]
         fn blocking_write_read(
             &mut self,
@@ -905,9 +956,26 @@ mod sealed {
             bytes: &[u8],
             buffer: &mut [u8],
         ) -> Result<(), Self::ErrorType> {
-            self.blocking_write(address, bytes, true, false)?;
+            self.blocking_write(address, bytes, true, buffer.is_empty())?;
             self.blocking_read(address, buffer, true, true)
                 .map_err(|e| Self::add_nack_count(e, bytes.len()))
+        }
+
+        /// The checks of the non-blocking master methods, before their buffer flag: a lost arbitration (see
+        /// `arbitration_err`), then a NACK
+        fn nb_errs(&mut self, ifg: &<Self::USCI as EUsciI2C>::IfgOut) -> nb::Result<(), Self::ErrorType> {
+            if let Some(err) = self.arbitration_err(ifg) {
+                return Err(Other(err));
+            }
+            if ifg.ucnackifg() {
+                // The byte counter restarts at each START and skips address bytes (SLAU445I 24.3.8, p. 643)
+                let nack_type = match self.usci().byte_count() {
+                    0 => NackType::Address(0),
+                    n => NackType::Data(n as usize),
+                };
+                return Err(Other(Self::ErrorType::nack(nack_type)));
+            }
+            Ok(())
         }
 
         fn mst_write_tx_buf(
@@ -915,15 +983,7 @@ mod sealed {
             byte: u8,
             ifg: &<Self::USCI as EUsciI2C>::IfgOut,
         ) -> nb::Result<(), Self::ErrorType> {
-            if ifg.ucnackifg() {
-                // The byte counter restarts at each START and skips address bytes (SLAU445I 24.3.8, p. 643)
-                let nack_type = match self.usci().byte_count() {
-                    0 => NackType::Address(0),
-                    n => NackType::Data(n as usize),
-                };
-
-                return Err(Other(Self::ErrorType::nack(nack_type)));
-            }
+            self.nb_errs(ifg)?;
             // UCTXIFG0: the transmitter can take a new byte (SLAU445I 24.3.11.1, p. 645)
             if !ifg.uctxifg0() {
                 return Err(WouldBlock);
@@ -936,15 +996,7 @@ mod sealed {
             &mut self,
             ifg: &<Self::USCI as EUsciI2C>::IfgOut,
         ) -> nb::Result<u8, Self::ErrorType> {
-            if ifg.ucnackifg() {
-                // The byte counter restarts at each START and skips address bytes (SLAU445I 24.3.8, p. 643)
-                let nack_type = match self.usci().byte_count() {
-                    0 => NackType::Address(0),
-                    n => NackType::Data(n as usize),
-                };
-
-                return Err(Other(Self::ErrorType::nack(nack_type)));
-            }
+            self.nb_errs(ifg)?;
             // UCRXIFG0: a byte was received into UCBxRXBUF (SLAU445I 24.3.11.3, p. 645)
             if !ifg.ucrxifg0() {
                 return Err(WouldBlock);
@@ -952,12 +1004,28 @@ mod sealed {
             Ok(self.usci().ucrxbuf_rd())
         }
 
-        /// Error handling during blocking read/writes. NACKs, bus arbitration, demotion to slave device, etc.
+        /// Error handling during blocking read/writes: a NACK, which ends the transaction with a STOP, or a
+        /// lost arbitration (see `arbitration_err`)
         fn handle_errs(
             &mut self,
             ifg: &<Self::USCI as EUsciI2C>::IfgOut,
             idx: usize,
-        ) -> Result<(), Self::ErrorType>;
+        ) -> Result<(), Self::ErrorType> {
+            if ifg.ucnackifg() {
+                self.stop_after_nack();
+                let nack = if idx == 0 { NackType::Address(idx) } else { NackType::Data(idx) };
+                return Err(Self::ErrorType::nack(nack));
+            }
+            match self.arbitration_err(ifg) {
+                Some(err) => Err(err),
+                None => Ok(()),
+            }
+        }
+
+        /// A lost arbitration, which only a role with other masters on the bus (UCMM = 1) can see: UCALIFG is
+        /// set and UCMST cleared (SLAU445I Table 24-2, p. 646). The flags stay as they are, for the slave
+        /// role and `return_to_master()`.
+        fn arbitration_err(&self, ifg: &<Self::USCI as EUsciI2C>::IfgOut) -> Option<Self::ErrorType>;
 
         /// Whether a master operation can occur at the moment
         fn can_proceed(&mut self, _address: u16) -> Result<(), Self::ErrorType>;
@@ -1021,14 +1089,64 @@ where M: PinMap
     /// the STOP is sent "even if no data was transmitted" (SLAU445I 24.3.5.2.1, p. 637); if it's stalled
     /// waiting for the Rx buffer to be read, the NACK "occurs immediately", followed by the STOP
     /// (SLAU445I 24.3.5.2.2, p. 639).
+    ///
+    /// As a transmitter, wait with [`tx_buf_empty()`](Self::tx_buf_empty) until the last byte has left the Tx
+    /// buffer first: "When transmitting a single byte of data, the UCTXSTP bit must be set while the byte is
+    /// being transmitted or any time after transmission begins, without writing new data into UCBxTXBUF.
+    /// Otherwise, only the address is transmitted" (SLAU445I 24.3.5.2.1, p. 637). Then
+    /// [`stop_sent()`](Self::stop_sent) tells when the transaction has ended.
     #[inline(always)]
     fn schedule_stop(&mut self) {
+        // The flags aren't cleared automatically (SLAU445I 24.3.11, p. 645). UCSTPIFG is cleared first, so
+        // that `stop_sent()` sees this STOP's own flag; UCTXIFG0, so that no byte goes into the Tx buffer
+        // after the STOP is requested; and UCNACKIFG, which the STOP answers (SLAU445I 24.3.5.2.1, p. 637). A
+        // byte already in UCBxRXBUF, the last one of a master receive say, stays readable, and the slave's
+        // flags stay too (`EUsciI2C::clear_master_flags`).
+        self.usci().clear_master_flags_keep_rx();
         self.usci().transmit_stop();
-        // For some reason the TXIFG flag needs to be cleared between transactions (the flags aren't cleared
-        // automatically: SLAU445I 24.3.11, p. 645). Every flag is cleared except the receive flags
-        // UCRXIFG0 to UCRXIFG3 (SLAU445I Table 24-19, p. 662 to p. 663): a byte already in UCBxRXBUF, the
-        // last one of a master receive say, must stay readable.
-        self.usci().ifg_clr_except_rx();
+    }
+
+    /// Check whether the Tx buffer is empty, without writing to it. Used as part of the non-blocking
+    /// interface: after the last byte of a write, a STOP ([`schedule_stop()`](Self::schedule_stop)) or a
+    /// repeated START (`send_start()`) has to wait until that byte has moved on to the shift register. "When
+    /// the data is transferred from the buffer to the shift register, UCTXIFG0 is set, indicating data
+    /// transmission has begun, and the UCTXSTP bit may be set", and data is only transmitted while "The
+    /// UCTXSTT bit is not set" (SLAU445I 24.3.5.2.1, p. 637).
+    ///
+    /// Returns `Err(WouldBlock)` while the byte is still in the Tx buffer, and the errors of the non-blocking
+    /// buffer methods: a NACK, and in the multi-master roles a lost arbitration.
+    #[inline]
+    fn tx_buf_empty(&mut self) -> nb::Result<(), Self::ErrorType> {
+        let ifg = self.usci().ifg_rd();
+        self.nb_errs(&ifg)?;
+        // UCTXIFG0 (SLAU445I 24.3.11.1, p. 645)
+        if !ifg.uctxifg0() {
+            return Err(WouldBlock);
+        }
+        Ok(())
+    }
+
+    /// Check whether the STOP has been sent: the one of [`schedule_stop()`](Self::schedule_stop), or the
+    /// automatic one of the byte counter. Used as part of the non-blocking interface, at the end of a
+    /// transaction: "the current transaction must be completed before the next one is initiated", which
+    /// UCTXSTP shows (SLAU445I 24.3.5.2.2, p. 639).
+    ///
+    /// The STOP sets the STOP flag, UCSTPIFG, of this eUSCI too (SLAU445I Table 24-2, p. 646). This clears
+    /// it, with the transaction's other flags, so that a master-slave doesn't report this STOP later as the
+    /// end of a slave transaction. UCRXIFG0 stays, so that a last received byte can still be read.
+    ///
+    /// Returns `Err(WouldBlock)` until then, and the errors of the non-blocking buffer methods: a NACK, and
+    /// in the multi-master roles a lost arbitration. A NACK discards a set UCTXSTP ("Any set UCTXSTT or
+    /// UCTXSTP is also discarded", SLAU445I 24.3.5.2.1, p. 637): call `schedule_stop()` again.
+    #[inline]
+    fn stop_sent(&mut self) -> nb::Result<(), Self::ErrorType> {
+        let ifg = self.usci().ifg_rd();
+        self.nb_errs(&ifg)?;
+        if !self.stop_done(&ifg) {
+            return Err(WouldBlock);
+        }
+        self.usci().clear_master_flags_keep_rx();
+        Ok(())
     }
 
     /// Checks whether a slave with the specified address is present on the I2C bus.
@@ -1066,7 +1184,15 @@ where M: PinMap
         }
     }
     /// Check the I2C bus flags for any events that should be dealt with. Returns `Err(WouldBlock)` if no events have occurred yet, otherwise `Ok(I2cEvent)`.
+    ///
+    /// A master-slave in master mode isn't a slave, so it gets `Err(WouldBlock)` then: being addressed
+    /// makes it a slave (SLAU445I Table 24-2, p. 646), and in master mode the flags are a master's, such as
+    /// the STOP flag of its own STOP.
     fn poll(&mut self) -> nb::Result<I2cEvent, Infallible> {
+        // UCMST (SLAU445I Table 24-4, p. 649)
+        if self.usci().is_master() {
+            return Err(WouldBlock);
+        }
         // UCSTPIFG, UCSTTIFG, UCRXIFG0, UCTXIFG0 with UCTR (SLAU445I Table 24-2, p. 646;
         // SLAU445I Table 24-19, p. 662)
         if self.usci().stop_received() {
@@ -1139,6 +1265,9 @@ where M: PinMap
 {
     /// Manually send a start condition and address byte. Used as part of the non-blocking interface.
     /// Passing a `u8` address uses 7-bit addressing, a `u16` address uses 10-bit addressing.
+    ///
+    /// It first clears the flags the transaction before left, as the START discards the Tx buffer and sets
+    /// UCTXIFG0 again (SLAU445I Figure 24-12, p. 638): read a last received byte before calling it.
     #[inline]
     fn send_start<SevenOrTenBit: AddressType>(
         &mut self,
@@ -1152,8 +1281,16 @@ where M: PinMap
 
     /// After losing arbitration (or after being addressed as a slave) call this method to return the peripheral to master mode.
     /// (The eUSCI clears UCMST in both cases: UCALIFG, SLAU445I Table 24-2, p. 646.)
+    ///
+    /// This also clears UCALIFG, which the eUSCI doesn't clear itself (SLAU445I 24.3.11, p. 645), so that the
+    /// master methods don't report the old arbitration loss again. A pending arbitration lost interrupt is
+    /// also one of the conditions in which the eUSCI_B stretches SCL (SLAU445I 24.3.7.2, p. 643). Clearing
+    /// UCALIFG resets UCTXIFGx too, and the next START sets UCTXIFG0 again (SLAU445I 24.3.11.1, p. 645).
     #[inline(always)]
-    fn return_to_master(&mut self) { self.usci().set_master(); }
+    fn return_to_master(&mut self) {
+        self.usci().clear_alifg();
+        self.usci().set_master();
+    }
 
     /// Check whether the device is currently in master mode (UCMST, SLAU445I Table 24-4, p. 649).
     #[inline(always)]
@@ -1187,23 +1324,8 @@ where
     M: PinMap,
 {
     type ErrorType = I2cSingleMasterErr;
-    fn handle_errs(
-        &mut self,
-        ifg: &<Self::USCI as EUsciI2C>::IfgOut,
-        idx: usize,
-    ) -> Result<(), Self::ErrorType> {
-        if ifg.ucnackifg() {
-            // After a NACK "The master must react with either a STOP condition or a repeated START condition"
-            // (SLAU445I 24.3.5.2.1, p. 637)
-            self.usci.transmit_stop();
-            let nack = if idx == 0 { NackType::Address(idx) } else { NackType::Data(idx) };
-            while self.usci.uctxstp_rd() {
-                asm::nop();
-            }
-            return Err(I2cSingleMasterErr::GotNACK(nack));
-        }
-        Ok(())
-    }
+    // No arbitration: with UCMM = 0 "There is no other master in the system" (SLAU445I Table 24-4, p. 649)
+    fn arbitration_err(&self, _ifg: &<Self::USCI as EUsciI2C>::IfgOut) -> Option<Self::ErrorType> { None }
 
     fn can_proceed(&mut self, _address: u16) -> Result<(), Self::ErrorType> { Ok(()) }
 }
@@ -1219,6 +1341,9 @@ where
 {
     /// Manually send a start condition and address byte. Used as part of the non-blocking interface.
     /// Passing a `u8` address uses 7-bit addressing, a `u16` address uses 10-bit addressing.
+    ///
+    /// It first clears the flags the transaction before left, as the START discards the Tx buffer and sets
+    /// UCTXIFG0 again (SLAU445I Figure 24-12, p. 638): read a last received byte before calling it.
     #[inline(always)]
     pub fn send_start<SevenOrTenBit: AddressType>(
         &mut self,
@@ -1286,20 +1411,9 @@ where
         Ok(())
     }
 
-    fn handle_errs(&mut self, ifg: &USCI::IfgOut, idx: usize) -> Result<(), I2cMultiMasterErr> {
-        if ifg.ucnackifg() {
-            // A NACK needs a STOP or a repeated START (SLAU445I 24.3.5.2.1, p. 637)
-            self.usci.transmit_stop();
-            let nack = if idx == 0 { NackType::Address(idx) } else { NackType::Data(idx) };
-            while self.usci.uctxstp_rd() {
-                asm::nop();
-            }
-            return Err(I2cMultiMasterErr::GotNACK(nack));
-        }
-        if ifg.ucalifg() {
-            return Err(I2cMultiMasterErr::ArbitrationLost);
-        }
-        Ok(())
+    // UCALIFG (SLAU445I Table 24-2, p. 646)
+    fn arbitration_err(&self, ifg: &USCI::IfgOut) -> Option<I2cMultiMasterErr> {
+        if ifg.ucalifg() { Some(I2cMultiMasterErr::ArbitrationLost) } else { None }
     }
 }
 impl<USCI, M> I2cRoleMaster<M> for I2cMultiMaster<USCI, M>
@@ -1324,12 +1438,8 @@ where
     /// `Ok(n)` if data was successfully retreived from the Rx buffer.
     #[inline]
     pub fn read_rx_buf(&mut self) -> nb::Result<u8, I2cMultiMasterErr> {
-        // UCALIFG in UCBxIFG (SLAU445I Table 24-19, p. 663)
-        let ifg = self.usci.ifg_rd();
-        if ifg.ucalifg() {
-            return Err(Other(I2cMultiMasterErr::ArbitrationLost));
-        }
-        self.mst_read_rx_buf(&ifg)
+        // UCALIFG, UCNACKIFG and UCRXIFG0 (SLAU445I Table 24-19, p. 663)
+        self.mst_read_rx_buf(&self.usci.ifg_rd())
     }
 
     /// Check if the Tx buffer is empty, if so write to it. Used as part of the non-blocking / interrupt-based interface.
@@ -1340,12 +1450,8 @@ where
     /// `Ok(())` if data was successfully loaded into the Tx buffer.
     #[inline]
     pub fn write_tx_buf(&mut self, byte: u8) -> nb::Result<(), I2cMultiMasterErr> {
-        // UCALIFG in UCBxIFG (SLAU445I Table 24-19, p. 663)
-        let ifg = self.usci.ifg_rd();
-        if ifg.ucalifg() {
-            return Err(Other(I2cMultiMasterErr::ArbitrationLost));
-        }
-        self.mst_write_tx_buf(byte, &ifg)
+        // UCALIFG, UCNACKIFG and UCTXIFG0 (SLAU445I Table 24-19, p. 663)
+        self.mst_write_tx_buf(byte, &self.usci.ifg_rd())
     }
 }
 
@@ -1458,24 +1564,16 @@ where
         Ok(())
     }
 
-    fn handle_errs(&mut self, ifg: &USCI::IfgOut, idx: usize) -> Result<(), I2cMasterSlaveErr> {
-        if ifg.ucnackifg() {
-            // A NACK needs a STOP or a repeated START (SLAU445I 24.3.5.2.1, p. 637)
-            self.usci.transmit_stop();
-            let nack = if idx == 0 { NackType::Address(idx) } else { NackType::Data(idx) };
-            while self.usci.uctxstp_rd() {
-                asm::nop();
-            }
-            return Err(I2cMasterSlaveErr::GotNACK(nack));
+    // UCALIFG with UCSTTIFG: addressed as a slave after losing arbitration (SLAU445I Figure 24-12, p. 638;
+    // SLAU445I Figure 24-13, p. 640)
+    fn arbitration_err(&self, ifg: &USCI::IfgOut) -> Option<I2cMasterSlaveErr> {
+        if !ifg.ucalifg() {
+            return None;
         }
-        // UCALIFG with UCSTTIFG: addressed as a slave after losing arbitration (SLAU445I Figure 24-12, p. 638)
-        if ifg.ucalifg() {
-            return match ifg.ucsttifg() {
-                false => Err(I2cMasterSlaveErr::ArbitrationLost),  // Lost arbitration
-                true  => Err(I2cMasterSlaveErr::AddressedAsSlave), // Lost arbitration and the slave address was us
-            };
-        }
-        Ok(())
+        Some(match ifg.ucsttifg() {
+            false => I2cMasterSlaveErr::ArbitrationLost,  // Lost arbitration
+            true  => I2cMasterSlaveErr::AddressedAsSlave, // Lost arbitration and the slave address was us
+        })
     }
 }
 impl<USCI, M> I2cRoleMaster<M> for I2cMasterSlave<USCI, M>
@@ -1511,16 +1609,8 @@ where
     /// `Ok(n)` if data was successfully retreived from the Rx buffer.
     #[inline]
     pub fn read_rx_buf_as_master(&mut self) -> nb::Result<u8, I2cMasterSlaveErr> {
-        // UCALIFG with UCSTTIFG: addressed after losing arbitration (SLAU445I Table 24-19, p. 663;
-        // SLAU445I Figure 24-13, p. 640)
-        let ifg = self.usci.ifg_rd();
-        if ifg.ucalifg() {
-            return match ifg.ucsttifg() {
-                false => Err(Other(I2cMasterSlaveErr::ArbitrationLost)),
-                true  => Err(Other(I2cMasterSlaveErr::AddressedAsSlave)),
-            };
-        }
-        self.mst_read_rx_buf(&ifg)
+        // UCALIFG with UCSTTIFG, UCNACKIFG and UCRXIFG0 (SLAU445I Table 24-19, p. 663)
+        self.mst_read_rx_buf(&self.usci.ifg_rd())
     }
 
     /// Check if the Rx buffer is full, if so read it. Used as part of the non-blocking / interrupt-based interface.
@@ -1548,16 +1638,8 @@ where
     /// `Ok(())` if data was successfully loaded into the Tx buffer.
     #[inline]
     pub fn write_tx_buf_as_master(&mut self, byte: u8) -> nb::Result<(), I2cMasterSlaveErr> {
-        // UCALIFG with UCSTTIFG: addressed after losing arbitration (SLAU445I Table 24-19, p. 663;
-        // SLAU445I Figure 24-12, p. 638)
-        let ifg = self.usci.ifg_rd();
-        if ifg.ucalifg() {
-            return match ifg.ucsttifg() {
-                false => Err(Other(I2cMasterSlaveErr::ArbitrationLost)),  // Lost arbitration
-                true  => Err(Other(I2cMasterSlaveErr::AddressedAsSlave)), // Lost arbitration and the slave address was us
-            };
-        }
-        self.mst_write_tx_buf(byte, &ifg)
+        // UCALIFG with UCSTTIFG, UCNACKIFG and UCTXIFG0 (SLAU445I Table 24-19, p. 663)
+        self.mst_write_tx_buf(byte, &self.usci.ifg_rd())
     }
 
     /// Check if the Tx buffer is empty, if so write to it. Used as part of the non-blocking / interrupt-based interface.
@@ -1586,8 +1668,10 @@ where
 macro_rules! impl_i2c_error {
     ($err_type: ty) => {
         impl I2cError for $err_type {
+            #[inline(always)]
             fn nack(variant: NackType) -> Self { Self::GotNACK(variant) }
 
+            #[inline(always)]
             fn nack_type(&self) -> Option<NackType> {
                 match self {
                     Self::GotNACK(nack_type) => Some(*nack_type),
@@ -1655,7 +1739,8 @@ pub enum I2cMasterSlaveErr {
     /// Another master on the bus addressed us as a slave device. The peripheral has been forced into slave mode
     /// (UCALIFG, SLAU445I Table 24-2, p. 646).
     /// The slave transaction *must* be completed before master operations can be resumed with
-    /// [`return_to_master()`](I2cRoleMulti::return_to_master).
+    /// [`return_to_master()`](I2cRoleMulti::return_to_master), which also clears the arbitration lost flag.
+    /// The master methods leave the flags of the slave transaction as they are.
     AddressedAsSlave,
     /// The eUSCI peripheral attempted to address itself. The hardware does not support this operation
     /// (SLAU445I 24.3.5.2, p. 636).
@@ -1712,7 +1797,8 @@ pub enum I2cVector {
     /// condition on the bus", SLAU445I Table 24-2, p. 646).
     /// This is usually set when acting as an I2C slave, but this can also occur as an I2C master: during a
     /// zero byte write (SLAU445I 24.3.5.2.1, p. 637), and as a master receiver "If a STOP condition was
-    /// generated by the eUSCI_B module" (SLAU445I 24.3.5.2.2, p. 639).
+    /// generated by the eUSCI_B module" (SLAU445I 24.3.5.2.2, p. 639). The blocking master methods and
+    /// [`stop_sent()`](I2cRoleMaster::stop_sent) clear the flag of the master's own STOP.
     StopReceived     = 0x08,
     /// Slave address 3 received a data byte.
     Slave3RxBufFull  = 0x0A,
@@ -1809,9 +1895,11 @@ pub trait AddressType: AddressMode + Into<u16> + Copy {
     fn addr_type() -> AddressingMode;
 }
 impl AddressType for SevenBitAddress {
+    #[inline(always)]
     fn addr_type() -> AddressingMode { AddressingMode::SevenBit }
 }
 impl AddressType for TenBitAddress {
+    #[inline(always)]
     fn addr_type() -> AddressingMode { AddressingMode::TenBit }
 }
 
@@ -1831,36 +1919,48 @@ mod ehal1 {
                 fn transaction(
                     &mut self,
                     address: TenOrSevenBit,
-                    ops: &mut [Operation<'_>],
+                    mut ops: &mut [Operation<'_>],
                 ) -> Result<(), Self::Error> {
                     self.set_addressing_mode(TenOrSevenBit::addr_type());
 
-                    let mut prev_discr = None;
-                    let mut bytes_sent = 0;
-                    let len = ops.len();
-                    for (i, op) in ops.iter_mut().enumerate() {
+                    // A read without bytes puts nothing on the bus, as the eUSCI can't receive zero bytes
+                    // (see `blocking_read_unchecked`), so the STOP follows the last operation that isn't
+                    // one. A write without bytes sends the address with its own STOP (`zero_byte_write`),
+                    // so the operation after it starts with a START.
+                    fn empty_read(op: &Operation<'_>) -> bool {
+                        matches!(op, Operation::Read(items) if items.is_empty())
+                    }
+                    // Whether the previous operation was a read; `None` before the first one, and after a
+                    // write without bytes
+                    let mut prev_read = None;
+                    let mut bytes_sent: usize = 0;
+                    while let Some((op, rest)) = core::mem::take(&mut ops).split_first_mut() {
+                        ops = rest;
+                        if empty_read(op) {
+                            continue;
+                        }
+                        let read = matches!(op, Operation::Read(_));
                         // Send a start if this is the first operation,
                         // or if the previous operation was a different type (e.g. Read and Write)
-                        let send_start = match prev_discr {
-                            None => true,
-                            Some(prev) => prev != core::mem::discriminant(op),
-                        };
-                        // Send a stop only if this is the last operation
-                        let send_stop = i == (len - 1);
+                        let send_start = prev_read != Some(read);
+                        // Send a stop only after the last operation that isn't an empty read
+                        let send_stop = ops.iter().all(empty_read);
 
-                        match op {
-                            Operation::Read(ref mut items) => {
+                        let len = match op {
+                            Operation::Read(items) => {
                                 self.blocking_read(address.into(), items, send_start, send_stop)
                                     .map_err(|e| Self::add_nack_count(e, bytes_sent))?;
-                                bytes_sent += items.len();
+                                items.len()
                             }
                             Operation::Write(items) => {
                                 self.blocking_write(address.into(), items, send_start, send_stop)
                                     .map_err(|e| Self::add_nack_count(e, bytes_sent))?;
-                                bytes_sent += items.len();
+                                items.len()
                             }
-                        }
-                        prev_discr = Some(core::mem::discriminant(op));
+                        };
+                        // Only numbers the byte of a NACK, so it wraps, as it does in release builds
+                        bytes_sent = bytes_sent.wrapping_add(len);
+                        prev_read = if len == 0 { None } else { Some(read) };
                     }
                     Ok(())
                 }

@@ -23,6 +23,7 @@ const CYCLES_PER_ITER: u32 = 3;
 
 impl SysDelay {
     /// Create a new delay object for an MCLK of `freq` Hz
+    #[inline(always)]
     pub(crate) fn new(freq: u32) -> Self {
         // Round up, so delays don't fall short. The clock could be REFOCLK or VLOCLK (SELMS,
         // SLAU445I Table 3-8, p. 117), so be careful of small frequencies.
@@ -51,9 +52,10 @@ impl SysDelay {
     }
 
     #[inline]
-    fn ms(&self, ms: u32) {
-        for _ in 0..ms {
+    fn ms(&self, mut ms: u32) {
+        while ms > 0 {
             Self::spin(self.iters_per_ms);
+            ms -= 1;
         }
     }
 
@@ -83,10 +85,14 @@ impl SysDelay {
 #[inline]
 pub(crate) fn delay_cycles(cycles: u32) {
     let mut iters = cycles.div_ceil(CYCLES_PER_ITER);
-    while iters > 0 {
+    // Tested at the end, so that a constant count that fits in one spin compiles to just that spin
+    loop {
         let chunk = iters.min(u16::MAX as u32);
         SysDelay::spin(chunk as u16);
         iters -= chunk;
+        if iters == 0 {
+            break;
+        }
     }
 }
 

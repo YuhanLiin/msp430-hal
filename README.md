@@ -50,6 +50,18 @@ rustflags = [
 With `libmul_none` multiplications run in software, about 5 to 10 times slower. Don't use `libmul_32`: it
 expects the multiplier at another address, which is PM5CTL0 on these devices.
 
+## Debugging
+
+Erratum EEM23 affects debugging on every supported device: "When modules using wait states (USB, MPY,
+CRC and FRAM controller in manual mode) are enabled, the EEM may trigger incorrectly. This can lead to
+an incorrect profile counter value or cause issues with the EEMs data watch point, state storage, and
+breakpoint functionality." There is no workaround, and only debugging is affected. Programs
+built like the examples use the multiplier (MPY32, through `libmul_f5`), the `crc` module uses the CRC,
+and the HAL sets FRAM wait states (NWAITS, SLAU445I 6.5, p. 302) for an MCLK above 8 MHz. On the
+MSP430FR2x5x, also "When more than 2 software breakpoints are set in continuous instruction addresses ...
+program counter (PC) will stuck at the first breakpoint and can't move on". (SLAZ695J EEM23, p. 9;
+SLAZ664S EEM23, p. 10; SLAZ726B EEM23, p. 7 to p. 8; SLAZ705H EEM23, p. 8)
+
 # Supported Devices
 The library currently supports a subset of the MSP430FR2xxx / 4xxx family: the MSP430FR2x5x and MSP430FR247x and MSP430FR25x2 subfamilies, and the MSP430FR2433.
 Adding support for a device in the MSP430FR2xxx/4xxx family is easy, see [Supporting additional devices](#Supporting-additional-devices).

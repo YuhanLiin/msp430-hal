@@ -458,9 +458,10 @@ pub struct Parts<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> 
 impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
     Parts<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
 {
-    /// Converts all parts into a GPIO batch so the entire port can be configured at once
+    /// Converts all parts into a GPIO batch so the entire port can be configured at once. Unlike a batch
+    /// from [`Batch::new`], it writes every register, as the pins may have changed since.
     #[inline]
-    pub fn batch(self) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> {
+    pub fn batch(self) -> Batch<PORT, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7, FromParts> {
         Batch::create()
     }
 

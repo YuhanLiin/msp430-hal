@@ -59,7 +59,7 @@ jobs:
           for ex in examples/*.rs; do
             # Skip examples that rely on non-MSRV features
             case "$(basename $ex)" in
-              lpm0.rs|defmt.rs|svsh_current.rs|lpm0_fram_off.rs)
+              lpm0.rs|defmt.rs|svsh_current.rs|lpm0_fram_off.rs|lpm3.rs|lpm4.rs|erratum_cs13.rs|erratum_pmm32.rs|erratum_gc5.rs)
                 echo "Skipping $ex"
                 ;;
               *)

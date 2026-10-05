@@ -93,7 +93,7 @@ fn main() -> ! {
             Err(RecvError::Framing)     => b'?',
             Err(RecvError::Break)       => b'#',
         };
-        block!(tx.write(ch));
+        block!(tx.write(ch)).ok();
     }
 }
 

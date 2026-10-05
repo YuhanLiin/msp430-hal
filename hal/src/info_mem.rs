@@ -20,16 +20,18 @@ pub use crate::device_specific::INFO_MEM_SIZE;
 /// Table 6-23, p. 61; SLASEO7C Table 9-31, p. 73; SLASEE4C Table 6-19, p. 62)
 const INFO_MEM_START_ADDR: *mut u8 = 0x1800 as *mut u8;
 
-/// A struct that manages writing and reading from information memory.
-pub struct InfoMemory {
-    info_mem: &'static mut [u8; INFO_MEM_SIZE],
-}
+/// A struct that manages writing and reading from information memory. It takes no memory itself: the
+/// information memory is always at the same address.
+pub struct InfoMemory(());
 impl InfoMemory {
-    /// Creates a mutable reference to the information memory segment. Don't call this method more than once.
+    /// Creates the one handle to the information memory segment. Don't call this method more than once.
     #[inline(always)]
-    pub(crate) fn new(_sys: _pac::Sys) -> Self {
-        Self { info_mem: unsafe { &mut *(INFO_MEM_START_ADDR as *mut [u8; INFO_MEM_SIZE]) } }
-    }
+    pub(crate) fn new(_sys: _pac::Sys) -> Self { Self(()) }
+
+    // The information memory, as an array. Only the one `InfoMemory` hands out references to it, tied to
+    // its own borrows.
+    #[inline(always)]
+    fn array() -> *mut [u8; INFO_MEM_SIZE] { INFO_MEM_START_ADDR as *mut [u8; INFO_MEM_SIZE] }
 
     /// Temporarily grants mutable access to the information memory as an array.
     ///
@@ -40,7 +42,7 @@ impl InfoMemory {
     pub fn write<T>(&mut self, f: impl FnOnce(&mut [u8; INFO_MEM_SIZE]) -> T) -> T {
         critical_section::with(|_| {
             Self::disable_write_protect();
-            let ret = f(&mut *self.info_mem);
+            let ret = f(unsafe { &mut *Self::array() });
             Self::enable_write_protect();
             ret
         })
@@ -51,7 +53,7 @@ impl InfoMemory {
     #[inline]
     pub fn into_unprotected(self) -> &'static mut [u8; INFO_MEM_SIZE] {
         Self::disable_write_protect();
-        self.info_mem
+        unsafe { &mut *Self::array() }
     }
 
     // `modify` keeps the program FRAM protection (PFWP and FRWPOA) as it is. The password reads
@@ -79,5 +81,6 @@ impl InfoMemory {
 
 impl Index<usize> for InfoMemory {
     type Output = u8;
-    fn index(&self, index: usize) -> &Self::Output { &self.info_mem[index] }
+    #[inline]
+    fn index(&self, index: usize) -> &Self::Output { unsafe { &(*Self::array())[index] } }
 }

@@ -64,7 +64,7 @@ fn main() -> ! {
     // Multi-master mode allows another master to control whether this device's SCK
     // and MOSI pins are outputs or high impedance via the STE pin.
     // (SLAU445I 23.3.3.1, p. 608: with STE master-inactive, "UCxSIMO and UCxCLK are set to inputs"; that
-    // mode has erratum SLAZ705H USCI50.) The bit clock is fBRCLK / UCBRx (SLAU445I 23.3.6, p. 609).
+    // mode has erratum SLAZ705H USCI50, p. 11.) The bit clock is fBRCLK / UCBRx (SLAU445I 23.3.6, p. 609).
     let mut spi: Spi<_, RemappedMapping> = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
         .to_master_using_smclk(&smclk, 16) // 8MHz / 16 = 500kHz
         .single_master_bus(miso, mosi, sck);

@@ -78,6 +78,9 @@ pub struct ResetMode;
 pub struct NmiMode;
 
 /// The resistor on the RST/NMI pin (SFRRPCR.SYSRSTRE, SYSRSTUP, SLAU445I Table 1-11, p. 64)
+///
+/// The MSP430FR2433 has no `None`: clearing SYSRSTRE there also disables the pull-down of the TEST/SBWTCK
+/// pin (erratum PORT28: SLAZ664S PORT28, p. 12 to p. 13).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RstPull {
     /// Pull-up, as after reset. The user's guide requires this or an external resistor if the pin is unused
@@ -85,7 +88,14 @@ pub enum RstPull {
     Up,
     /// Pull-down (SYSRSTRE = 1, SYSRSTUP = 0: SLAU445I Table 1-11, p. 64)
     Down,
-    /// No resistor (SYSRSTRE = 0: SLAU445I Table 1-11, p. 64)
+    /// No resistor (SYSRSTRE = 0: SLAU445I Table 1-11, p. 64).
+    ///
+    /// Not on the MSP430FR2433, because of erratum PORT28: clearing SYSRSTRE there also disables the
+    /// internal pull-down of the TEST/SBWTCK pin, which "can lead to increased current consumption and
+    /// unintentionally-enabled JTAG access to the device". The HAL follows the erratum's first workaround:
+    /// "Do not clear the SFRRPCR.SYSRSTRE bit, use the SFRRPCR.SYSRSTRUP bit to define direction of the
+    /// internal resistor on RST/NMI/SBWTDIO pin instead" (SLAZ664S PORT28, p. 12 to p. 13).
+    #[cfg(not(feature = "erratum_port28"))]
     None,
 }
 
@@ -178,6 +188,7 @@ fn with_pull(w: &mut _pac::sfr::sfrrpcr::W, pull: RstPull) -> &mut _pac::sfr::sf
     match pull {
         RstPull::Up => w.sysrstre().enable().sysrstup().pullup(),
         RstPull::Down => w.sysrstre().enable().sysrstup().pulldown(),
+        #[cfg(not(feature = "erratum_port28"))]
         RstPull::None => w.sysrstre().disable().sysrstup().pulldown(),
     }
 }
@@ -216,6 +227,14 @@ pub fn take_nmi_pin_interrupt() -> bool {
 /// Vacant memory is address space with nothing behind it. Reads return 3FFFh, and executing from it
 /// runs `JMP $`, which hangs the CPU (SLAU445I 1.9.2, p. 45). This catches such accesses, for example
 /// through a corrupted pointer, with the `SYSNMI` interrupt.
+///
+/// Erratum CPU46, on every supported device: after the POPM instruction "the last Stack Pointer increment
+/// is followed by an unintended read access to the memory. If this read access is performed on vacant
+/// memory, the VMAIFG will be set", which happens when POPM pops "up to the top of the STACK" (SLAZ695J
+/// CPU46, p. 7; SLAZ664S CPU46, p. 8; SLAZ726B CPU46, p. 7; SLAZ705H CPU46, p. 7). The code rustc
+/// generates doesn't use POPM: a disassembly of the example programs on 2026-10-05 found none, see
+/// REFERENCES.md. Hand-written assembly that pops up to the top of the stack needs the erratum's
+/// workaround.
 pub struct VacantMemory(());
 
 impl VacantMemory {
@@ -393,8 +412,13 @@ impl InterruptVectors {
     /// use through every reset but a BOR, see [`InterruptVectors`].
     #[inline]
     pub unsafe fn use_ram(&mut self) {
-        // The FRAM table, FF80h to FFFFh, 64 words
-        core::ptr::copy_nonoverlapping(0xFF80 as *const u16, ram_table(), 64);
+        // The FRAM table, FF80h to FFFFh, 64 words. Copied a word at a time with volatile accesses, which
+        // the compiler keeps as a loop: `copy_nonoverlapping` links the library's memcpy (186 bytes) for
+        // this one copy.
+        let fram_table = 0xFF80 as *const u16;
+        for i in 0..64 {
+            ram_table().add(i).write_volatile(fram_table.add(i).read_volatile());
+        }
         sys().sysctl().set_bits(|w| w.sysrivect().ram());
     }
 
@@ -405,19 +429,23 @@ impl InterruptVectors {
         unsafe { sys().sysctl().clear_bits(|w| w.sysrivect().fram()) };
     }
 
-    /// Point `interrupt`'s vector in the RAM table at `handler`. The PAC numbers each interrupt by its place
-    /// in the table: vector `n` is at FF80h + 2n in FRAM, and at the same place below the top of RAM in the
-    /// RAM table (SLAU445I 1.3.6.1, p. 36). It takes effect while the RAM table is in use, see
-    /// [`InterruptVectors::use_ram`], which overwrites it with the FRAM table, so call it afterwards. One
-    /// word is written, so an interrupt can't see half a vector.
+    /// Point `interrupt`'s vector in the RAM table at `handler`, at the same place below the top of RAM as
+    /// the vector has below FFFFh in FRAM (SLAU445I 1.3.6.1, p. 36). It takes effect while the RAM table is
+    /// in use, see [`InterruptVectors::use_ram`], which overwrites it with the FRAM table, so call it
+    /// afterwards. One word is written, so an interrupt can't see half a vector.
     ///
     /// # Safety
     ///
     /// As for [`InterruptVectors::use_ram`]. `handler` must be an interrupt handler.
     #[inline]
     pub unsafe fn set_handler(&mut self, interrupt: _pac::Interrupt, handler: unsafe extern "msp430-interrupt" fn()) {
+        // The PAC numbers each interrupt by its place in its own vector table, which msp430-rt links to end
+        // just below the reset vector at FFFEh. So interrupt n is at FFFEh - 2 * (len - n), slot 63 - len + n
+        // of the 64-word table. The MSP430FR247x and MSP430FR25x2 PACs list 63 vectors, from FF80h; the
+        // MSP430FR2433 PAC 59, from FF88h; the MSP430FR2355 PAC 45, from FFA4h.
+        let first = 63 - _pac::__INTERRUPTS.len();
         // Volatile: only the interrupt logic reads the table
-        ram_table().add(interrupt as u16 as usize).write_volatile(handler as usize as u16);
+        ram_table().add(first + interrupt as u16 as usize).write_volatile(handler as usize as u16);
     }
 }
 
@@ -429,6 +457,11 @@ fn ram_table() -> *mut u16 { (RAM_END - 0x80) as *mut u16 }
 /// (SYSBSLIND, SLAU445I Table 1-13, p. 66). A BOR resets the settings (`rw-[0]`, SLAU445I Table 1-14, p. 67,
 /// with the key in SLAU445I Table 0-1, p. 28). Measured on an MSP430FR2476, SYSBSLC read 0000h when the
 /// program started, after a software BOR too: the boot code left the BSL unprotected.
+///
+/// Erratum BSL18, on revision A of the MSP430FR2433 (hardware revision 10h, SLAZ664S 5.3, p. 5): "An empty
+/// reset vector (for example, as on an un-programmed device) should invoke the BSL, but it does not". The
+/// workaround: "Use the dedicated TEST and RST pins to perform hardware BSL invocation, or perform
+/// software BSL invocation from the main application" (SLAZ664S BSL18, p. 6; revisions: SLAZ664S 1, p. 2).
 pub struct Bsl(());
 
 impl Bsl {

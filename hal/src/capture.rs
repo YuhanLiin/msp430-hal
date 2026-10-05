@@ -91,7 +91,14 @@ macro_rules! config_fn {
         #[allow(non_snake_case)]
         #[inline(always)]
         /// Configure the capture input select of the capture pin as capture input B (CCIS = 01b: SLAU445I
-        /// Table 13-6, p. 386; SLAU445I Table 14-8, p. 411)
+        /// Table 13-6, p. 386; SLAU445I Table 14-8, p. 411). Which signal that is depends on the device and
+        /// the timer, see the timer signal connection tables listed at [`CapturePeriph`].
+        ///
+        /// On the MSP430FR247x it can't be eCOMP0's output, erratum COMP12: "eCOMP0 output can not be
+        /// selected internally to the Timer0_B7 CCI1B input (TB0CCTL1.CCIS = 01b)". The workaround:
+        /// "Connect eCOMP0 output and Timer B capture input externally through GPIOs" (SLAZ726B COMP12,
+        /// p. 5), such as eCOMP0's output pin P3.4 to TB0.CCI1A on P4.7, input A of the same capture pin
+        /// (SLASEO7C Table 9-22, p. 63; SLASEO7C Table 9-15, p. 59).
         pub fn $config_sel_b(mut self) -> Self {
             self.$pin.select = Ccis::InputB;
             self

@@ -39,6 +39,9 @@
 //! [`SpiSlave`] provides non-blocking methods that can be used for polling or interrupt-based implementations.
 //! It does not implement either of the embedded-hal traits.
 //!
+//! On the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2, a slave with UCCKPH = 1 has erratum USCI47: see
+//! [`to_slave()`](SpiConfig::to_slave).
+//!
 //! Pins used (pins with `RemappedMapping` in brackets):
 //!
 //! | Device       | eUSCI | MISO          | MOSI          | SCLK          | STE           |
@@ -65,11 +68,6 @@
 //! and on the MSP430FR2x5x in the VQFN-32 (RSM) package eUSCI_B1 only supports I2C (data sheets, device
 //! comparison and pin attributes: SLASE59F Table 3-1, p. 7 and SLASE59F Table 4-1, p. 11;
 //! SLASEC4D Table 3-1, p. 8, note (4) and SLASEC4D Table 4-1, p. 19, note (7)).
-//!
-//! On the MSP430FR2433 the PAC exposes each eUSCI once per mode, for example `usci_a0_uart_mode` and
-//! `usci_a0_spi_mode`. Both are the same hardware, so only use one of them for each eUSCI (the data sheet
-//! lists one register block per eUSCI: SLASE59F Table 6-40, p. 66; SLASE59F Table 6-41, p. 67;
-//! SLASE59F Table 6-42, p. 67).
 #[cfg(feature = "eusci_aclk")]
 use crate::clock::Aclk;
 use crate::{
@@ -182,13 +180,20 @@ where
     /// This device will act as a slave on the SPI bus (UCMST = 0, SLAU445I Table 23-3, p. 613;
     /// SLAU445I Table 23-12, p. 620).
     ///
-    /// On the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2, a slave with UCCKPH = 1
-    /// (`CaptureOnFirstTransition`) sends wrong data, and an eUSCI_A receives nothing, if SCLK isn't at its
-    /// idle level when the eUSCI leaves reset (SLAZ695J USCI47, SLAZ664S USCI47, SLAZ705H USCI47). The
-    /// erratum's workarounds: "Use clock phase mode UCCKPH = 0 for MSP SPI slave if allowed by the
-    /// application", or "The SPI master must set the clock pin at the appropriate idle level (low for
-    /// UCCKPL = 0, high for UCCKPL = 1) before SPI slave is reset (UCSWRST bit is cleared)", that is,
-    /// before this slave is configured.
+    /// Erratum USCI47, on the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2: a slave with UCCKPH = 1
+    /// (`CaptureOnFirstTransition`, as in `MODE_0` and `MODE_2`) sends wrong data, and an eUSCI_A slave
+    /// receives nothing, if SCLK isn't at its idle level when the eUSCI leaves reset (SLAZ695J USCI47,
+    /// p. 12 to p. 13; SLAZ664S USCI47, p. 14; SLAZ705H USCI47, p. 10 to p. 11). `shared_bus()` and
+    /// `exclusive_bus()` release it from reset (UCSWRST = 0) before they return. The HAL can't apply
+    /// the erratum's workarounds by itself:
+    /// - "Use clock phase mode UCCKPH = 0 for MSP SPI slave if allowed by the application":
+    ///   `CaptureOnSecondTransition`, as in `MODE_1` and `MODE_3`.
+    /// - "The SPI master must set the clock pin at the appropriate idle level (low for UCCKPL = 0, high
+    ///   for UCCKPL = 1) before SPI slave is reset (UCSWRST bit is cleared)": set the slave up while the
+    ///   master keeps SCLK idle.
+    /// - For an eUSCI_A slave, "If UCTXIFG is set twice but UCRXIFG is not set, reset the MSP SPI slave
+    ///   by setting and then clearing the UCSWRST bit, and inform the SPI master to resend the data":
+    ///   [`SpiSlave::reset()`] does the reset.
     pub fn to_slave(mut self) -> SpiConfig<USCI, Slave, M> {
         self.ctlw0.ucmst = false;
         // UCSSEL is 'don't care' in slave mode (SLAU445I 23.3.6, p. 609)
@@ -202,6 +207,11 @@ where
     /// This device will act as a master on the SPI bus, deriving SCLK from SMCLK.
     /// (UCMST = 1 and UCSSELx = 10b, SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620. SCLK is
     /// SMCLK / `clk_div`, and 0 also divides by 1: SLAU445I 23.3.6, p. 609.)
+    ///
+    /// SMCLK is derived from MCLK (SLAU445I 3.2.1, p. 102), so it's synchronous to MCLK, which is the
+    /// workaround of erratum USCI45 on the MSP430FR2x5x and MSP430FR2433: with an SCLK source
+    /// asynchronous to MCLK, the clock high phase of the first data bit can be stretched (SLAZ695J
+    /// USCI45, p. 12; SLAZ664S USCI45, p. 13 to p. 14).
     pub fn to_master_using_smclk(
         mut self,
         _smclk: &Smclk,
@@ -223,8 +233,10 @@ where
     /// devices: SLASEC4D Table 6-9, p. 68; SLASEO7C Table 9-8, p. 50; SLASEE4C Table 6-8, p. 49. SCLK is
     /// ACLK / `clk_div`, and 0 also divides by 1: SLAU445I 23.3.6, p. 609.)
     ///
-    /// On the MSP430FR2x5x, the clock high phase of the first data bit can in rare cases be stretched when
-    /// ACLK is asynchronous to MCLK; no data is lost (SLAZ695J USCI45).
+    /// Erratum USCI45, on the MSP430FR2x5x: when ACLK is asynchronous to MCLK, the clock high phase of the
+    /// first data bit can in rare cases be stretched significantly; no data is lost (SLAZ695J USCI45,
+    /// p. 12). The erratum's workaround is an SCLK source synchronous to MCLK, such as SMCLK
+    /// ([`to_master_using_smclk()`](Self::to_master_using_smclk)).
     pub fn to_master_using_aclk(
         mut self,
         _aclk: &Aclk,
@@ -246,9 +258,16 @@ where
     /// the MSP430FR2433: SLASE59F Table 6-7, p. 46. SCLK is MODCLK / `clk_div`, and 0 also divides by 1:
     /// SLAU445I 23.3.6, p. 609.)
     ///
-    /// The clock high phase of the first data bit can in rare cases be stretched when MODCLK is asynchronous
-    /// to MCLK; no data is lost (SLAZ664S USCI45).
+    /// Erratum USCI45: when the SCLK source is asynchronous to MCLK, the clock high phase of the first data
+    /// bit can in rare cases be stretched significantly; no data is lost (SLAZ664S USCI45, p. 13 to
+    /// p. 14). MODCLK always is: it comes from its own oscillator, MODOSC, which MCLK can't run from
+    /// (SLAU445I 3.2.15, p. 111; SELMS: SLAU445I Table 3-8, p. 117). The erratum's workaround is an SCLK
+    /// source synchronous to MCLK, such as SMCLK ([`to_master_using_smclk()`](Self::to_master_using_smclk)).
+    ///
+    /// This also sets MODOSCREQEN, so that MODCLK runs for the eUSCI whichever kind of request it makes
+    /// (SLAU445I 3.2.15.1, p. 111; SLAU445I Table 3-12, p. 123).
     pub fn to_master_using_modclk(mut self, clk_div: u16) -> SpiConfig<USCI, Master, M> {
+        crate::clock::enable_modosc_conditional_requests();
         self.ctlw0.ucmst = true;
         self.ctlw0.ucssel = Ucssel::DeviceSpecific;
         self.prescaler = clk_div;
@@ -308,10 +327,10 @@ where
     /// SLASEE4C Figure 6-3, p. 57).
     ///
     /// Erratum USCI50: "only move data into UCxTXBUF when UCxSTE is in the active state" (SLAZ695J USCI50,
-    /// SLAZ664S USCI50, SLAZ726B USCI50, SLAZ705H USCI50). Measured on an MSP430FR2476, a character written
-    /// to UCxTXBUF while another master has the bus is never sent. So the writes return `WouldBlock`, and the
-    /// blocking ones wait, until [`Spi::bus_available()`]; check it before
-    /// [`write_unchecked()`](Spi::write_unchecked).
+    /// p. 13; SLAZ664S USCI50, p. 14 to p. 15; SLAZ726B USCI50, p. 8 to p. 9; SLAZ705H USCI50, p. 11).
+    /// Measured on an MSP430FR2476, a character written to UCxTXBUF while another master has the bus is
+    /// never sent. So the writes return `WouldBlock`, and the blocking ones wait, until
+    /// [`Spi::bus_available()`]; check it before [`write_unchecked()`](Spi::write_unchecked).
     ///
     /// A transfer that another master interrupts is aborted, and the next read returns
     /// [`SpiErr::BusConflict`]: "the data must be rewritten" (SLAU445I 23.3.3.1, p. 608). Repeat the
@@ -450,11 +469,10 @@ where
         // remapping bits are set here
         USCI::configure_pin_mapping();
 
-        // 4. Clear UCSWRST
+        // 4. Clear UCSWRST. The interrupts stay off: setting UCSWRST in step 1 cleared UCTXIE and UCRXIE
+        // ("When set, the UCSWRST bit resets the UCRXIE, UCTXIE, UCRXIFG, UCOE, and UCFE bits", SLAU445I
+        // 23.3.1, p. 606).
         self.usci.ctw0_clear_rst();
-
-        self.usci.clear_transmit_interrupt();
-        self.usci.clear_receive_interrupt();
     }
 }
 
@@ -465,6 +483,9 @@ where crate::pac::EUsciB1: SpiUsci<M>
     /// Set eUSCI_B1 up as the 4-wire SPI slave of the Manchester Function Module, see [`crate::mfm`]. The MFM
     /// connects to it internally, so its own pins aren't needed (SLASEC4D 6.10.14, p. 79: "the eUSCI_B1 must
     /// be configured in 4-wire SPI slave mode"; SLAU445I 25.6.1, p. 668).
+    ///
+    /// Erratum USCI47 applies to this slave as to any other, see [`SpiConfig::to_slave`]: with UCCKPH = 1
+    /// its output data can be wrong (SLAZ695J USCI47, p. 12 to p. 13).
     pub fn mfm_slave(mut self, ste_pol: StePolarity) -> SpiSlave<crate::pac::EUsciB1, M> {
         // UCMODEx = 01b: STE active high, 10b: STE active low (SLAU445I Table 23-12, p. 620)
         self.ctlw0.ucmode = match ste_pol {
@@ -553,14 +574,21 @@ macro_rules! spi_common {
         // UCFE: another master interrupted a transfer on a multi-master bus, which aborted it (SLAU445I
         // 23.3.3.1, p. 608); UCFE isn't used otherwise (SLAU445I Table 23-5, p. 615). Measured on an
         // MSP430FR2476, the abort sets UCRXIFG too, with the last character still in UCxRXBUF, and a character
-        // waiting in UCxTXBUF stays there and isn't sent. A reset of the eUSCI drops both and clears the flags
-        // (UCSWRST: SLAU445I 23.3.1, p. 606). It clears the interrupt enables too, so they're set again.
+        // waiting in UCxTXBUF stays there and isn't sent. A reset of the eUSCI drops both and clears the
+        // flags.
         fn bus_conflict(&mut self) -> SpiErr {
+            self.reset_keeping_interrupts();
+            SpiErr::BusConflict
+        }
+
+        // Set and clear UCSWRST, which ends a transfer in progress (SLAU445I 23.3.5, p. 609), sets UCTXIFG
+        // and clears UCRXIFG, UCOE and UCFE (SLAU445I 23.3.1, p. 606). It clears the interrupt enables too,
+        // so they're set again.
+        fn reset_keeping_interrupts(&mut self) {
             let ie = self.usci.ie_rd();
             self.usci.ctw0_set_rst();
             self.usci.ctw0_clear_rst();
             self.usci.ie_wr(ie);
-            SpiErr::BusConflict
         }
 
         /// Get the source of the interrupt currently being serviced: the highest-priority pending interrupt
@@ -680,6 +708,21 @@ where
         } else {
             Err(WouldBlock)
         }
+    }
+
+    /// Reset the eUSCI: set and clear UCSWRST, which ends a transfer in progress (SLAU445I 23.3.5,
+    /// p. 609), sets UCTXIFG and clears UCRXIFG, UCOE and UCFE (SLAU445I 23.3.1, p. 606). The interrupt
+    /// enables, which the reset clears too, are kept.
+    ///
+    /// This is the last workaround of erratum USCI47 (MSP430FR2x5x, MSP430FR2433, MSP430FR25x2), for an
+    /// eUSCI_A slave with UCCKPH = 1 that left reset while SCLK wasn't idle, and since then receives
+    /// nothing: "If UCTXIFG is set twice but UCRXIFG is not set, reset the MSP SPI slave by setting and
+    /// then clearing the UCSWRST bit, and inform the SPI master to resend the data" (SLAZ695J USCI47,
+    /// p. 12 to p. 13; SLAZ664S USCI47, p. 14; SLAZ705H USCI47, p. 10 to p. 11). Reset it while SCLK is
+    /// idle, or the reset meets the erratum's condition again; see [`SpiConfig::to_slave`].
+    #[inline]
+    pub fn reset(&mut self) {
+        self.reset_keeping_interrupts();
     }
 }
 

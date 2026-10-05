@@ -54,6 +54,11 @@
 //! configuration, so the two functions below provide a reference that can be used to read from these channels.
 //! The ADC channel tables listed above give channel 12 as the temperature sensor, 13 as the internal
 //! reference, 14 as DVSS and 15 as DVCC.
+//!
+//! On the MSP430FR2433 and MSP430FR25x2, temperature sensor results may be wrong with ACLK as the ADC clock
+//! in LPM3 (erratum ADC50). Read the sensor with SMCLK or MODCLK as the ADC clock, with a 100 µs sampling
+//! time if the conversion is triggered from LPM3, or in LPM0 or active mode (SLAZ664S ADC50, p. 6;
+//! SLAZ705H ADC50, p. 5). See [`AdcConfig::use_aclk()`].
 
 use crate::_pac;
 use crate::{
@@ -155,6 +160,7 @@ macro_rules! impl_adc_channel_pin {
         impl<DIR> Channel<Adc> for Pin<$port, $pin, $mode<DIR>> {
             type ID = u8;
 
+            #[inline(always)]
             fn channel() -> Self::ID { $channel }
         }
         // On the MSP430FR2433 and MSP430FR25x2 ADC functionality is done via ADCPCTLx instead of
@@ -176,6 +182,7 @@ macro_rules! impl_adc_channel_extra {
         impl Channel<Adc> for $type {
             type ID = u8;
 
+            #[inline(always)]
             fn channel() -> Self::ID { $channel }
         }
     };
@@ -193,6 +200,7 @@ impl_adc_channel_extra!(InternalVRef, 13);
 impl<PIN: Channel<Adc, ID = u8>> Channel<Adc> for VrefOutput<PIN> {
     type ID = u8;
 
+    #[inline(always)]
     fn channel() -> Self::ID { PIN::channel() }
 }
 
@@ -217,21 +225,6 @@ pub fn adc_ch15_vcc() -> AdcVccChannel { AdcVccChannel }
 pub struct NoClockSet;
 /// Typestate for an ADC configuration with a clock source selected
 pub struct ClockSet(ClockSource);
-
-/// `x / (2^BITS - 1)`, rounded down, from shifts: the MSP430 has no divider, and a library division
-/// takes several hundred cycles. `(x + x / 2^BITS) / 2^BITS` is never above the quotient, and at most
-/// one below it for the products `count_to_mv` divides; the loop makes up the difference.
-#[inline(always)]
-fn div_by_full_scale<const BITS: u32>(x: u32) -> u32 {
-    let full_scale = (1 << BITS) - 1;
-    let mut quotient = (x + (x >> BITS)) >> BITS;
-    let mut remainder = x - ((quotient << BITS) - quotient);
-    while remainder >= full_scale {
-        quotient += 1;
-        remainder -= full_scale;
-    }
-    quotient
-}
 
 /// Configuration object for an ADC.
 ///
@@ -266,6 +259,7 @@ pub struct AdcConfig<STATE> {
 
 // Only implement Default for NoClockSet
 impl Default for AdcConfig<NoClockSet> {
+    #[inline]
     fn default() -> Self {
         Self {
             state: NoClockSet,
@@ -281,6 +275,7 @@ impl Default for AdcConfig<NoClockSet> {
 
 impl AdcConfig<NoClockSet> {
     /// Creates an ADC configuration. A default implementation is also available through `::default()`
+    #[inline]
     pub fn new(
         clock_divider: ClockDivider,
         predivider: Predivider,
@@ -299,6 +294,7 @@ impl AdcConfig<NoClockSet> {
         }
     }
     /// Configure the ADC to use SMCLK (ADCSSELx: SLAU445I Table 21-4, p. 564)
+    #[inline]
     pub fn use_smclk(self, _smclk: &Smclk) -> AdcConfig<ClockSet> {
         AdcConfig {
             state: ClockSet(ClockSource::Smclk),
@@ -312,11 +308,13 @@ impl AdcConfig<NoClockSet> {
     }
     /// Configure the ADC to use ACLK (ADCSSELx: SLAU445I Table 21-4, p. 564)
     ///
-    /// On the MSP430FR2433 and MSP430FR25x2, temperature sensor readings taken in LPM3 with ACLK as the
-    /// ADC clock may be wrong: "When ACLK is used as ADC clock source and device is in LPM3 mode while
-    /// sampling the on-chip temperature sensor, the ADC may generate erroneous conversion results". The
-    /// erratum's workarounds are SMCLK or MODCLK as the ADC clock, with "A 100us sampling time" if the
-    /// conversion is triggered from LPM3, or LPM0 or active mode (SLAZ664S ADC50; SLAZ705H ADC50).
+    /// Erratum ADC50, on the MSP430FR2433 and MSP430FR25x2: temperature sensor readings taken in LPM3 with
+    /// ACLK as the ADC clock may be wrong: "When ACLK is used as ADC clock source and device is in LPM3 mode
+    /// while sampling the on-chip temperature sensor, the ADC may generate erroneous conversion results".
+    /// The erratum's workarounds are SMCLK or MODCLK as the ADC clock ([`use_smclk()`](Self::use_smclk),
+    /// [`use_modclk()`](Self::use_modclk)), with "A 100us sampling time" if the conversion is triggered
+    /// from LPM3, or LPM0 or active mode (SLAZ664S ADC50, p. 6; SLAZ705H ADC50, p. 5).
+    #[inline]
     pub fn use_aclk(self, _aclk: &Aclk) -> AdcConfig<ClockSet> {
         AdcConfig {
             state: ClockSet(ClockSource::Aclk),
@@ -329,6 +327,15 @@ impl AdcConfig<NoClockSet> {
         }
     }
     /// Configure the ADC to use MODCLK (ADCSSELx: SLAU445I Table 21-4, p. 564)
+    ///
+    /// "During a conversion, the ADC module issues an unconditional request for the MODOSC clock source"
+    /// (SLAU445I 3.2.15.1, p. 111). On the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2, a MODCLK request or
+    /// its removal ("e.g. end of ADC conversion") that coincides with an interrupt request and the entry
+    /// into LPM3 or LPM4 can lock up the device or make it run unintended code, erratum PMM32 (SLAZ695J
+    /// PMM32, p. 9 to p. 10; SLAZ664S PMM32, p. 11; SLAZ705H PMM32, p. 8 to p. 9). The [`lpm`](crate::lpm)
+    /// functions [`request_lpm3()`](crate::lpm::request_lpm3) and
+    /// [`request_lpm4()`](crate::lpm::request_lpm4) work around it.
+    #[inline]
     pub fn use_modclk(self) -> AdcConfig<ClockSet> {
         AdcConfig {
             state: ClockSet(ClockSource::Modclk),
@@ -343,6 +350,7 @@ impl AdcConfig<NoClockSet> {
 }
 impl AdcConfig<ClockSet> {
     /// Applies this ADC configuration to hardware registers, and returns an ADC.
+    #[inline]
     pub fn configure(self, mut adc_reg: _pac::Adc) -> Adc {
         // Disable the ADC before we set the other bits. Some can only be set while the ADC is disabled.
         // (SLAU445I 21.2.1, p. 541: "the ADC control bits can be modified only when ADCENC = 0")
@@ -360,6 +368,9 @@ impl AdcConfig<ClockSet> {
             .adcdiv().variant(self.clock_divider)
         );
 
+        // One word write. On the MSP430FR2433, "ADCHI/ADCLO may be reset unexpectedly when ADCCTL2 high byte
+        // is written byte-wise", erratum ADC63, whose workaround is "Write to ADCCTL2 high byte in word-wise
+        // method" (SLAZ664S ADC63, p. 6). The high byte holds ADCPDIVx (SLAU445I 21.3.3, p. 565).
         adc_reg.adcctl2().write(|w| w
             .adcpdiv().variant(self.predivider)
             .adcres().variant(self.resolution)
@@ -568,11 +579,10 @@ impl<REF> Adc<REF> {
     /// use to save power").
     pub fn disable(&mut self) { disable_adc_reg(&mut self.adc_reg); }
 
-    /// Selects which pin to sample (ADCINCHx: SLAU445I Table 21-8, p. 567).
-    fn set_pin<PIN>(&mut self, _pin: &PIN)
-    where PIN: Channel<Adc, ID = u8> {
+    /// Selects which channel to sample (ADCINCHx: SLAU445I Table 21-8, p. 567).
+    fn set_channel(&mut self, channel: u8) {
         self.adc_reg.adcmctl0().modify(|_, w|
-            unsafe { w.adcinch().bits(PIN::channel()) }
+            unsafe { w.adcinch().bits(channel) }
         );
     }
 
@@ -592,14 +602,20 @@ impl<REF> Adc<REF> {
     ///
     /// A conversion that is still pending for another channel is finished first and its result
     /// discarded.
-    pub fn read_count<PIN>(&mut self, pin: &mut PIN) -> nb::Result<u16, Infallible>
+    pub fn read_count<PIN>(&mut self, _pin: &mut PIN) -> nb::Result<u16, Infallible>
     where PIN: Channel<Adc, ID = u8> {
+        self.read_channel(PIN::channel())
+    }
+
+    // `read_count()` for a channel number: not generic over the pin, so the reads of different channels
+    // share this code
+    fn read_channel(&mut self, channel: u8) -> nb::Result<u16, Infallible> {
         if let Some(pending) = self.pending {
             if self.adc_is_busy() {
                 return Err(nb::Error::WouldBlock);
             }
             self.pending = None;
-            if pending == PIN::channel() {
+            if pending == channel {
                 return Ok(self.adc_get_result());
             }
         }
@@ -609,24 +625,36 @@ impl<REF> Adc<REF> {
         // SLAU445I Table 21-3, p. 561)
         self.adc_reg.adcctl1().modify(|_, w| w.adcshs().software().adcissh().clear_bit().adcconseq().single().adcshp().set_bit());
         self.adc_reg.adcctl0().modify(|_, w| w.adcmsc().clear_bit());
-        self.set_pin(pin);
+        self.set_channel(channel);
         self.enable();
 
         self.start_conversion();
-        self.pending = Some(PIN::channel());
+        self.pending = Some(channel);
         Err(nb::Error::WouldBlock)
     }
 
     /// Convert an ADC count to a voltage value in millivolts, rounded down.
     ///
-    /// `ref_voltage_mv` is the reference voltage of the ADC in millivolts. The full-scale count
-    /// (255, 1023 or 4095) corresponds to the reference voltage, as in the data sheets' DVCC equation
-    /// (SLASEC4D 6.10.1, p. 67: DVCC = 4095 x reference voltage / ADC result; with 1023 in
-    /// SLASEO7C 9.10.1, p. 49, SLASE59F 6.10.1, p. 45, and SLASEE4C 6.10.1, p. 48) and in the ADCDF
-    /// description (SLAU445I Table 21-5, p. 565: "+VREF results in 03FFh"). The ADC conversion formula
-    /// of SLAU445I 21.2.1, p. 541, has 1024 or 4096 instead, a difference of at most 1 LSB. With an
-    /// external negative reference, this is the voltage above VR-. A count in the signed [`DataFormat`]
-    /// is converted too.
+    /// `ref_voltage_mv` is the reference voltage of the ADC in millivolts. The user's guide gives the
+    /// conversion formula as `count = 1024 × (Vin - VR-) / (VR+ - VR-)` for 10-bit results and with 4096
+    /// for 12-bit results (SLAU445I 21.2.1, p. 541), so 2^n for n-bit results, and 256 for 8-bit ones
+    /// (ADCRES: SLAU445I Table 21-5, p. 565). This returns the voltage at which the formula gives `count`:
+    /// `count × ref_voltage_mv / 2^n`. The full-scale count, 255, 1023 or 4095, also stands for every
+    /// input at or above VR+ ("full-scale ... when the input signal is equal to or higher than VR+", same
+    /// section), so it converts to one step, `ref_voltage_mv / 2^n`, below the reference.
+    ///
+    /// Each count stands for a range of inputs one step wide. The user's guide doesn't say whether the
+    /// voltage this returns is the bottom of that range or its middle, which depends on whether the
+    /// converter rounds or truncates. Neither changes the result by more than one step, less than the
+    /// specified errors: in 12-bit mode, for example, a gain error of ±9 LSB and an offset error of ±4 mV
+    /// (SLASEO7C 8.12.8.3, p. 41), or ±3 LSB and ±1.5 mV (SLASEC4D Table 5-22, p. 52).
+    ///
+    /// The data sheets' equation for DVCC divides by 4095 or 1023 instead of 2^n (SLASEC4D 6.10.1, p. 67;
+    /// SLASEO7C 9.10.1, p. 49; SLASE59F 6.10.1, p. 45; SLASEE4C 6.10.1, p. 48). This follows the user's
+    /// guide, which defines the ADC core's conversion. The two differ by at most one step, at full scale.
+    ///
+    /// With an external negative reference, this is the voltage above VR-. A count in the signed
+    /// [`DataFormat`] is converted too.
     pub fn count_to_mv(&self, count: u16, ref_voltage_mv: u16) -> u16 {
         let ctl2 = self.adc_reg.adcctl2().read();
         // ADCRES (SLAU445I Table 21-5, p. 565)
@@ -643,13 +671,8 @@ impl<REF> Adc<REF> {
         } else {
             count
         };
-        let product = count as u32 * ref_voltage_mv as u32;
-        let mv = match bits {
-            8 => div_by_full_scale::<8>(product),
-            10 => div_by_full_scale::<10>(product),
-            _ => div_by_full_scale::<12>(product),
-        };
-        mv as u16
+        // count × VREF / 2^n (SLAU445I 21.2.1, p. 541)
+        ((count as u32 * ref_voltage_mv as u32) >> bits) as u16
     }
 
     /// Begins a single ADC conversion if one isn't already underway, enabling the ADC in the process.

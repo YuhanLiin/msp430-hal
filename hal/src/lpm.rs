@@ -32,6 +32,21 @@
 //!
 //! GPIO pins will maintain the value they had when LPM4 was entered (SLAU445I 1.4, p. 36).
 //!
+//! # Errata of LPM3 and LPM4
+//! On the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2 the transition to LPM3 or LPM4 can lock up the
+//! device, or make it run unintended code, when an interrupt is requested at the same time (SLAZ695J
+//! CS13, p. 8, and PMM32, p. 9 to p. 10; SLAZ664S CS13, p. 9, and PMM32, p. 11 to p. 12; SLAZ705H CS13,
+//! p. 8, and PMM32, p. 8 to p. 9). [`request_lpm3`] and [`request_lpm4`] apply TI's workarounds to the
+//! entry they make, and on the MSP430FR2433 also the one for the bit errors that the FRAM can report
+//! after a wake-up although it has none (SLAZ664S GC5, p. 10 to p. 11).
+//!
+//! The errata name entries "during ISR exits" too. An interrupt handler runs from FRAM, which powers the
+//! FRAM up again (SLAU445I 6.8, p. 303), so a handler that returns to the sleep enters LPM3 or LPM4 again
+//! with the FRAM active, without the workaround for PMM32. On those devices, let each interrupt handler
+//! wake the CPU (`#[interrupt(wake_cpu)]`) and call `request_lpm3()` or `request_lpm4()` again, as
+//! [`request_lpm3`] explains. No handler can run between the workaround and the start of the sleep:
+//! the functions keep interrupts disabled for that part.
+//!
 //! # LPM3.5
 //! LPM3.5 is an extension of LPM4 that also disables the RAM and analog peripherals. Unlike in LPM4,
 //! the very low power oscillators (VLOCLK or XTCLK) are expected to be used in LPM3.5 (SLASEC4D
@@ -119,7 +134,8 @@ fn sleep<const MASK: u8>() {
 /// peripheral still needs SMCLK (SLAU445I Table 1-3, p. 39).
 ///
 /// On the devices with errata CS13 and PMM32 the entry works around them, see
-/// [`lpm3_4_with_workarounds`].
+/// [`lpm3_4_with_workarounds`] (SLAZ695J CS13, p. 8 to p. 9, and PMM32, p. 9 to p. 11; SLAZ664S CS13,
+/// p. 9 to p. 10, and PMM32, p. 11 to p. 12; SLAZ705H CS13, p. 7 to p. 8, and PMM32, p. 8 to p. 10).
 #[inline(always)]
 fn request_lpm<const MASK: u8>() {
     #[cfg(feature = "xt1_high_frequency")]
@@ -147,73 +163,98 @@ fn hfxt_in_use() -> bool {
 }
 
 /// Enter LPM3 or LPM4 (the status register bits in `mask`) with the workarounds for the errata that
-/// can lock up the device on the way in, on the MSP430FR2355, MSP430FR2433 and MSP430FR2522:
+/// can lock up the device on the way in, on the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2:
 ///
 /// - CS13, a lock-up when an interrupt arrives during the entry with the DCO above 2 MHz. Workaround
 ///   4: "Set DCOCLK to 2MHz or lower before entering LPM3/4, then restore DCOCLK after wake-up"
-///   (SLAZ695J CS13, p. 9; SLAZ664S CS13; SLAZ705H CS13). Interrupt handlers run on the slowed DCO,
-///   with the FLL off, until the function returns, and so do peripherals clocked from it if one keeps
-///   the device in LPM0 (the erratum: "peripherals using clocks derived from DCOCLK might be
-///   affected during this interval").
-/// - PMM32, a lock-up or unintended code execution when an interrupt and a MODCLK request coincide
-///   with the entry. Workaround 2: "Place the FRAM in INACTIVE mode before any entry to LPM3/4 by
-///   clearing the FRPWR bit and FRLPMPWR bit (if exist) in the GCCTL0 register. This must be
-///   performed from RAM" (SLAZ695J PMM32, p. 10 to p. 11; SLAZ664S PMM32; SLAZ705H PMM32).
-/// - GC5 on the MSP430FR2433, bit errors reported after a wake-up although the FRAM has none. The
-///   workaround clears UBDRSTEN, UBDIE and CBDIE before the entry, and after the wake-up clears
-///   UBDIFG and CBDIFG and sets them again "after the first valid FRAM access has been completed"
-///   (SLAZ664S GC5).
+///   (SLAZ695J CS13, p. 9; SLAZ664S CS13, p. 9 to p. 10; SLAZ705H CS13, p. 8). Interrupt handlers run
+///   on the slowed DCO, with the FLL off until a handler that wakes the CPU clears SCG0, and so do
+///   peripherals clocked from it if one keeps the device in LPM0 (the erratum: "peripherals using
+///   clocks derived from DCOCLK might be affected during this interval").
+/// - PMM32, a lock-up or unintended code execution when an interrupt coincides with the entry and with
+///   a MODCLK request or removal, or with SMCLK at another frequency than MCLK while neither MODCLK nor
+///   SMCLK runs (SLAZ695J PMM32, p. 9 to p. 11; SLAZ664S PMM32, p. 11 to p. 12; SLAZ705H PMM32, p. 8 to
+///   p. 10). Workaround 2: "Place the FRAM in INACTIVE mode before any entry to LPM3/4 by clearing the
+///   FRPWR bit and FRLPMPWR bit (if exist) in the GCCTL0 register. This must be performed from RAM". It
+///   covers the entry made here, not an interrupt handler's return to the sleep: see [`request_lpm3`].
+/// - GC5 on the MSP430FR2433, bit errors reported after a wake-up although the FRAM has none.
+///   Workaround 1 clears UBDRSTEN, UBDIE and CBDIE before the entry. Workaround 2 clears UBDIFG and
+///   CBDIFG after the wake-up and sets the three bits again "after the first valid FRAM access has been
+///   completed" (SLAZ664S GC5, p. 11), which [`valid_fram_access`] makes sure of.
 #[cfg(any(feature = "erratum_cs13", feature = "erratum_pmm32"))]
 #[inline(never)]
 fn lpm3_4_with_workarounds(mask: u8) {
     #[cfg(feature = "erratum_cs13")]
     let saved_dco = lower_dco();
 
+    // GC5, workaround 1: switch the bit error handling off before the sleep (UBDRSTEN, UBDIE and CBDIE
+    // in GCCTL0, SLAU445I Table 6-3, p. 307), unless it is off already
+    #[cfg(feature = "erratum_gc5")]
+    let bit_error_handling = {
+        let saved = unsafe { _pac::Frctl::steal() }.gcctl0().read();
+        if saved.ubdrsten().bit() || saved.ubdie().bit() || saved.cbdie().bit() {
+            fram_unlocked(|fram| unsafe {
+                fram.gcctl0().clear_bits(|w| w
+                    .ubdrsten().clear_bit()
+                    .ubdie().clear_bit()
+                    .cbdie().clear_bit())
+            });
+        }
+        saved
+    };
+
     #[cfg(feature = "erratum_pmm32")]
     {
-        let frctl = _pac::Frctl::ptr() as *mut u16;
-        // GC5: switch the bit error handling off before the sleep (UBDRSTEN, UBDIE and CBDIE in GCCTL0,
-        // SLAU445I Table 6-3, p. 307)
-        #[cfg(feature = "erratum_gc5")]
-        let bit_error_handling = {
-            let gcctl0 = unsafe { _pac::Frctl::steal() }.gcctl0().read();
-            let saved = (gcctl0.ubdrsten().bit(), gcctl0.ubdie().bit(), gcctl0.cbdie().bit());
-            if saved != (false, false, false) {
-                fram_unlocked(|fram| unsafe {
-                    fram.gcctl0().clear_bits(|w| w.ubdrsten().clear_bit().ubdie().clear_bit().cbdie().clear_bit())
-                });
-            }
-            saved
-        };
-
         // FRPWR and FRLPMPWR, GCCTL0 bits 2 and 1 (SLAU445I Table 6-3, p. 307). They're cleared in the
         // routine that runs from RAM, which can't call the PAC, so they're passed as a mask.
         const GCCTL0_FRPWR_FRLPMPWR: u16 = 1 << 2 | 1 << 1;
-        unsafe { sleep_from_ram(mask as u16, frctl, GCCTL0_FRPWR_FRLPMPWR) };
-
-        #[cfg(feature = "erratum_gc5")]
-        if bit_error_handling != (false, false, false) {
-            // A FRAM read that the cache can't serve, the reset vector (SLAU445I 6.8, p. 303:
-            // "Accesses to FRAM that can be served from cache do not change the power state")
-            unsafe { core::ptr::read_volatile(0xFFFE as *const u16) };
-            let (ubdrsten, ubdie, cbdie) = bit_error_handling;
-            fram_unlocked(|fram| {
-                // UBDIFG and CBDIFG are cleared by writing 0 (SLAU445I Table 6-4, p. 308)
-                unsafe { fram.gcctl1().clear_bits(|w| w.ubdifg().clear_bit().cbdifg().clear_bit()) };
-                unsafe { fram.gcctl0().set_bits(|w| w.ubdrsten().bit(ubdrsten).ubdie().bit(ubdie).cbdie().bit(cbdie)) };
-            });
-        }
+        // An interrupt handler that ran between the FRAM switch-off and the sleep instruction would power
+        // the FRAM up again (SLAU445I 6.8, p. 303), and the sleep would start with the FRAM active. With
+        // interrupts enabled, they're disabled for the routine (DINT followed by a NOP, as SLAU445I
+        // 4.6.2.19, p. 189 asks of "any code sequence" that "needs to be protected from interruption"),
+        // and the instruction that starts the sleep enables them again, as `request_lpm3_with_interrupts`
+        // does (GIE: SLAU445I Figure 4-9, p. 130).
+        let mask = if msp430::register::sr::read().gie() {
+            msp430::interrupt::disable();
+            mask | GIE
+        } else {
+            mask
+        };
+        unsafe { sleep_from_ram(mask as u16, _pac::Frctl::ptr() as *mut u16, GCCTL0_FRPWR_FRLPMPWR) };
     }
     #[cfg(not(feature = "erratum_pmm32"))]
     unsafe { asm!("bis {mask}, SR", "nop", mask = in(reg) mask as u16, options(nostack)) };
 
+    // The DCO comes back first, so that the rest runs at full speed, and so that the FLL, which a handler
+    // that wakes the CPU switches on again by clearing SCG0, runs on the slowed DCO for a few instructions
+    // only
     #[cfg(feature = "erratum_cs13")]
     restore_dco(saved_dco);
+
+    // GC5, workaround 2: "After LPM wake up, clear GCCTL1.UBDIFG and GCCTL1.CBDIFG, and then reinitialize
+    // the GCCTL0 register after the first valid FRAM access has been completed" (SLAZ664S GC5, p. 11). The
+    // flags are cleared after every wake-up, as the workaround says, also when the bit error handling is
+    // off and GCCTL0 stays as it is. They are cleared after `valid_fram_access()`, so that an error flagged
+    // up to that access is cleared as well.
+    #[cfg(feature = "erratum_gc5")]
+    {
+        valid_fram_access();
+        let saved = bit_error_handling;
+        fram_unlocked(|fram| unsafe {
+            // UBDIFG and CBDIFG are cleared by writing 0 (SLAU445I Table 6-4, p. 308)
+            fram.gcctl1().clear_bits(|w| w.ubdifg().clear_bit().cbdifg().clear_bit());
+            fram.gcctl0().set_bits(|w| w
+                .ubdrsten().bit(saved.ubdrsten().bit())
+                .ubdie().bit(saved.ubdie().bit())
+                .cbdie().bit(saved.cbdie().bit()));
+        });
+    }
 }
 
-/// The PMM32 workaround from SLAZ695J PMM32, p. 11, run from RAM: unlock FRCTL, clear `gcctl0_clear`
-/// in GCCTL0 (FRPWR and FRLPMPWR), lock FRCTL, and set the status register bits in `sr_bits`. LPM0 with
-/// the FRAM powered down uses it too, with FRPWR alone, see [`enter_lpm0_fram_off`]. The
+/// The code of workaround 2 of erratum PMM32, run from RAM (SLAZ695J PMM32, p. 10 to p. 11; SLAZ664S
+/// PMM32, p. 12; SLAZ705H PMM32, p. 9 to p. 10): unlock FRCTL, clear `gcctl0_clear` in GCCTL0 (FRPWR and
+/// FRLPMPWR), lock FRCTL, and set the status register bits in `sr_bits`. LPM0 with the FRAM powered
+/// down uses it too, with FRPWR alone, see [`enter_lpm0_fram_off`]. The
 /// erratum's code writes `FRCTL0 = FRCTLPW`, which would also clear NWAITS; this writes the password
 /// over the current low byte instead (FRCTLPW, NWAITS: SLAU445I Table 6-2, p. 306). A byte write of a
 /// wrong password to the upper byte locks FRCTL again (SLAU445I 6.10, p. 305). An access to the FRAM
@@ -222,9 +263,20 @@ fn lpm3_4_with_workarounds(mask: u8) {
 ///
 /// The `.data` section is copied to RAM at start-up (msp430-rt's link.x), so the function runs from
 /// RAM. FRCTL0 is at offset 00h and GCCTL0 at 04h of the FRCTL registers (SLAU445I Table 6-1, p. 305).
+///
+/// It gets a symbol name of its own, as code outside the program could call it, so that the compiler
+/// leaves its arguments to the callers. A program with one call passing constants otherwise had the
+/// constants loaded in the function itself, 12 more bytes of RAM. The name holds the HAL's version, so
+/// two versions of the HAL in one program don't clash, and the linker still leaves the function out of
+/// programs that don't call it.
 #[link_section = ".data.lpm_from_ram"]
 #[inline(never)]
-unsafe fn sleep_from_ram(sr_bits: u16, frctl: *mut u16, gcctl0_clear: u16) {
+#[export_name = concat!(
+    "__msp430_hal_",
+    env!("CARGO_PKG_VERSION_MAJOR"), "_", env!("CARGO_PKG_VERSION_MINOR"), "_", env!("CARGO_PKG_VERSION_PATCH"),
+    "_lpm_sleep_from_ram"
+)]
+unsafe extern "C" fn sleep_from_ram(sr_bits: u16, frctl: *mut u16, gcctl0_clear: u16) {
     asm!(
         "mov.b 0({frctl}), {tmp}",
         "bis #0xA500, {tmp}",
@@ -253,6 +305,30 @@ fn fram_unlocked(f: impl FnOnce(&_pac::Frctl)) {
     });
 }
 
+/// Read the FRAM itself, not only its cache, for workaround 2 of erratum GC5: "For the valid FRAM access
+/// the user has to consider possible cache hits which depends on implementation" (SLAZ664S GC5, p. 11).
+///
+/// The cache serves a read without the FRAM: "If one of the four words stored in one of the cache lines
+/// is requested (a cache hit), no FRAM access occurs" (SLAU445I 6.5.1, p. 303), and "Accesses to FRAM that
+/// can be served from cache do not change the power state of the FRAM power control" (SLAU445I 6.8,
+/// p. 303). It is "a 2-way associative cache with 4 cache lines of 64 bits each" (SLAU445I 6.9, p. 304),
+/// four words each. Five words 8 bytes apart lie in five different lines, one more than the cache holds,
+/// so at least one of the five reads below reads the FRAM. They read five vectors of the interrupt vector
+/// table, from the reset vector at FFFEh down (SLASE59F 6.4, p. 41; SLASE59F Table 6-2, p. 41 to p. 42).
+/// The reads are volatile, so they stay before the register writes that follow, which set GCCTL0 again.
+#[cfg(feature = "erratum_gc5")]
+#[inline(always)]
+fn valid_fram_access() {
+    // The reset vector, and the vectors 8, 16, 24 and 32 bytes below it
+    unsafe {
+        core::ptr::read_volatile(0xFFFE as *const u16);
+        core::ptr::read_volatile(0xFFF6 as *const u16);
+        core::ptr::read_volatile(0xFFEE as *const u16);
+        core::ptr::read_volatile(0xFFE6 as *const u16);
+        core::ptr::read_volatile(0xFFDE as *const u16);
+    }
+}
+
 /// CSCTL0 and CSCTL1 before the DCO was slowed for erratum CS13, and whether the FLL was on
 #[cfg(feature = "erratum_cs13")]
 struct SavedDco {
@@ -261,9 +337,9 @@ struct SavedDco {
     fll_was_on: bool,
 }
 
-/// Bring the DCO to 2 MHz or lower for erratum CS13 (SLAZ695J CS13, p. 9; SLAZ664S CS13; SLAZ705H
-/// CS13), if it may run faster. In the lowest range, DCORSEL = 000b (SLAU445I Table 3-5, p. 114),
-/// with DCOFTRIM = 000b the DCO runs at 0.85 MHz to 0.90 MHz at its highest tap (SLASEC4D
+/// Bring the DCO to 2 MHz or lower for erratum CS13 (SLAZ695J CS13, p. 9; SLAZ664S CS13, p. 9 to p. 10;
+/// SLAZ705H CS13, p. 8), if it may run faster. In the lowest range, DCORSEL = 000b (SLAU445I Table 3-5,
+/// p. 114), with DCOFTRIM = 000b the DCO runs at 0.85 MHz to 0.90 MHz at its highest tap (SLASEC4D
 /// Table 5-6, p. 38; SLASE59F Table 5-6, p. 25; SLASEE4C Table 5-6, p. 27). In that range already,
 /// the FLL keeps it near 1 MHz, and nothing changes.
 #[cfg(feature = "erratum_cs13")]
@@ -343,8 +419,9 @@ const GCCTL0_FRPWR: u16 = 1 << 2;
 ///
 /// "For LPM0, the FRAM power state during LPM0 is saved from the previous state in active mode", and
 /// "Memory accesses pointing into the FRAM address space automatically set FRPWR = 1" (SLAU445I 6.8,
-/// p. 303), so the FRAM is switched off from RAM, right before the sleep, by the routine the PMM32
-/// workaround uses.
+/// p. 303), so the FRAM is switched off from RAM, right before the sleep, by the routine the workaround
+/// for erratum PMM32 uses (SLAZ695J PMM32, p. 10 to p. 11; SLAZ664S PMM32, p. 12; SLAZ705H PMM32, p. 9 to
+/// p. 10).
 ///
 /// The first interrupt handler powers the FRAM up again, as it runs from FRAM: "If FRAM power is disabled,
 /// any memory access automatically inserts wait states to ensure sufficient time for the FRAM power up and
@@ -383,12 +460,37 @@ pub fn enter_lpm0_fram_off_with_interrupts() {
 /// must be disabled before entering into LPM3, LPM4, or LPMx.5 mode" (SLASEC4D Table 6-1, note 2,
 /// p. 61).
 ///
-/// Errata: on the MSP430FR2355, MSP430FR2433 and MSP430FR2522 the transition to LPM3 or LPM4 can
-/// lock up the device under some conditions (SLAZ695J CS13, PMM32; SLAZ664S CS13, PMM32; SLAZ705H
-/// CS13, PMM32). On those devices the entry applies TI's workarounds: the FRAM is switched to
-/// INACTIVE from RAM, and a DCO above 2 MHz is slowed to below 1 MHz, with the FLL off, until the
-/// CPU returns from this function, so interrupt handlers run slower while it sleeps. On the
-/// MSP430FR2433 the FRAM bit error handling is also paused around the sleep (SLAZ664S GC5).
+/// Errata: on the MSP430FR2x5x, MSP430FR2433 and MSP430FR25x2 the transition to LPM3 or LPM4 can lock
+/// up the device when an interrupt is requested at the same time (SLAZ695J CS13, p. 8 to p. 9, and
+/// PMM32, p. 9 to p. 11; SLAZ664S CS13, p. 9 to p. 10, and PMM32, p. 11 to p. 12; SLAZ705H CS13, p. 7
+/// to p. 8, and PMM32, p. 8 to p. 10). On those devices the entry applies TI's workarounds: the FRAM is
+/// switched to INACTIVE from RAM, and a DCO above 2 MHz is slowed to below 1 MHz until the CPU carries
+/// on in this function after the sleep. On the MSP430FR2433 the FRAM bit error handling is also paused
+/// around the sleep (SLAZ664S GC5, p. 10 to p. 11).
+///
+/// While the DCO is slowed, interrupt handlers run slower, and so do peripherals clocked from the DCO,
+/// as erratum CS13 warns: "peripherals using clocks derived from DCOCLK might be affected during this
+/// interval". One that keeps SMCLK running, such as a UART that is still sending (SLAU445I 22.3.14,
+/// p. 590), makes the device enter LPM0 instead (SLAU445I Table 1-3, p. 39) and runs on the slowed clock
+/// for the whole sleep. Handlers run with the FLL off, as an interrupt "does not clear SCG0" (SLAU445I
+/// 3.2.10, p. 106). `#[interrupt(wake_cpu)]` clears it with the other low-power bits, so the FLL runs on
+/// the slowed DCO from such a handler's return until this function restores the DCO, a few instructions
+/// later. FLLUNLOCK can report the DCO as too slow meanwhile (SLAU445I 3.2.9, p. 105), which
+/// [`fll_unlock_history`] then keeps, and which requests the NMI after [`enable_fll_unlock_interrupt`]
+/// (FLLUNLOCKHIS, FLLWARNEN: SLAU445I Table 3-11, p. 121).
+///
+/// The FRAM workaround covers only the entry this function makes. PMM32 also names entries "during
+/// ISR exits" (SLAZ695J PMM32, p. 9; SLAZ664S PMM32, p. 11; SLAZ705H PMM32, p. 9), and an interrupt
+/// handler, which runs from FRAM, powers the FRAM up again (SLAU445I 6.8, p. 303), so a handler that
+/// returns to the sleep enters LPM3 or LPM4 again with the FRAM active. On those devices, let each
+/// handler wake the CPU (`#[interrupt(wake_cpu)]`) and call this function again. A handler that ran
+/// after this function has switched the FRAM off, before the sleep has started, would power it up in
+/// the same way, so the function disables interrupts for that part, and the instruction that starts
+/// the sleep enables them again, as [`request_lpm3_with_interrupts`] does (SLAU445I 4.6.2.19,
+/// p. 189).
+///
+/// [`fll_unlock_history`]: crate::clock::fll_unlock_history
+/// [`enable_fll_unlock_interrupt`]: crate::clock::enable_fll_unlock_interrupt
 #[inline(always)]
 pub fn request_lpm3() {
     const LPM3: u8 = SCG1 | SCG0 | CPU_OFF;
@@ -398,8 +500,12 @@ pub fn request_lpm3() {
 /// Enable interrupts and request Low Power Mode 3 (LPM3) in one instruction, like
 /// [`enter_lpm0_with_interrupts`].
 ///
-/// High-frequency XT1 and errata: see [`request_lpm3`] (SLASEC4D Table 6-1, note 2, p. 61;
-/// SLAZ695J CS13, PMM32; SLAZ664S CS13, PMM32, GC5; SLAZ705H CS13, PMM32).
+/// High-frequency XT1, and the errata workarounds with what they need from interrupt handlers: see
+/// [`request_lpm3`] (SLASEC4D Table 6-1, note 2, p. 61; SLAZ695J CS13, p. 8 to p. 9, and PMM32, p. 9 to
+/// p. 11; SLAZ664S CS13, p. 9 to p. 10, PMM32, p. 11 to p. 12, and GC5, p. 10 to p. 11; SLAZ705H CS13,
+/// p. 7 to p. 8, and PMM32, p. 8 to p. 10).
+/// Called with interrupts disabled, it lets no interrupt handler run between the FRAM workaround of
+/// erratum PMM32 and the sleep.
 #[inline(always)]
 pub fn request_lpm3_with_interrupts() {
     const LPM3: u8 = SCG1 | SCG0 | CPU_OFF | GIE;
@@ -421,8 +527,10 @@ pub fn request_lpm3_with_interrupts() {
 ///
 /// Interrupts must be enabled already; see [`request_lpm4_with_interrupts`].
 ///
-/// High-frequency XT1 and errata: see [`request_lpm3`] (SLASEC4D Table 6-1, note 2, p. 61;
-/// SLAZ695J CS13, PMM32; SLAZ664S CS13, PMM32, GC5; SLAZ705H CS13, PMM32).
+/// High-frequency XT1, and the errata workarounds with what they need from interrupt handlers: see
+/// [`request_lpm3`] (SLASEC4D Table 6-1, note 2, p. 61; SLAZ695J CS13, p. 8 to p. 9, and PMM32, p. 9 to
+/// p. 11; SLAZ664S CS13, p. 9 to p. 10, PMM32, p. 11 to p. 12, and GC5, p. 10 to p. 11; SLAZ705H CS13,
+/// p. 7 to p. 8, and PMM32, p. 8 to p. 10).
 #[inline(always)]
 pub fn request_lpm4() {
     const LPM4: u8 = SCG1 | SCG0 | OSC_OFF | CPU_OFF;
@@ -432,8 +540,12 @@ pub fn request_lpm4() {
 /// Enable interrupts and request Low Power Mode 4 (LPM4) in one instruction, like
 /// [`enter_lpm0_with_interrupts`].
 ///
-/// High-frequency XT1 and errata: see [`request_lpm3`] (SLASEC4D Table 6-1, note 2, p. 61;
-/// SLAZ695J CS13, PMM32; SLAZ664S CS13, PMM32, GC5; SLAZ705H CS13, PMM32).
+/// High-frequency XT1, and the errata workarounds with what they need from interrupt handlers: see
+/// [`request_lpm3`] (SLASEC4D Table 6-1, note 2, p. 61; SLAZ695J CS13, p. 8 to p. 9, and PMM32, p. 9 to
+/// p. 11; SLAZ664S CS13, p. 9 to p. 10, PMM32, p. 11 to p. 12, and GC5, p. 10 to p. 11; SLAZ705H CS13,
+/// p. 7 to p. 8, and PMM32, p. 8 to p. 10).
+/// Called with interrupts disabled, it lets no interrupt handler run between the FRAM workaround of
+/// erratum PMM32 and the sleep.
 #[inline(always)]
 pub fn request_lpm4_with_interrupts() {
     const LPM4: u8 = SCG1 | SCG0 | OSC_OFF | CPU_OFF | GIE;
@@ -534,26 +646,44 @@ impl KeepXt1Pins {
         Self { xin, xout: xin && Xt1Xout::<()>::function_matches_type() }
     }
 
-    /// Bit mask of the kept pins on `PORT`
-    fn mask_on<PORT: PortNum + 'static>(self) -> u8 {
-        fn pin_mask<PIN: AlternatePin, PORT: 'static>(keep: bool) -> u8
+    /// Bit mask of the kept pins on `PORT`, or `None` if neither XT1 pin is on `PORT`, which the compiler
+    /// knows from the types
+    fn mask_on<PORT: PortNum + 'static>(self) -> Option<u8> {
+        fn pin_mask<PIN: AlternatePin, PORT: 'static>(keep: bool) -> Option<u8>
         where
             PIN::Port: 'static,
         {
-            if keep && TypeId::of::<PIN::Port>() == TypeId::of::<PORT>() { PIN::MASK } else { 0 }
+            if TypeId::of::<PIN::Port>() != TypeId::of::<PORT>() {
+                None
+            } else if keep {
+                Some(PIN::MASK)
+            } else {
+                Some(0)
+            }
         }
-        pin_mask::<Xt1Xin<()>, PORT>(self.xin) | pin_mask::<Xt1Xout<()>, PORT>(self.xout)
+        match (pin_mask::<Xt1Xin<()>, PORT>(self.xin), pin_mask::<Xt1Xout<()>, PORT>(self.xout)) {
+            (None, None) => None,
+            (xin, xout) => Some(xin.unwrap_or(0) | xout.unwrap_or(0)),
+        }
     }
 }
 
 /// Return every pin of `PORT` to GPIO (PxSEL0 and PxSEL1 cleared), except the XT1 pins in `keep`
 /// (SLAU445I 1.4.3.1, p. 41, step 2)
 pub(crate) fn reset_pin_functions<PORT: PortNum + 'static>(keep: KeepXt1Pins) {
-    let keep = keep.mask_on::<PORT>();
     let port = unsafe { PORT::steal() };
-    // Clearing leaves only the bits in the mask set
-    port.pxsel0_clear(keep);
-    port.pxsel1_clear(keep);
+    match keep.mask_on::<PORT>() {
+        // Clearing leaves only the bits in the mask set
+        Some(keep) => {
+            port.pxsel0_clear(keep);
+            port.pxsel1_clear(keep);
+        }
+        // No XT1 pin on this port: one write each
+        None => {
+            port.pxsel0_wr(0);
+            port.pxsel1_wr(0);
+        }
+    }
 }
 
 /// Define `reset_all_pin_functions()` in a device's `lpm` module, from the list of the device's
@@ -571,8 +701,8 @@ pub(crate) use reset_all_pin_functions_impl;
 
 /// Configuration common to LPM3.5 and 4.5, following the entry steps of SLAU445I 1.4.3.1, p. 41
 fn enter_lpmx_5<MODE: WatchdogSelect>(mut wdt: Wdt<MODE>, svs: SvsState) -> ! {
-    // Take peripherals. Execution won't return from this fn.
-    let regs = unsafe { _pac::Peripherals::steal() };
+    // Take the CS and the PMM. Execution won't return from this fn.
+    let (cs, pmm) = unsafe { (_pac::Cs::steal(), _pac::Pmm::steal()) };
 
     // Pause WDT (SLAU445I 1.4.3.1, p. 41, step 7: with the WDT in watchdog mode "the device does
     // not enter LPMx.5")
@@ -580,11 +710,11 @@ fn enter_lpmx_5<MODE: WatchdogSelect>(mut wdt: Wdt<MODE>, svs: SvsState) -> ! {
 
     // A module that still requests ACLK keeps the device out of LPMx.5 (SLAU445I 3.2.12.1, p. 109;
     // ACLKREQEN: SLAU445I Table 3-12, p. 123)
-    unsafe { regs.cs.csctl8().clear_bits(|w| w.aclkreqen().clear_bit()) };
+    unsafe { cs.csctl8().clear_bits(|w| w.aclkreqen().clear_bit()) };
     // The low-power REFO mode must be switched off before LPMx.5, or it draws extra current
     // (SLAU445I Table 3-7, p. 116)
     #[cfg(feature = "enhanced_cs")]
-    unsafe { regs.cs.csctl3().clear_bits(|w| w.refolp().clear_bit()) };
+    unsafe { cs.csctl3().clear_bits(|w| w.refolp().clear_bit()) };
 
     // Clear GIE (SLAU445I 1.4.3.1, p. 41, step 8)
     let interrupts_were_enabled = msp430::register::sr::read().gie();
@@ -594,7 +724,7 @@ fn enter_lpmx_5<MODE: WatchdogSelect>(mut wdt: Wdt<MODE>, svs: SvsState) -> ! {
     // Set PMMREGOFF
     // (SLAU445I 1.4.3.1, p. 41, steps 9a to 9c; PMMPW, SVSHE and PMMREGOFF: SLAU445I Table 2-2,
     // p. 91)
-    regs.pmm.pmmctl0().write(|w| w
+    pmm.pmmctl0().write(|w| w
         .pmmpw().password()
         .svshe().variant(svs)
         .pmmregoff().set_bit()
@@ -604,15 +734,15 @@ fn enter_lpmx_5<MODE: WatchdogSelect>(mut wdt: Wdt<MODE>, svs: SvsState) -> ! {
     // Only write to the upper byte of PMMCTL0
     // (SLAU445I 1.4.3.1, p. 41, step 9d; a word write with a wrong password causes a PUC:
     // SLAU445I 2.3, p. 90)
-    regs.pmm.pmmctl0_h().write(|w| w.pmmpw().lock());
+    pmm.pmmctl0_h().write(|w| w.pmmpw().lock());
 
     // In manual mode, disconnect the LPM3.5 switch before the entry (SLAU445I 2.2.7, p. 88: "It is
     // recommended to turn off the switch to avoid unnecessary leakage before the device enters LPM3.5").
     // The BOR at the wake-up puts it back in automatic mode, connected (LPM5SM "rw-[0]", LPM5SW "rw-[1]":
     // SLAU445I Table 2-7, p. 97, with the key in SLAU445I Table 0-1, p. 28).
     #[cfg(feature = "lpm3_5_switch")]
-    if regs.pmm.pm5ctl0().read().lpm5sm().is_manual() {
-        unsafe { regs.pmm.pm5ctl0().clear_bits(|w| w.lpm5sw().disconnected()) };
+    if pmm.pm5ctl0().read().lpm5sm().is_manual() {
+        unsafe { pmm.pm5ctl0().clear_bits(|w| w.lpm5sw().disconnected()) };
     }
 
     // Enter LPMx.5 with CPUOFF, OSCOFF, SCG0 and SCG1 (SLAU445I 1.4.3.1, p. 41, step 10). If

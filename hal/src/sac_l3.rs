@@ -61,10 +61,8 @@ use core::marker::PhantomData;
 
 use crate::{
     hw_traits::sac::{MSel, NSel, SacPeriph},
-    pac::Tb2,
     pmm::InternalVRef,
     pwm::{CCR1, CCR2},
-    timer::SubTimer,
 };
 
 /// A builder for configuring a Smart Analog Combo (SAC) unit
@@ -103,13 +101,21 @@ impl<SAC: SacPeriph> DacConfig<SAC> {
 #[derive(Copy, Clone)]
 /// Options for when the DAC loads in a new value placed in the DAC data register. (DACLSEL: SLAU445I
 /// 20.2.3.4, p. 529, and SLAU445I Table 20-8, p. 534; the triggers: SLASEC4D Table 6-32, p. 80)
+///
+/// The timer triggers load the value "on the rising edge" of a TB2 output (SLAU445I 20.2.3.4, p. 529),
+/// which [`PwmUninit::into_dac_trigger`](crate::pwm::PwmUninit::into_dac_trigger) sets up to rise once
+/// per TB2 period. "New data must be loaded into the DACDAT register before the trigger occurs"
+/// (SLAU445I 20.2.3.4, p. 529): write the next value after each load, see
+/// [`DacConfig::configure_with_interrupts()`].
 pub enum LoadTrigger<'a> {
     /// The DAC loads the new value as soon as the register is written to.
     Immediate,
-    /// The DAC loads the new value when TB2.1 exhibits a rising edge.
-    TB2_1(&'a SubTimer<Tb2, CCR1>),
-    /// The DAC loads the new value when TB2.2 exhibits a rising edge.
-    TB2_2(&'a SubTimer<Tb2, CCR2>),
+    /// The DAC loads the new value when TB2.1, the output of TB2's CCR1, rises: TB2's `pwm1` turned into
+    /// a trigger.
+    TB2_1(&'a DacTrigger<CCR1>),
+    /// The DAC loads the new value when TB2.2, the output of TB2's CCR2, rises: TB2's `pwm2` turned into
+    /// a trigger.
+    TB2_2(&'a DacTrigger<CCR2>),
 }
 // DACLSEL values (SLAU445I Table 20-8, p. 534; SLASEC4D Table 6-32, p. 80)
 impl From<LoadTrigger<'_>> for u8 {
@@ -123,6 +129,11 @@ impl From<LoadTrigger<'_>> for u8 {
         }
     }
 }
+
+/// The output of TB2's CCR1 (TB2.1) or CCR2 (TB2.2), set up to load the DACs once per TB2 period, see
+/// [`PwmUninit::into_dac_trigger`](crate::pwm::PwmUninit::into_dac_trigger). TB2.1 and TB2.2 are the
+/// hardware load triggers of every SAC's DAC (SLASEC4D Table 6-18, p. 74; SLASEC4D Table 6-32, p. 80).
+pub struct DacTrigger<C>(pub(crate) PhantomData<C>);
 
 /// Defines which voltage reference the DAC uses (DACSREF: SLAU445I Table 20-8, p. 534; 0 is DVCC and 1 the
 /// internal shared reference: SLASEC4D Table 6-31, p. 80)

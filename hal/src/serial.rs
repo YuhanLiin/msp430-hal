@@ -22,9 +22,6 @@
 //! - MSP430FR25x2: SLASEE4C Table 6-11, p. 53; port pin functions, including UCA0CLK: SLASEE4C Table 6-15,
 //!   p. 58 (P1) and SLASEE4C Table 6-16, p. 60 (P2).
 //!
-//! On the MSP430FR2433 the PAC exposes each eUSCI once per mode, for example `usci_a0_uart_mode` and
-//! `usci_a0_spi_mode`. Both are the same hardware, so only use one of them for each eUSCI.
-//!
 //! On the MSP430FR2x5x, eUSCI_A1's pins in alternate function 2 (`to_alternate2()`) invert the polarity of
 //! TXD and RXD, and a rising edge then starts a character (SLASEC4D 6.10.8, p. 73; SLASEC4D Table 6-15,
 //! p. 73, "eUSCI_A1 UART Polarity Configurations"; SLASEC4D Table 6-66, p. 102: P4SELx = 10b). SLASEC4D
@@ -33,6 +30,12 @@
 //!
 //! Begin configuration by calling [`SerialConfig::new()`]. After configuration, [`Rx`] and/or [`Tx`] structs are produced by
 //! providing the corresponding GPIO pins.
+//!
+//! The baud-rate settings are calculated from the baud rate and the clock frequency when the clock is
+//! selected (SLAU445I 22.3.10, p. 586). A [`BaudConfig`] given to [`SerialConfig::new()`] instead of the baud
+//! rate holds the settings themselves: worked out by the compiler in a `const`, or taken from the user's
+//! guide's table of recommended settings (SLAU445I Table 22-5, p. 589), so that the program doesn't calculate
+//! them.
 //!
 //! The [`Tx`] and [`Rx`] structs are used to send and receive bytes via serial. They implement both [`embedded-io`](embedded_io)'s
 //! serial traits (which are buffer-based, blocking), and the single-byte-based non-blocking [`embedded-hal-nb`](embedded_hal_nb::serial) version.
@@ -64,7 +67,6 @@ use crate::pin_mapping::*;
 use core::convert::Infallible;
 use core::fmt::Display;
 use core::marker::PhantomData;
-use core::num::NonZeroU32;
 
 /// Bit order of transmit and receive (UCMSB, SLAU445I Table 22-8, p. 593)
 #[derive(Clone, Copy)]
@@ -313,7 +315,9 @@ pub enum UartVector {
     TxBufEmpty,
     /// A start bit was received (UCSTTIFG, SLAU445I Table 22-6, p. 591)
     StartBit,
-    /// A character was sent completely (UCTXCPTIFG, SLAU445I Table 22-6, p. 591)
+    /// A character was sent completely (UCTXCPTIFG, SLAU445I Table 22-6, p. 591). Due to erratum USCI42
+    /// this comes after every character, even while the next one waits in the Tx buffer (SLAZ695J USCI42,
+    /// p. 12; SLAZ664S USCI42, p. 13; SLAZ726B USCI42, p. 8; SLAZ705H USCI42, p. 10).
     TxComplete,
 }
 
@@ -375,9 +379,10 @@ macro_rules! impl_serial_pin {
 }
 pub(crate) use impl_serial_pin;
 
-/// Typestate for a serial interface with an unspecified clock source
-pub struct NoClockSet {
-    baudrate: NonZeroU32,
+/// Typestate for a serial interface with an unspecified clock source, holding the baud rate given to
+/// [`SerialConfig::new`] (see [`BaudRate`])
+pub struct NoClockSet<B = u32> {
+    baudrate: B,
 }
 
 /// Typestate for a serial interface with a specified clock source
@@ -465,12 +470,15 @@ where
     }
 }
 
-impl<USCI, M> SerialConfig<USCI, NoClockSet, M>
+impl<USCI, B, M> SerialConfig<USCI, NoClockSet<B>, M>
 where
     USCI: SerialUsci<M>,
+    B: BaudRate,
     M: PinMap,
 {
-    /// Create a new serial configuration using a EUSCI peripheral
+    /// Create a new serial configuration using a EUSCI peripheral. `baudrate` is the baud rate in bits per
+    /// second, from which the clock selection (`use_smclk()` and the others) calculates the baud-rate
+    /// settings, or the settings themselves, a [`BaudConfig`], so that the program doesn't calculate them.
     #[inline]
     pub fn new(
         usci: USCI,
@@ -479,9 +487,8 @@ where
         stopbits: StopBits,
         parity: Parity,
         loopback: Loopback,
-        baudrate: u32,
+        baudrate: B,
     ) -> Self {
-        const ONE: NonZeroU32 = NonZeroU32::new(1).unwrap();
         SerialConfig {
             order,
             cnt,
@@ -495,19 +502,19 @@ where
             deglitch: UartDeglitch::_200ns,
             irda: None,
             break_interrupts: false,
-            state: NoClockSet { baudrate: NonZeroU32::new(baudrate).unwrap_or(ONE) },
+            state: NoClockSet { baudrate },
             _map: PhantomData,
         }
     }
 
     /// Configure serial UART to use external UCLK, passing in the appropriately configured pin
     /// used as the clock signal as well as the frequency of the clock (UCSSELx = 00b, SLAU445I Table 22-8,
-    /// p. 593).
+    /// p. 593). The frequency is only used to calculate the baud-rate settings from a baud rate.
     ///
     /// # Panics
     ///
     /// If the baud rate is above a third of the clock frequency, the most the eUSCI supports (SLAU445I
-    /// 22.3.9.1, p. 584).
+    /// 22.3.9.1, p. 584). A [`BaudConfig`] is checked when it's made.
     #[inline(always)]
     pub fn use_uclk<P: Into<USCI::ClockPin>>(
         self,
@@ -517,7 +524,7 @@ where
         serial_config!(
             self,
             ClockSet {
-                baud_config: calculate_baud_config(freq, self.state.baudrate),
+                baud_config: self.state.baudrate.baud_config(freq),
                 clksel: Ucssel::Uclk,
             }
         )
@@ -530,13 +537,13 @@ where
     /// # Panics
     ///
     /// If the baud rate is above a third of the clock frequency, the most the eUSCI supports (SLAU445I
-    /// 22.3.9.1, p. 584).
+    /// 22.3.9.1, p. 584). A [`BaudConfig`] is checked when it's made.
     #[inline(always)]
     pub fn use_aclk(self, aclk: &Aclk) -> SerialConfig<USCI, ClockSet, M> {
         serial_config!(
             self,
             ClockSet {
-                baud_config: calculate_baud_config(aclk.freq() as u32, self.state.baudrate),
+                baud_config: self.state.baudrate.baud_config(aclk.freq()),
                 clksel: Ucssel::DeviceSpecific,
             }
         )
@@ -545,19 +552,20 @@ where
     #[cfg(feature = "eusci_modclk")]
     /// Configure serial UART to use MODCLK (UCSSELx = 01b on the MSP430FR2433, SLASE59F Table 6-7, p. 46).
     ///
+    /// This also sets MODOSCREQEN, so that MODCLK runs for the eUSCI whichever kind of request it makes
+    /// (SLAU445I 3.2.15.1, p. 111; SLAU445I Table 3-12, p. 123).
+    ///
     /// # Panics
     ///
     /// If the baud rate is above a third of the clock frequency, the most the eUSCI supports (SLAU445I
-    /// 22.3.9.1, p. 584).
+    /// 22.3.9.1, p. 584). A [`BaudConfig`] is checked when it's made.
     #[inline(always)]
     pub fn use_modclk(self) -> SerialConfig<USCI, ClockSet, M> {
+        crate::clock::enable_modosc_conditional_requests();
         serial_config!(
             self,
             ClockSet {
-                baud_config: calculate_baud_config(
-                    crate::device_specific::MODCLK_FREQ_HZ,
-                    self.state.baudrate
-                ),
+                baud_config: self.state.baudrate.baud_config(crate::device_specific::MODCLK_FREQ_HZ),
                 clksel: Ucssel::DeviceSpecific,
             }
         )
@@ -568,69 +576,135 @@ where
     /// # Panics
     ///
     /// If the baud rate is above a third of the clock frequency, the most the eUSCI supports (SLAU445I
-    /// 22.3.9.1, p. 584).
+    /// 22.3.9.1, p. 584). A [`BaudConfig`] is checked when it's made.
     #[inline(always)]
     pub fn use_smclk(self, smclk: &Smclk) -> SerialConfig<USCI, ClockSet, M> {
         serial_config!(
             self,
             ClockSet {
-                baud_config: calculate_baud_config(smclk.freq(), self.state.baudrate),
+                baud_config: self.state.baudrate.baud_config(smclk.freq()),
                 clksel: Ucssel::Smclk,
             }
         )
     }
 }
 
-struct BaudConfig {
-    br: u16,
-    brs: u8,
-    brf: u8,
+/// UART baud-rate settings: oversampling (UCOS16), the prescaler UCBRx and the modulation patterns UCBRFx and
+/// UCBRSx (UCAxBRW and UCAxMCTLW: SLAU445I Table 22-10, p. 595; SLAU445I Table 22-11, p. 595).
+///
+/// Given to [`SerialConfig::new`] instead of a baud rate, they're used as they are, so the program doesn't
+/// calculate them from the clock frequency. They're only right for the clock frequency they were worked out
+/// for, which the clock selection doesn't check. In a `const`, the compiler works them out:
+///
+/// ```ignore
+/// // 115200 baud from SMCLK = DCOCLKDIV in the 8 MHz range (7995392 Hz), undivided, worked out by the
+/// // compiler
+/// const BAUD: BaudConfig = BaudConfig::new(DcoclkFreqSel::_8MHz.freq(), 115_200);
+/// // 9600 baud from an 8 MHz clock, from the user's guide's table of recommended settings (SLAU445I
+/// // Table 22-5, p. 589)
+/// const BAUD_9600: BaudConfig = BaudConfig::from_fields(true, 52, 1, 0x49);
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct BaudConfig {
     ucos16: bool,
+    ucbr: u16,
+    ucbrf: u8,
+    ucbrs: u8,
 }
 
-#[inline]
-fn calculate_baud_config(clk_freq: u32, bps: NonZeroU32) -> BaudConfig {
-    // In low-frequency mode the baud rate can be at most a third of the clock (SLAU445I 22.3.9.1,
-    // p. 584)
-    assert!(clk_freq / bps.get() >= 3, "baud rate above a third of the UART clock");
-    // Ensure n stays within the 16 bit boundary (UCBRx, SLAU445I Table 22-10, p. 595)
-    let n = (clk_freq / bps).min(0xFFFF);
+impl BaudConfig {
+    /// The settings for `baudrate` from a clock of `clock_hz`, as the clock selection of [`SerialConfig`]
+    /// calculates them from a baud rate: N = fBRCLK / baud rate, with oversampling from N = 16, and UCBRSx
+    /// looked up from the fractional part of N in SLAU445I Table 22-4, p. 586 (SLAU445I 22.3.10, p. 586). A
+    /// baud rate of 0 counts as 1.
+    ///
+    /// # Panics
+    ///
+    /// If the baud rate is above a third of the clock frequency, the most the eUSCI supports (SLAU445I
+    /// 22.3.9.1, p. 584). In a `const` that's a build error.
+    #[inline(always)]
+    pub const fn new(clock_hz: u32, baudrate: u32) -> Self {
+        let bps = if baudrate == 0 { 1 } else { baudrate };
+        // N = fBRCLK / baud rate (SLAU445I 22.3.10, p. 586), as INT(N) and the remainder of the division
+        let n = clock_hz / bps;
+        let modulo = clock_hz % bps;
+        // In low-frequency mode the baud rate can be at most a third of the clock (SLAU445I 22.3.9.1,
+        // p. 584)
+        assert!(n >= 3, "baud rate above a third of the UART clock");
 
-    let brs = lookup_brs(clk_freq, bps);
+        let ucbrs = lookup_brs(modulo, bps);
 
-    // N = fBRCLK / baud rate. Oversampling (UCOS16 = 1) when N >= 16, with UCBRx = INT(N / 16) and
-    // UCBRFx = INT((N / 16 - INT(N / 16)) * 16); otherwise UCBRx = INT(N) (SLAU445I 22.3.10, p. 586: "If N
-    // is equal or greater than 16, it is recommended to use the oversampling baud-rate generation mode";
-    // SLAU445I 22.3.10.1, p. 586; SLAU445I 22.3.10.2, p. 587). The quick set-up note on the same page says
-    // "if N > 16" instead; this follows the text, so N = 16 also oversamples, within the 1/16 limit of
-    // SLAU445I 22.3.9.2, p. 585.
-    if (n >= 16) && (bps.get() < u32::MAX / 16) {
-        //  div = bps * 16
-        const SIXTEEN: NonZeroU32 = NonZeroU32::new(16).unwrap();
-        let div = bps.saturating_mul(SIXTEEN);
+        // Oversampling (UCOS16 = 1) when N >= 16, with UCBRx = INT(N / 16) and UCBRFx = INT((N / 16 -
+        // INT(N / 16)) * 16); otherwise UCBRx = INT(N) (SLAU445I 22.3.10, p. 586: "If N is equal or
+        // greater than 16, it is recommended to use the oversampling baud-rate generation mode"; SLAU445I
+        // 22.3.10.1, p. 586; SLAU445I 22.3.10.2, p. 587). The quick set-up note on the same page says "if
+        // N > 16" instead; this follows the text, so N = 16 also oversamples, within the 1/16 limit of
+        // SLAU445I 22.3.9.2, p. 585.
+        if n >= 16 {
+            // INT(N / 16) is INT(N) / 16, and INT((N / 16 - INT(N / 16)) * 16) is INT(N) mod 16
+            BaudConfig { ucos16: true, ucbr: (n >> 4) as u16, ucbrf: (n & 0xF) as u8, ucbrs }
+        } else {
+            // UCBRFx is ignored with UCOS16 = 0 (SLAU445I Table 22-11, p. 595)
+            BaudConfig { ucos16: false, ucbr: n as u16, ucbrf: 0, ucbrs }
+        }
+    }
 
-        // n / 16, but more precise
-        let br = (clk_freq / div) as u16;
-
-        // same as n % 16, but more precise
-        let brf = ((clk_freq % div) / bps) as u8;
-        BaudConfig { ucos16: true, br, brf, brs }
-    } else {
-        // UCBRFx is ignored with UCOS16 = 0 (SLAU445I Table 22-11, p. 595)
-        BaudConfig { ucos16: false, br: n as u16, brf: 0, brs }
+    /// Settings worked out elsewhere: from the user's guide's table of recommended settings for typical
+    /// clocks and baud rates (SLAU445I Table 22-5, p. 589 to p. 590), or from the detailed error calculation
+    /// that it recommends for UCBRSx (SLAU445I 22.3.10.1, p. 586; SLAU445I 22.3.11, p. 587). `ucos16` selects
+    /// oversampling, `ucbr` is the prescaler UCBRx, `ucbrf` and `ucbrs` are the modulation patterns UCBRFx
+    /// (used only with oversampling) and UCBRSx (SLAU445I Table 22-10, p. 595; SLAU445I Table 22-11, p. 595).
+    ///
+    /// # Panics
+    ///
+    /// If `ucbrf` is above 15, the most its 4 bits hold (SLAU445I Table 22-11, p. 595), or `ucbr` is below 3
+    /// without oversampling or 0 with it: the baud rate can be at most a third of the clock frequency in
+    /// low-frequency mode and a sixteenth with oversampling (SLAU445I 22.3.9.1, p. 584; SLAU445I 22.3.9.2,
+    /// p. 585). In a `const` that's a build error.
+    #[inline(always)]
+    pub const fn from_fields(ucos16: bool, ucbr: u16, ucbrf: u8, ucbrs: u8) -> Self {
+        assert!(ucbrf <= 15, "UCBRFx above 15");
+        assert!(ucbr >= if ucos16 { 1 } else { 3 }, "baud rate above the most the UART clock allows");
+        BaudConfig { ucos16, ucbr, ucbrf, ucbrs }
     }
 }
 
+mod sealed {
+    pub trait SealedBaudRate {}
+
+    impl SealedBaudRate for u32 {}
+    impl SealedBaudRate for super::BaudConfig {}
+}
+
+/// The baud rate given to [`SerialConfig::new`]: a `u32`, the baud rate in bits per second, from which the
+/// clock selection calculates the settings (see [`BaudConfig::new`]), or a [`BaudConfig`], whose settings
+/// it uses as they are.
+pub trait BaudRate: sealed::SealedBaudRate {
+    #[doc(hidden)]
+    fn baud_config(self, clk_freq: u32) -> BaudConfig;
+}
+
+impl BaudRate for u32 {
+    // Inlined into each clock selection, so that the calculation folds to the result wherever the clock
+    // frequency and the baud rate are constants
+    #[inline(always)]
+    fn baud_config(self, clk_freq: u32) -> BaudConfig { BaudConfig::new(clk_freq, self) }
+}
+
+impl BaudRate for BaudConfig {
+    #[inline(always)]
+    fn baud_config(self, _clk_freq: u32) -> BaudConfig { self }
+}
+
+// UCBRSx for the fractional part of N, `modulo / bps` (SLAU445I 22.3.10, p. 586)
 #[inline(always)]
-fn lookup_brs(clk_freq: u32, bps: NonZeroU32) -> u8 {
+const fn lookup_brs(modulo: u32, bps: u32) -> u8 {
     // bps is between [1, 5_000_000] (datasheet max: fBITCLK 5 MHz in SLASEC4D Table 5-14, p. 45,
     // SLASE59F Table 5-14, p. 30, SLASEO7C 8.12.7.1, p. 35 and SLASEE4C Table 5-14, p. 32)
     // clk_freq is between [0, 24_000_000] (datasheet max: feUSCI 24 MHz on the MSP430FR2x5x, SLASEC4D
     // Table 5-14, p. 45; 16 MHz on the others, SLASE59F Table 5-14, p. 30, SLASEO7C 8.12.7.1, p. 35 and
     // SLASEE4C Table 5-14, p. 32)
-
     // modulo = clk_freq % bps => modulo is between [0, 4_999_999]
-    let modulo = clk_freq % bps;
 
     // fraction = modulo * 10_000 / (bps), so within [0, ((bps-1) * 10_000) / bps].
     // To prove upper bound we note `(bps-1)/bps` is largest when bps == 5_000_000:
@@ -640,51 +714,32 @@ fn lookup_brs(clk_freq: u32, bps: NonZeroU32) -> u8 {
         // Most accurate
         ((modulo * 10_000) / bps) as u16
     } else {
-        // Avoid overflow if modulo is large. Assume modulo < 5_000_000 from datasheet max (fBITCLK, above)
-        (((modulo * 500) / bps) * 20) as u16
+        // Avoid overflow if modulo is large. Assume modulo < 5_000_000 from datasheet max (fBITCLK, above),
+        // so modulo * 500 fits
+        (modulo.wrapping_mul(500) / bps).wrapping_mul(20) as u16
     };
 
-    // See SLAU445I Table 22-4, p. 586, in the MSP430FR4xx and MSP430FR2xx family user's guide (Rev. I).
-    // A row's UCBRSx is valid from its fractional portion up to the next row's.
-    match fraction_as_ten_thousandths {
-        0..529     => 0x00,
-        529..715   => 0x01,
-        715..835   => 0x02,
-        835..1001  => 0x04,
-        1001..1252 => 0x08,
-        1252..1430 => 0x10,
-        1430..1670 => 0x20,
-        1670..2147 => 0x11,
-        2147..2224 => 0x21,
-        2224..2503 => 0x22,
-        2503..3000 => 0x44,
-        3000..3335 => 0x25,
-        3335..3575 => 0x49,
-        3575..3753 => 0x4A,
-        3753..4003 => 0x52,
-        4003..4286 => 0x92,
-        4286..4378 => 0x53,
-        4378..5002 => 0x55,
-        5002..5715 => 0xAA,
-        5715..6003 => 0x6B,
-        6003..6254 => 0xAD,
-        6254..6432 => 0xB5,
-        6432..6667 => 0xB6,
-        6667..7001 => 0xD6,
-        7001..7147 => 0xB7,
-        7147..7503 => 0xBB,
-        7503..7861 => 0xDD,
-        7861..8004 => 0xED,
-        8004..8333 => 0xEE,
-        8333..8464 => 0xBF,
-        8464..8572 => 0xDF,
-        8572..8751 => 0xEF,
-        8751..9004 => 0xF7,
-        9004..9170 => 0xFB,
-        9170..9288 => 0xFD,
-        9288..     => 0xFE,
+    // SLAU445I Table 22-4, p. 586: a row's UCBRSx is valid from its fractional portion up to the next row's.
+    // The first row starts at 0.
+    let mut row = UCBRS_FROM.len() - 1;
+    while row > 0 && fraction_as_ten_thousandths < UCBRS_FROM[row] {
+        row -= 1;
     }
+    UCBRS[row]
 }
+
+// SLAU445I Table 22-4, p. 586, in the MSP430FR4xx and MSP430FR2xx family user's guide (Rev. I): the
+// fractional portions of N, in ten-thousandths, and their UCBRSx settings
+const UCBRS_FROM: [u16; 36] = [
+    0, 529, 715, 835, 1001, 1252, 1430, 1670, 2147, 2224, 2503, 3000,
+    3335, 3575, 3753, 4003, 4286, 4378, 5002, 5715, 6003, 6254, 6432, 6667,
+    7001, 7147, 7503, 7861, 8004, 8333, 8464, 8572, 8751, 9004, 9170, 9288,
+];
+const UCBRS: [u8; 36] = [
+    0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x11, 0x21, 0x22, 0x44, 0x25,
+    0x49, 0x4A, 0x52, 0x92, 0x53, 0x55, 0xAA, 0x6B, 0xAD, 0xB5, 0xB6, 0xD6,
+    0xB7, 0xBB, 0xDD, 0xED, 0xEE, 0xBF, 0xDF, 0xEF, 0xF7, 0xFB, 0xFD, 0xFE,
+];
 
 impl<USCI, M> SerialConfig<USCI, ClockSet, M>
 where
@@ -700,7 +755,7 @@ where
         // "When UCIRTXCLK = 0, the prescaler UCBRx must be set to a value greater or equal to 5")
         if let Some(irda) = self.irda {
             assert!(
-                irda.pulse_clock != IrdaClock::Brclk || baud_config.br >= 5,
+                irda.pulse_clock != IrdaClock::Brclk || baud_config.ucbr >= 5,
                 "IrDA with IrdaClock::Brclk needs a baud-rate prescaler UCBRx of at least 5"
             );
         }
@@ -709,8 +764,8 @@ where
         usci.ctl0_reset();
         // UCAxBRW holds UCBRx; UCAxMCTLW holds UCBRSx, UCBRFx and UCOS16 (SLAU445I Table 22-10, p. 595;
         // SLAU445I Table 22-11, p. 595)
-        usci.brw_settings(baud_config.br);
-        usci.mctlw_settings(baud_config.ucos16, baud_config.brs, baud_config.brf);
+        usci.brw_settings(baud_config.ucbr);
+        usci.mctlw_settings(baud_config.ucos16, baud_config.ucbrs, baud_config.ucbrf);
         // UCLISTEN in UCAxSTATW (SLAU445I Table 22-12, p. 596)
         usci.loopback(self.loopback.to_bool());
         // UCGLITx in UCAxCTLW1 (SLAU445I Table 22-9, p. 594)
@@ -798,7 +853,8 @@ where
 
     /// Enable interrupts when a character has been sent completely (UCTXCPTIE, SLAU445I Table 22-17, p. 600).
     /// Due to erratum USCI42 the flag is set after each character, even while the next one waits in the Tx
-    /// buffer (SLAZ695J USCI42, SLAZ664S USCI42, SLAZ726B USCI42 and SLAZ705H USCI42).
+    /// buffer (SLAZ695J USCI42, p. 12; SLAZ664S USCI42, p. 13; SLAZ726B USCI42, p. 8; SLAZ705H USCI42,
+    /// p. 10).
     #[inline(always)]
     pub fn enable_tx_complete_interrupts(&mut self) {
         let usci = unsafe { USCI::steal() };
@@ -860,8 +916,8 @@ where
     // Internal flush function: done once the Tx buffer is empty and the last character has left the
     // shift register. UCBUSY also covers a character being received, so this can wait for that too
     // (UCTXIFG, UCBUSY: SLAU445I Table 22-18, p. 601 and SLAU445I Table 22-12, p. 596).
-    // (UCTXCPTIFG can't be used: erratum USCI42 sets it after each character; SLAZ695J USCI42, SLAZ664S
-    // USCI42, SLAZ726B USCI42 and SLAZ705H USCI42.)
+    // (UCTXCPTIFG can't be used: erratum USCI42 sets it after each character; SLAZ695J USCI42, p. 12;
+    // SLAZ664S USCI42, p. 13; SLAZ726B USCI42, p. 8; SLAZ705H USCI42, p. 10.)
     #[inline]
     fn flush(&mut self) -> nb::Result<(), Infallible> {
         let usci = unsafe { USCI::steal() };
@@ -1108,11 +1164,11 @@ mod emb_io {
         USCI: SerialUsci<M>,
         M: PinMap,
     {
-        /// Due to errata USCI42, UCTXCPTIFG will fire every time a byte is done transmitting,
-        /// even if there's still more buffered (SLAZ695J USCI42, SLAZ664S USCI42, SLAZ726B USCI42 and
-        /// SLAZ705H USCI42). Thus, the implementation uses UCTXIFG and UCBUSY instead. When `flush()`
-        /// completes, the Tx buffer is empty and the last character has left the shift register (UCBUSY,
-        /// SLAU445I Table 22-12, p. 596).
+        /// Due to erratum USCI42, UCTXCPTIFG will fire every time a byte is done transmitting,
+        /// even if there's still more buffered (SLAZ695J USCI42, p. 12; SLAZ664S USCI42, p. 13; SLAZ726B
+        /// USCI42, p. 8; SLAZ705H USCI42, p. 10). Thus, the implementation uses UCTXIFG and UCBUSY instead.
+        /// When `flush()` completes, the Tx buffer is empty and the last character has left the shift
+        /// register (UCBUSY, SLAU445I Table 22-12, p. 596).
         ///
         /// As the error type is `Infallible`, this can be safely unwrapped.
         #[inline]
@@ -1211,11 +1267,11 @@ mod ehal_nb1 {
         USCI: SerialUsci<M>,
         M: PinMap,
     {
-        /// Due to errata USCI42, UCTXCPTIFG will fire every time a byte is done transmitting,
-        /// even if there's still more buffered (SLAZ695J USCI42, SLAZ664S USCI42, SLAZ726B USCI42 and
-        /// SLAZ705H USCI42). Thus, the implementation uses UCTXIFG and UCBUSY instead. When `flush()`
-        /// completes, the Tx buffer is empty and the last character has left the shift register (UCBUSY,
-        /// SLAU445I Table 22-12, p. 596).
+        /// Due to erratum USCI42, UCTXCPTIFG will fire every time a byte is done transmitting,
+        /// even if there's still more buffered (SLAZ695J USCI42, p. 12; SLAZ664S USCI42, p. 13; SLAZ726B
+        /// USCI42, p. 8; SLAZ705H USCI42, p. 10). Thus, the implementation uses UCTXIFG and UCBUSY instead.
+        /// When `flush()` completes, the Tx buffer is empty and the last character has left the shift
+        /// register (UCBUSY, SLAU445I Table 22-12, p. 596).
         #[inline]
         fn flush(&mut self) -> nb::Result<(), Self::Error> { self.flush() }
 
@@ -1253,11 +1309,11 @@ mod ehal02 {
     {
         type Error = void::Void;
 
-        /// Due to errata USCI42, UCTXCPTIFG will fire every time a byte is done transmitting,
-        /// even if there's still more buffered (SLAZ695J USCI42, SLAZ664S USCI42, SLAZ726B USCI42 and
-        /// SLAZ705H USCI42). Thus, the implementation uses UCTXIFG and UCBUSY instead. When `flush()`
-        /// completes, the Tx buffer is empty and the last character has left the shift register (UCBUSY,
-        /// SLAU445I Table 22-12, p. 596).
+        /// Due to erratum USCI42, UCTXCPTIFG will fire every time a byte is done transmitting,
+        /// even if there's still more buffered (SLAZ695J USCI42, p. 12; SLAZ664S USCI42, p. 13; SLAZ726B
+        /// USCI42, p. 8; SLAZ705H USCI42, p. 10). Thus, the implementation uses UCTXIFG and UCBUSY instead.
+        /// When `flush()` completes, the Tx buffer is empty and the last character has left the shift
+        /// register (UCBUSY, SLAU445I Table 22-12, p. 596).
         #[inline]
         fn flush(&mut self) -> nb::Result<(), Self::Error> {
             self.flush().map_err(|_| nb::Error::WouldBlock)

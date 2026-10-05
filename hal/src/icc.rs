@@ -95,13 +95,12 @@ impl Icc {
         ((index / 8) as usize, index % 8)
     }
 
-    /// Set the priority of an interrupt source. Its priority can change at any time (SLAU445I 5.2.2, p. 283).
+    /// Set the priority of an interrupt source. Its priority can change at any time (SLAU445I 5.2.2, p. 283:
+    /// "Software can read or write these registers at any time").
     #[inline]
     pub fn set_priority(&mut self, source: IccSource, priority: Priority) {
         let (reg, field) = Self::ilsr_index(source);
-        critical_section::with(|_| {
-            self.0.iccilsr(reg).modify(|_, w| w.ilsr(field).variant(priority));
-        });
+        self.0.iccilsr(reg).modify(|_, w| w.ilsr(field).variant(priority));
     }
 
     /// The priority of an interrupt source (its ILSRx field, SLAU445I Table 5-4, p. 294).

@@ -1,6 +1,7 @@
 //! The device descriptors (TLV): which device this is, and the calibration values measured in the
 //! factory. The board checks the descriptors against their CRC and prints them on the backchannel UART.
-//! LED1 turns on if the CRC matches.
+//! LED1 turns on if the CRC matches. It doesn't print the hardware revision: the data sheet lists it, but
+//! "This device does not support reading the hardware revision from memory" (SLAZ726B 5.3, p. 4).
 //! (The descriptors: SLASEO7C Table 9-30, p. 71 to p. 72. LED1 on P1.0 is green: SLAU802 Figure 19, p. 25.)
 //!
 //! How to test:
@@ -74,11 +75,10 @@ fn main() -> ! {
     let mut crc = Crc::new(periph.crc, 0xFFFF);
     let crc_ok = tlv::crc_matches(&mut crc);
 
-    // The information block and the die record (SLASEO7C Table 9-30, p. 71)
+    // The information block, without the hardware revision, and the die record (SLASEO7C Table 9-30, p. 71)
     let die = tlv::die_record();
     writeln!(tx, "\r\nDevice descriptors (TLV)\r").ok();
     writeln!(tx, "Device ID:         {:04X}\r", tlv::device_id()).ok();
-    writeln!(tx, "Hardware revision: {:02X}\r", tlv::hardware_revision()).ok();
     writeln!(tx, "Firmware revision: {:02X}\r", tlv::firmware_revision()).ok();
     writeln!(tx, "Lot wafer ID:      {:08X}\r", die.lot_wafer_id).ok();
     writeln!(tx, "Die position:      X {}, Y {}\r", die.x_position, die.y_position).ok();

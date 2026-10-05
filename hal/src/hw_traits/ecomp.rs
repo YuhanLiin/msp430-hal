@@ -100,6 +100,7 @@ pub enum DacBufferMode {
     Software,
 }
 impl From<DacBufferMode> for bool {
+    #[inline(always)]
     fn from(value: DacBufferMode) -> Self {
         match value {
             DacBufferMode::Hardware => false,
