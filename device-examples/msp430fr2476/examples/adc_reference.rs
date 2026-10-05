@@ -4,11 +4,12 @@
 //! - the internal 2.5 V reference
 //! - an external reference on VeREF+ (P1.0), here from the function generator's second channel
 //!
-//! An input voltage converts to `count = 4095 × input / reference` (12-bit results, SLAU445I 21.2.1,
-//! p. 541), so each line shows the count and the voltage worked out from the reference. All three
-//! should give the input voltage; the internal reference is the most accurate (2.5 V ±1.5 %: SLASEO7C
-//! 8.12.5.1, p. 33), while AVCC is only as accurate as the LaunchPad's 3.3 V supply.
-//! (ADCSREFx: SLAU445I Table 21-8, p. 567. VeREF+ is P1.0 and A8 is P4.3: SLASEO7C Table 9-19, p. 62.)
+//! An input voltage converts to `count = 4096 × input / reference`, at most 4095 (12-bit results:
+//! SLAU445I 21.2.1, p. 541), so each line shows the count and the voltage worked out from the reference.
+//! All three should give the input voltage; the internal reference is the most accurate (2.5 V ±1.5 %:
+//! SLASEO7C 8.12.5.1, p. 33), while AVCC is only as accurate as the LaunchPad's 3.3 V supply.
+//! (ADCSREFx: SLAU445I Table 21-8, p. 567. VeREF+ is P1.0 and A8 is P4.3: SLASEO7C Table 9-19, p. 62.
+//! LED1 is on P1.0 too: SLAU802 Figure 19, p. 25.)
 //!
 //! How to test (function generator with two channels, and the multimeter):
 //! 1. Generator channel 1: the DC waveform, Offset 1.000 V, output load High-Z. Connect it to P4.3

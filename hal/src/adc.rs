@@ -348,21 +348,6 @@ pub struct NoClockSet;
 /// Typestate for an ADC configuration with a clock source selected
 pub struct ClockSet(ClockSource);
 
-/// `x / (2^BITS - 1)`, rounded down, from shifts: the MSP430 has no divider, and a library division
-/// takes several hundred cycles. `(x + x / 2^BITS) / 2^BITS` is never above the quotient, and at most
-/// one below it for the products `count_to_mv` divides; the loop makes up the difference.
-#[inline(always)]
-fn div_by_full_scale<const BITS: u32>(x: u32) -> u32 {
-    let full_scale = (1 << BITS) - 1;
-    let mut quotient = (x + (x >> BITS)) >> BITS;
-    let mut remainder = x - ((quotient << BITS) - quotient);
-    while remainder >= full_scale {
-        quotient += 1;
-        remainder -= full_scale;
-    }
-    quotient
-}
-
 /// Configuration object for an ADC.
 ///
 /// The default configuration is based on the default register values (SLAU445I Table 21-3, p. 561 to
@@ -767,14 +752,26 @@ impl<REF> Adc<REF> {
 
     /// Convert an ADC count to a voltage value in millivolts, rounded down.
     ///
-    /// `ref_voltage_mv` is the reference voltage of the ADC in millivolts. The full-scale count
-    /// (255, 1023 or 4095) corresponds to the reference voltage, as in the data sheets' DVCC equation
-    /// (SLASEC4D 6.10.1, p. 67: DVCC = 4095 x reference voltage / ADC result; with 1023 in
-    /// SLASEO7C 9.10.1, p. 49, SLASE59F 6.10.1, p. 45, and SLASEE4C 6.10.1, p. 48) and in the ADCDF
-    /// description (SLAU445I Table 21-5, p. 565: "+VREF results in 03FFh"). The ADC conversion formula
-    /// of SLAU445I 21.2.1, p. 541, has 1024 or 4096 instead, a difference of at most 1 LSB. With an
-    /// external negative reference, this is the voltage above VR-. A count in the signed [`DataFormat`]
-    /// is converted too.
+    /// `ref_voltage_mv` is the reference voltage of the ADC in millivolts. The user's guide gives the
+    /// conversion formula as `count = 1024 × (Vin - VR-) / (VR+ - VR-)` for 10-bit results and with 4096
+    /// for 12-bit results (SLAU445I 21.2.1, p. 541), so 2^n for n-bit results, and 256 for 8-bit ones
+    /// (ADCRES: SLAU445I Table 21-5, p. 565). This returns the voltage at which the formula gives `count`:
+    /// `count × ref_voltage_mv / 2^n`. The full-scale count, 255, 1023 or 4095, also stands for every
+    /// input at or above VR+ ("full-scale ... when the input signal is equal to or higher than VR+", same
+    /// section), so it converts to one step, `ref_voltage_mv / 2^n`, below the reference.
+    ///
+    /// Each count stands for a range of inputs one step wide. The user's guide doesn't say whether the
+    /// voltage this returns is the bottom of that range or its middle, which depends on whether the
+    /// converter rounds or truncates. Neither changes the result by more than one step, less than the
+    /// specified errors: in 12-bit mode, for example, a gain error of ±9 LSB and an offset error of ±4 mV
+    /// (SLASEO7C 8.12.8.3, p. 41), or ±3 LSB and ±1.5 mV (SLASEC4D Table 5-22, p. 52).
+    ///
+    /// The data sheets' equation for DVCC divides by 4095 or 1023 instead of 2^n (SLASEC4D 6.10.1, p. 67;
+    /// SLASEO7C 9.10.1, p. 49; SLASE59F 6.10.1, p. 45; SLASEE4C 6.10.1, p. 48). This follows the user's
+    /// guide, which defines the ADC core's conversion. The two differ by at most one step, at full scale.
+    ///
+    /// With an external negative reference, this is the voltage above VR-. A count in the signed
+    /// [`DataFormat`] is converted too.
     pub fn count_to_mv(&self, count: u16, ref_voltage_mv: u16) -> u16 {
         use crate::_pac::adc::adcctl2::Adcres;
         let ctl2 = self.adc_reg.adcctl2().read();
@@ -792,13 +789,8 @@ impl<REF> Adc<REF> {
         } else {
             count
         };
-        let product = count as u32 * ref_voltage_mv as u32;
-        let mv = match bits {
-            8 => div_by_full_scale::<8>(product),
-            10 => div_by_full_scale::<10>(product),
-            _ => div_by_full_scale::<12>(product),
-        };
-        mv as u16
+        // count × VREF / 2^n (SLAU445I 21.2.1, p. 541)
+        ((count as u32 * ref_voltage_mv as u32) >> bits) as u16
     }
 
     /// Begins a single ADC conversion if one isn't already underway, enabling the ADC in the process.
