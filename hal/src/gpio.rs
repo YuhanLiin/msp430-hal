@@ -432,6 +432,46 @@ impl<PORT: PortNum, PIN: PinNum> Pin<PORT, PIN, Output> {
     }
 }
 
+/// The pin that a peripheral's pin type, such as the UART's `UsciA0TxPin`, stands for, whatever its
+/// alternate function. The drivers' `free()` methods give it back as a [`FreedPin`]. The device files name
+/// the pin of each.
+#[doc(hidden)]
+pub trait FreePin {
+    /// The pin's port
+    type Port: PortNum;
+    /// The pin's number
+    type Pin: PinNum;
+}
+
+/// The pin of a peripheral's pin type `P`, such as the UART's `UsciA0TxPin`, as a floating GPIO input: what
+/// the drivers' `free()` methods give back
+pub type FreedPin<P> = Pin<<P as FreePin>::Port, <P as FreePin>::Pin, Input<Floating>>;
+
+/// Turn the pin of `P` back into a floating GPIO input, see [`release_pin`]
+#[inline]
+pub(crate) fn free_pin<P: FreePin>() -> FreedPin<P> { release_pin() }
+
+/// Turn a pin in a module function back into a floating GPIO input, its state after a reset (PxDIR, PxREN,
+/// PxSEL0 and PxSEL1 = 00h: SLAU445I Table 8-4, p. 319). PxDIR and PxREN are cleared first: the eUSCI and
+/// MFM functions don't use PxDIR ("X" in the pin function tables, for example SLASEO7C Table 9-23, p. 65 and
+/// SLASEC4D Table 6-67, p. 104), so the pin doesn't drive its PxOUT level on the way back to GPIO. A pin in
+/// function 3 leaves it through PxSELC, both PxSEL bits in one write, so it doesn't pass through another
+/// function (SLAU445I 8.2.5, p. 314). PxDIR, PxREN, PxSEL0, PxSEL1 and PxSELC: SLAU445I Tables 8-11 to 8-15,
+/// p. 334 to p. 336.
+#[inline]
+pub(crate) fn release_pin<PORT: PortNum, PIN: PinNum>() -> Pin<PORT, PIN, Input<Floating>> {
+    let p = unsafe { PORT::steal() };
+    p.pxdir_clear(PIN::CLR_MASK);
+    p.pxren_clear(PIN::CLR_MASK);
+    if p.pxsel0_rd() & p.pxsel1_rd() & PIN::SET_MASK != 0 {
+        p.pxselc_wr(PIN::SET_MASK);
+    } else {
+        p.pxsel0_clear(PIN::CLR_MASK);
+        p.pxsel1_clear(PIN::CLR_MASK);
+    }
+    make_pin!()
+}
+
 /// GPIO parts for a specific port, including all 8 pins (a port has up to eight I/O lines, SLAU445I 8.1,
 /// p. 312; the slots of missing pins are [`Unavailable`]).
 pub struct Parts<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7> {

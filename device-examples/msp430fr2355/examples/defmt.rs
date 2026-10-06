@@ -37,7 +37,7 @@ use static_cell::StaticCell;
 
 // Once configured, our UART peripheral will live here.
 // This allows for printing from anywhere, including interrupts and panics.
-static SERIAL: StaticCell<Tx<EUsciA1>> = StaticCell::new();
+static SERIAL: StaticCell<TxOnly<EUsciA1>> = StaticCell::new();
 
 #[entry]
 fn main() -> ! {

@@ -47,7 +47,7 @@
 //! The output inverts with the `inverted` argument (IRPSEL, SLAU445I Table 1-25, p. 76 and SLAU445I
 //! Table 1-30, p. 81).
 
-use crate::{_pac, serial::{SerialUsci, Tx}};
+use crate::{_pac, serial::{SerialUsci, Tx, TxOnly}};
 use core::marker::PhantomData;
 
 pub use crate::device_specific::ir::{IrMapping, IrUsci};
@@ -84,8 +84,21 @@ pub use crate::_pac::sys::syscfg1::Irmsel as IrMode;
 /// p. 81)
 pub struct SoftwareData;
 /// Typestate for a modulator whose data comes from eUSCI_A0 (IRDSSEL = 0, SLAU445I Table 1-30, p. 81;
-/// "From UCA0TXD/UCA0SIMO" in SLAU445I Figure 1-8, p. 50)
-pub struct UartData;
+/// "From UCA0TXD/UCA0SIMO" in SLAU445I Figure 1-8, p. 50). It holds the UART's transmitter `T`, see
+/// [`IrUart`], so the UART can't be given back while the modulator uses it.
+pub struct UartData<T>(T);
+
+mod sealed {
+    pub trait IrUart {}
+}
+
+/// eUSCI_A0's transmitter in the pin mapping [`IrMapping`], which the modulator can take its data from: a
+/// [`Tx`] from `split()` or a [`TxOnly`] from `tx_only()`
+pub trait IrUart: sealed::IrUart {}
+impl sealed::IrUart for Tx<IrUsci, IrMapping> {}
+impl IrUart for Tx<IrUsci, IrMapping> {}
+impl sealed::IrUart for TxOnly<IrUsci, IrMapping> {}
+impl IrUart for TxOnly<IrUsci, IrMapping> {}
 
 // The IR bits of SYSCFG1 (SLAU445I Table 1-25, p. 76 and SLAU445I Table 1-30, p. 81) are set and cleared
 // on their own: other bits of SYSCFG1 belong to other functions on some devices (SYNCSEL on CapTIvate
@@ -94,7 +107,7 @@ pub struct UartData;
 fn sys() -> &'static _pac::sys::RegisterBlock { unsafe { &*_pac::Sys::ptr() } }
 
 /// The infrared modulator. Disable it with [`IrModulator::disable`].
-pub struct IrModulator<DATA>(PhantomData<DATA>);
+pub struct IrModulator<DATA>(DATA);
 
 #[inline(always)]
 fn enable(mode: IrMode, inverted: bool, software_data: bool) {
@@ -135,7 +148,7 @@ impl IrModulator<SoftwareData> {
         // SLAU445I Table 1-32, p. 83)
         <IrUsci as SerialUsci<IrMapping>>::configure_pin_mapping();
         enable(mode, inverted, true);
-        IrModulator(PhantomData)
+        IrModulator(SoftwareData)
     }
 
     /// Set the data bit (IRDATA, SLAU445I Table 1-25, p. 76 and SLAU445I Table 1-30, p. 81).
@@ -150,35 +163,60 @@ impl IrModulator<SoftwareData> {
     }
 }
 
-impl IrModulator<UartData> {
+impl<T: IrUart> IrModulator<UartData<T>> {
     /// Enable the modulator with the characters eUSCI_A0's UART sends as data (IRDSSEL = 0, SLAU445I
     /// Table 1-25, p. 76 and SLAU445I Table 1-30, p. 81; SLAU445I 1.12.2.2, p. 50: "In hardware data
     /// generation, the data comes from eUSCI_A"). The output inverts with `inverted` (IRPSEL). The UART has
-    /// to use the pin mapping [`IrMapping`], whose TXD pin carries the output.
+    /// to use the pin mapping [`IrMapping`], whose TXD pin carries the output. The modulator holds the UART's
+    /// `tx`, so it can't be given back while the modulator uses it, and stands in for it: the program sends
+    /// through the modulator as through `tx`. [`disable`](Self::disable) gives `tx` back.
     #[inline]
     pub fn with_uart_data<F, S>(
         _first: &IrInput<F>,
         _second: &IrInput<S>,
         mode: IrMode,
         inverted: bool,
-        _tx: &Tx<IrUsci, IrMapping>,
+        tx: T,
     ) -> Self
     where
         F: IrFirstTimer,
         S: IrSecondTimer,
     {
         enable(mode, inverted, false);
-        IrModulator(PhantomData)
+        IrModulator(UartData(tx))
+    }
+
+    /// Disable the modulator, so the pin carries the eUSCI_A0 signal again, and give back the UART's `Tx`
+    /// (IREN, see [`IrModulator::<SoftwareData>::disable`])
+    #[inline]
+    pub fn disable(self) -> T {
+        disable();
+        self.0 .0
     }
 }
 
-impl<DATA> IrModulator<DATA> {
+// The modulator stands in for the UART's `Tx`, which it holds
+impl<T: IrUart> core::ops::Deref for IrModulator<UartData<T>> {
+    type Target = T;
+    #[inline(always)]
+    fn deref(&self) -> &T { &self.0 .0 }
+}
+
+impl<T: IrUart> core::ops::DerefMut for IrModulator<UartData<T>> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 .0 }
+}
+
+impl IrModulator<SoftwareData> {
     /// Disable the modulator, so the pin carries the eUSCI_A0 signal again (IREN; SLAU445I 1.12.2.2, p. 50:
     /// "If IREN is cleared, this function is bypassed"; SLAU445I Figure 1-8, p. 50).
     #[inline]
-    pub fn disable(self) {
-        // Clears IREN, IRDSSEL and IRDATA; IRPSEL and IRMSEL stay, and don't matter while the modulator is
-        // bypassed (SLAU445I Table 1-30, p. 81; SLAU445I Figure 1-8, p. 50)
-        unsafe { sys().syscfg1().clear_bits(|w| w.iren().clear_bit().irdssel().clear_bit().irdata().clear_bit()) };
-    }
+    pub fn disable(self) { disable() }
+}
+
+// Clears IREN, IRDSSEL and IRDATA; IRPSEL and IRMSEL stay, and don't matter while the modulator is bypassed
+// (SLAU445I Table 1-30, p. 81; SLAU445I Figure 1-8, p. 50)
+#[inline(always)]
+fn disable() {
+    unsafe { sys().syscfg1().clear_bits(|w| w.iren().clear_bit().irdssel().clear_bit().irdata().clear_bit()) };
 }

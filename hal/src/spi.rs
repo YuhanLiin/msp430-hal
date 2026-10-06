@@ -75,6 +75,7 @@ use crate::{
     hw_traits::eusci::{EusciSPI, SpiStatw, Ucmode, Ucssel, UcxSpiCtw0},
     pin_mapping::*,
 };
+use crate::gpio::{free_pin, FreePin, FreedPin};
 use core::{convert::Infallible, marker::PhantomData};
 use nb::Error::WouldBlock;
 
@@ -83,13 +84,13 @@ use embedded_hal::spi::{Mode, Phase, Polarity};
 /// Marks a eUSCI capable of SPI communication (in this case, all euscis do: SLAU445I 23.1, p. 604)
 pub trait SpiUsci<M: PinMap = DefaultMapping>: EusciSPI {
     /// Master In Slave Out (refered to as SOMI in datasheet; UCxSOMI, SLAU445I 23.3, p. 606)
-    type MISO;
+    type MISO: FreePin;
     /// Master Out Slave In (refered to as SIMO in datasheet; UCxSIMO, SLAU445I 23.3, p. 606)
-    type MOSI;
+    type MOSI: FreePin;
     /// Serial Clock (UCxCLK, SLAU445I 23.3, p. 606)
-    type SCLK;
+    type SCLK: FreePin;
     /// Slave Transmit Enable (acts like CS; UCxSTE, SLAU445I 23.3, p. 606)
-    type STE: SpiPinLevel;
+    type STE: SpiPinLevel + FreePin;
 
     /// Additional configuration
     #[inline(always)]
@@ -98,7 +99,8 @@ pub trait SpiUsci<M: PinMap = DefaultMapping>: EusciSPI {
 
 // Allows a GPIO pin to be converted into an SPI object
 // The pin's alternate function defaults to Alternate1: PxSEL = 01b, the primary module function
-// (SLAU445I Table 8-3, p. 314). The device_specific files cite each pin's function in its data sheet.
+// (SLAU445I Table 8-3, p. 314). The device_specific files cite each pin's function in its data sheet. The
+// pin is the one `free()` gives back.
 macro_rules! impl_spi_pin {
     ($struct_name: ident, $port: ty, $pin: ty) => {
         impl_spi_pin!($struct_name, $port, $pin, Alternate1);
@@ -107,6 +109,10 @@ macro_rules! impl_spi_pin {
         impl<DIR> From<Pin<$port, $pin, $alt<DIR>>> for $struct_name {
             #[inline(always)]
             fn from(_val: Pin<$port, $pin, $alt<DIR>>) -> Self { $struct_name }
+        }
+        impl $crate::gpio::FreePin for $struct_name {
+            type Port = $port;
+            type Pin = $pin;
         }
         impl $crate::spi::SpiPinLevel for $struct_name {
             // The pin's bit in PxIN (SLAU445I Table 8-9, p. 334)
@@ -486,14 +492,16 @@ where crate::pac::EUsciB1: SpiUsci<M>
     ///
     /// Erratum USCI47 applies to this slave as to any other, see [`SpiConfig::to_slave`]: with UCCKPH = 1
     /// its output data can be wrong (SLAZ695J USCI47, p. 12 to p. 13).
-    pub fn mfm_slave(mut self, ste_pol: StePolarity) -> SpiSlave<crate::pac::EUsciB1, M> {
+    ///
+    /// It's an [`MfmSlave`](crate::mfm::MfmSlave), not an [`SpiSlave`], as it has no pins to give back.
+    pub fn mfm_slave(mut self, ste_pol: StePolarity) -> crate::mfm::MfmSlave<M> {
         // UCMODEx = 01b: STE active high, 10b: STE active low (SLAU445I Table 23-12, p. 620)
         self.ctlw0.ucmode = match ste_pol {
             StePolarity::EnabledWhenHigh => Ucmode::FourPinSPI1,
             StePolarity::EnabledWhenLow  => Ucmode::FourPinSPI0,
         };
         self.configure_hw();
-        SpiSlave { usci: self.usci, _pin_map: PhantomData }
+        crate::mfm::MfmSlave(SpiSlave { usci: self.usci, _pin_map: PhantomData })
     }
 }
 
@@ -628,6 +636,32 @@ pub enum SpiVector {
     TxBufferEmpty = 4,
 }
 
+/// The pins an SPI driver gives back with its `free()`, as floating GPIO inputs: MISO, MOSI, SCLK, and STE if
+/// the bus uses it
+pub type SpiPins<USCI, M> = (
+    FreedPin<<USCI as SpiUsci<M>>::MISO>,
+    FreedPin<<USCI as SpiUsci<M>>::MOSI>,
+    FreedPin<<USCI as SpiUsci<M>>::SCLK>,
+    Option<FreedPin<<USCI as SpiUsci<M>>::STE>>,
+);
+
+// Hold the eUSCI in reset and turn the pins back into GPIO inputs, for `free()`. STE is among them in 4-pin
+// mode (UCMODEx = 01b or 10b: SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620), as every bus
+// that uses it sets that mode. "When set, the UCSWRST bit resets the UCRXIE, UCTXIE, ..." (SLAU445I 23.3.1,
+// p. 606), so the interrupts are off too.
+#[inline]
+fn free_spi<USCI: SpiUsci<M>, M: PinMap>(usci: USCI) -> (USCI, SpiPins<USCI, M>) {
+    let ste = usci.four_pin();
+    usci.ctw0_set_rst();
+    let pins = (
+        free_pin::<USCI::MISO>(),
+        free_pin::<USCI::MOSI>(),
+        free_pin::<USCI::SCLK>(),
+        if ste { Some(free_pin::<USCI::STE>()) } else { None },
+    );
+    (usci, pins)
+}
+
 /// Represents a group of pins configured for SPI communication
 pub struct Spi<USCI, M: PinMap = DefaultMapping>
 where USCI: SpiUsci<M>
@@ -678,6 +712,13 @@ where
         // The interrupt enables are held cleared while the eUSCI is in reset (SLAU445I 23.3.1, p. 606)
         self.usci.ie_wr(intrs);
     }
+
+    /// Give back the eUSCI and the pins, so that the eUSCI can be set up again, with other pins for example.
+    /// The eUSCI is held in reset (UCSWRST = 1: SLAU445I 23.3.1, p. 606), which cuts a transfer still running
+    /// short: call `flush` first. The pins come back as floating GPIO inputs, STE only if the bus uses it,
+    /// see [`SpiPins`].
+    #[inline]
+    pub fn free(self) -> (USCI, SpiPins<USCI, M>) { free_spi(self.usci) }
 }
 
 /// An eUSCI peripheral that has been configured into an SPI slave.
@@ -693,6 +734,18 @@ where
     M: PinMap,
 {
     spi_common!();
+
+    /// Give back the eUSCI and the pins, as [`Spi::free`] does
+    #[inline]
+    pub fn free(self) -> (USCI, SpiPins<USCI, M>) { free_spi(self.usci) }
+
+    // The eUSCI held in reset, without pins: for the MFM's slave, which has none (`Mfm::free`)
+    #[cfg(feature = "mfm")]
+    #[inline]
+    pub(crate) fn free_usci(self) -> USCI {
+        self.usci.ctw0_set_rst();
+        self.usci
+    }
 
     /// Try to read from the Rx buffer. Returns `nb::WouldBlock` if the buffer is empty.
     #[inline(always)]

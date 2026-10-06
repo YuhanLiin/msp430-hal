@@ -99,6 +99,7 @@ use crate::clock::Smclk;
 use crate::hw_traits::eusci::{
     EUsciI2C, I2CUcbIfgOut, UcbCtlw0, UcbCtlw1, UcbI2coa, Ucmode, Ucssel,
 };
+use crate::gpio::{free_pin, FreePin, FreedPin};
 use crate::pin_mapping::*;
 
 use core::marker::PhantomData;
@@ -209,9 +210,9 @@ where USCI: I2cUsci<M>
 /// Marks a usci capable of I2C communication
 pub trait I2cUsci<M: PinMap = DefaultMapping>: EUsciI2C {
     /// I2C SCL pin
-    type ClockPin;
+    type ClockPin: FreePin;
     /// I2C SDA pin
-    type DataPin;
+    type DataPin: FreePin;
     /// I2C external clock source pin. Only necessary if UCLKI is selected as a clock source (UCLKI is the
     /// eUSCI_B SPI clock pin: SLAU445I Figure 24-1, p. 628).
     type ExternalClockPin;
@@ -232,6 +233,11 @@ macro_rules! impl_i2c_pin {
         impl<DIR> From<Pin<$port, $pin, $alt<DIR>>> for $struct_name {
             #[inline(always)]
             fn from(_val: Pin<$port, $pin, $alt<DIR>>) -> Self { $struct_name }
+        }
+        // The pin `free()` gives back
+        impl $crate::gpio::FreePin for $struct_name {
+            type Port = $port;
+            type Pin = $pin;
         }
     };
 }
@@ -697,6 +703,23 @@ macro_rules! configure {
             {
                 self.configure_regs();
                 $out_type { usci: self.usci, _pin_map: PhantomData }
+            }
+        }
+
+        impl<USCI, M> $out_type
+        where
+            USCI: I2cUsci<M>,
+            M: PinMap,
+        {
+            /// Give back the eUSCI and the SCL and SDA pins, so that the eUSCI can be set up again, with other
+            /// pins for example. The eUSCI is held in reset: "I2C communication stops", "SDA and SCL are high
+            /// impedance", and UCBxIE and UCBxIFG are cleared (SLAU445I 24.3.1, p. 629), so finish a
+            /// transfer, with its STOP, first. The pins come back as floating GPIO inputs, see [`FreedPin`]. A
+            /// pin given to `use_uclk()` stays in its clock function.
+            #[inline]
+            pub fn free(self) -> (USCI, FreedPin<USCI::ClockPin>, FreedPin<USCI::DataPin>) {
+                self.usci.ctw0_set_rst();
+                (self.usci, free_pin::<USCI::ClockPin>(), free_pin::<USCI::DataPin>())
             }
         }
     };

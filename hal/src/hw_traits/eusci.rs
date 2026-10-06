@@ -446,6 +446,10 @@ pub trait EusciSPI: Steal {
     // UCxCTLW0, "Modify only when UCSWRST = 1" (SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620)
     fn ctw0_wr(&self, reg: &UcxSpiCtw0);
 
+    // Whether UCMODEx selects 4-pin SPI, with STE: 01b or 10b; 00b is 3-pin SPI (SLAU445I Table 23-3, p. 613;
+    // SLAU445I Table 23-12, p. 620)
+    fn four_pin(&self) -> bool;
+
     // UCCKPH and UCCKPL in UCxCTLW0 (SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620)
     fn set_spi_mode(&self, mode: Mode);
 
@@ -561,6 +565,10 @@ macro_rules! eusci_spi_impl {
             // UCxCTLW0 (SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620)
             #[inline(always)]
             fn ctw0_wr(&self, reg: &UcxSpiCtw0) { self.$ucxctlw0().write(UcxSpiCtw0_wr! {reg}); }
+
+            // UCMODEx in UCxCTLW0 (SLAU445I Table 23-3, p. 613; SLAU445I Table 23-12, p. 620)
+            #[inline(always)]
+            fn four_pin(&self) -> bool { !self.$ucxctlw0().read().ucmode().is_ucmode_0() }
 
             // UCxBRW (SLAU445I Table 23-4, p. 614; SLAU445I Table 23-13, p. 621)
             #[inline(always)]

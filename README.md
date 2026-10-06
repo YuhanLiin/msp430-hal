@@ -102,6 +102,11 @@ The library is mostly feature complete for the FR2xxx/4xxx family. The following
 
 PRs with implementations for these peripherals are welcome.
 
+The UART, SPI and I2C drivers have a `free()`, which consumes the driver and gives back the eUSCI and its
+pins, so that the eUSCI can be set up again, on other pins for example, as the `echo_remapped` examples do.
+Still to do: the same for the other drivers, such as the timers, PWM and capture, whose peripheral is split
+into parts that would all have to come back.
+
 If you encounter any use cases not supported please open an issue (or submit a pull request).
 
 ## Supporting additional devices

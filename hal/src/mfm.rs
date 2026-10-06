@@ -24,12 +24,19 @@
 //! [`SpiConfig`](crate::spi::SpiConfig). It is not tested on hardware yet.
 
 use crate::{
-    gpio::{Alternate2, Pin, Pin0, Pin1, P5},
+    gpio::{release_pin, Alternate2, Floating, Input, Pin, Pin0, Pin1, P5},
     pac::EUsciB1,
     pin_mapping::{DefaultMapping, PinMap},
     spi::{SpiErr, SpiSlave, SpiUsci},
 };
 use core::convert::Infallible;
+
+/// eUSCI_B1 as the SPI slave of the MFM, from [`SpiConfig::mfm_slave`](crate::spi::SpiConfig::mfm_slave), for
+/// [`Mfm::new`]. The MFM connects to it internally, so unlike an [`SpiSlave`] it has no pins to give back:
+/// [`Mfm::free`] gives eUSCI_B1 back.
+pub struct MfmSlave<M: PinMap = DefaultMapping>(pub(crate) SpiSlave<EUsciB1, M>)
+where
+    EUsciB1: SpiUsci<M>;
 
 /// The Manchester Function Module, with eUSCI_B1 as its SPI slave (SLASEC4D 6.10.14, p. 79)
 pub struct Mfm<M: PinMap = DefaultMapping>
@@ -49,11 +56,19 @@ where
     /// [`SpiConfig::mfm_slave`](crate::spi::SpiConfig::mfm_slave).
     #[inline]
     pub fn new<RXDIR, TXDIR>(
-        spi: SpiSlave<EUsciB1, M>,
+        spi: MfmSlave<M>,
         _rx: Pin<P5, Pin0, Alternate2<RXDIR>>,
         _tx: Pin<P5, Pin1, Alternate2<TXDIR>>,
     ) -> Self {
-        Mfm { spi }
+        Mfm { spi: spi.0 }
+    }
+
+    /// Give back eUSCI_B1, held in reset (UCSWRST = 1: SLAU445I 23.3.1, p. 606), and the MFM's pins, P5.0 and
+    /// P5.1, as floating GPIO inputs, which disables the MFM (SLAU445I 25.2, p. 666), see
+    /// [`FreedPin`](crate::gpio::FreedPin).
+    #[inline]
+    pub fn free(self) -> (EUsciB1, Pin<P5, Pin0, Input<Floating>>, Pin<P5, Pin1, Input<Floating>>) {
+        (self.spi.free_usci(), release_pin(), release_pin())
     }
 
     /// A received byte, or `WouldBlock` if none has arrived (eUSCI_B1's UCRXIFG and UCBxRXBUF:

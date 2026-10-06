@@ -62,13 +62,13 @@ fn main() -> ! {
         let mut led = p1.pin0.to_output();
         led.set_low().ok();
 
-        let mut e_usci_a0 = periph.e_usci_a0;
+        let e_usci_a0 = periph.e_usci_a0;
 
         // FIRST: Default UART mapping (P1.4 TX / P1.5 RX)
         // (SLASEO7C Table 9-11, p. 54; UCA0TXD with P1SEL = 01: SLASEO7C Table 9-23, p. 65)
         // (8N1, LSB first: UCMSB, UC7BIT, UCSPB, UCPEN in SLAU445I Table 22-8, p. 593; ACLK is
         // UCSSEL = 01b: SLASEO7C Table 9-8, p. 50)
-        {
+        let (e_usci_a0, _p1_4) = {
             let mut tx = SerialConfig::<_, _, DefaultMapping>::new(
                 e_usci_a0,
                 BitOrder::LsbFirst,
@@ -81,11 +81,10 @@ fn main() -> ! {
             .use_aclk(&aclk).tx_only(p1.pin4.to_alternate1());
 
             embedded_io::Write::write_all(&mut tx, b"HELLO DEFAULT\n").ok();
-        }
-
-        unsafe {
-            e_usci_a0 = msp430fr247x::Peripherals::steal().e_usci_a0;
-        }
+            // Send the last character, then take eUSCI_A0 back (P1.4 comes back as a GPIO input)
+            embedded_io::Write::flush(&mut tx).ok();
+            tx.free()
+        };
 
         // SECOND: Remap UART to P5.2 TX / P5.1 RX
         // (USCIA0RMP: SLASEO7C Table 9-11, p. 54; UCA0TXD and UCA0RXD with P5SEL = 01:
