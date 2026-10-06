@@ -13,13 +13,17 @@ use msp430_hal::{
 use panic_msp430 as _;
 
 // Red onboard LED should blink at a steady period.
+// No board document covers this LED (on P1.0 here): there is none for the MSP430FR25x2. P1.0 is a GPIO
+// output, P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58).
 #[entry]
 fn main() -> ! {
-    // Take peripherals and disable watchdog
+    // Take peripherals and disable watchdog. The watchdog runs from every PUC and must be halted, here
+    // with WDTHOLD (SLAU445I 12.2.2, p. 363; SLAU445I Table 12-2, p. 366).
     let periph = msp430fr25x2::Peripherals::take().unwrap();
     let _wdt = Wdt::constrain(periph.wdt_a);
 
-    // Configure GPIO
+    // Configure GPIO. Pmm::new clears LOCKLPM5, so the pins take on their configuration
+    // (SLAU445I 8.3.1, p. 316).
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let port1 = Batch::new(periph.p1).split(&pmm);
     let mut p1_0 = port1.pin0.to_output();
