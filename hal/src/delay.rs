@@ -79,9 +79,15 @@ impl SysDelay {
     }
 }
 
-/// Busy-wait for at least `cycles` MCLK cycles, like TI's `__delay_cycles()`
+/// Busy-wait for at least `cycles` MCLK cycles, like TI's `__delay_cycles()`.
+///
+/// The wait is a loop that takes 3 MCLK cycles per iteration, so `cycles` is rounded up to a multiple of 3:
+/// a `cycles` above 0 waits at least 3 cycles, and 0 doesn't wait. The call itself takes some cycles on
+/// top, which matters for small values, and an interrupt during the wait makes it longer. It counts MCLK
+/// cycles, so how long it lasts depends on the MCLK frequency, and unlike [`SysDelay`] it needs no
+/// configured clock.
 #[inline]
-pub(crate) fn delay_cycles(cycles: u32) {
+pub fn delay_cycles(cycles: u32) {
     let mut iters = cycles.div_ceil(CYCLES_PER_ITER);
     while iters > 0 {
         let chunk = iters.min(u16::MAX as u32);

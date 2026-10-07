@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 - Fixed `delay_ns()` and `delay_us()`, which waited whole milliseconds, at most 1 ms. They now wait the requested time, counted in MCLK cycles, plus about 60 MCLK cycles for the call. `SysDelay` also implements the embedded-hal 0.2 `DelayUs` now.
+- Add `delay::delay_cycles()`, which busy-waits for at least a number of MCLK cycles, like TI's `__delay_cycles()`. It needs no configured clock and works in steps of 3 cycles: the count is rounded up to a multiple of 3, so a count above 0 waits at least 3 cycles.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
