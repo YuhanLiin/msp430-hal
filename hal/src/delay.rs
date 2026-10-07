@@ -95,8 +95,9 @@ mod ehal1 {
     use embedded_hal::delay::DelayNs;
 
     impl DelayNs for SysDelay {
-        /// Pauses execution for at least `ns` nanoseconds, rounded up to whole microseconds. The call
-        /// itself takes about 60 MCLK cycles (measured on an MSP430FR2476), see the
+        /// Pauses execution for at least `ns` nanoseconds, rounded up to whole microseconds. Like
+        /// `delay_us`, this isn't accurate for short delays: the call itself takes up to about 60 MCLK
+        /// cycles (measured on an MSP430FR2476), and `delay_ns(250)` took 6.0 µs at 5 MHz. See the
         /// [module documentation](crate::delay).
         #[inline]
         fn delay_ns(&mut self, ns: u32) {
@@ -107,8 +108,13 @@ mod ehal1 {
             }
         }
 
-        /// Pauses execution for at least `us` microseconds. The call itself takes about 60 MCLK
-        /// cycles (measured on an MSP430FR2476), see the [module documentation](crate::delay).
+        /// Pauses execution for at least `us` microseconds.
+        ///
+        /// This isn't accurate for delays of single or double digit microseconds: the call itself takes
+        /// up to about 60 MCLK cycles (measured on an MSP430FR2476), which is up to 12 µs at 5 MHz. At
+        /// 5 MHz, `delay_us(1)` took 6.0 µs and `delay_us(10)` took 22.6 µs. The longer the delay, the
+        /// less that overhead matters: `delay_us(100)` took 113 µs. See the
+        /// [module documentation](crate::delay).
         #[inline]
         fn delay_us(&mut self, us: u32) { self.us(us) }
 
@@ -136,8 +142,12 @@ mod ehal02 {
             }
 
             impl DelayUs<$typ> for SysDelay {
-                /// The call itself takes about 60 MCLK cycles (measured on an MSP430FR2476), see
-                /// the [module documentation](crate::delay).
+                /// Pauses execution for at least `us` microseconds.
+                ///
+                /// This isn't accurate for delays of single or double digit microseconds: the call itself
+                /// takes up to about 60 MCLK cycles (measured on an MSP430FR2476), which is up to 12 µs at
+                /// 5 MHz. At 5 MHz, `delay_us(1)` took 6.0 µs and `delay_us(10)` took 22.6 µs. See the
+                /// [module documentation](crate::delay).
                 #[inline]
                 fn delay_us(&mut self, us: $typ) {
                     if us > 0 {
