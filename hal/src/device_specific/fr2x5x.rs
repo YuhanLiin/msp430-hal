@@ -444,43 +444,34 @@ mod sac {
     use crate::pac::{Sac0, Sac1, Sac2, Sac3};
     use crate::{gpio::*, hw_traits::sac::*};
 
-    // SAC pins, all three in their PxSELx = 11 function (the macro uses Alternate3): the OAx+ pin is
-    // PSEL = 00 and the OAx- pin is NSEL = 00 (SLASEC4D Tables 6-27 to 6-30, p. 79 to p. 80), and OAxO
-    // is the output pin (SLASEC4D Table 6-63, p. 96; SLASEC4D Table 6-65, p. 100). The SAC registers are
-    // in SLAU445I Table 20-5, p. 531.
-    // SAC0: SLASEC4D Table 6-27, p. 79; registers at 0C80h (SLASEC4D Table 6-59, p. 93)
+    // The SAC pins are in their PxSELx = 11 function (SLASEC4D Table 6-63, p. 96, and Table 6-65, p. 100):
+    // OAx+ is PSEL = 00 and OAx- is NSEL = 00 (SLASEC4D Table 6-27, p. 79, to Table 6-30, p. 80)
     impl_sac_periph!(
         Sac0,
-        P1, Pin3, // Positive input pin: OA0+, P1SELx = 11
-        P1, Pin2, // Negative input pin: OA0-, P1SELx = 11
-        P1, Pin1, // Output pin: OA0O, P1SELx = 11
+        P1, Pin3, // Positive input pin: OA0+
+        P1, Pin2, // Negative input pin: OA0-
+        P1, Pin1, // Output pin: OA0O
         sac0oa, sac0pga, sac0dac, sac0dat, sac0iv
     );
-    // SAC1: SLASEC4D Table 6-29, p. 79; pins in SLASEC4D Table 6-63, p. 96; registers at 0C90h (SLASEC4D
-    // Table 6-60, p. 93)
     impl_sac_periph!(
         Sac1,
-        P1, Pin7, // OA1+, P1SELx = 11
-        P1, Pin6, // OA1-, P1SELx = 11
-        P1, Pin5, // OA1O, P1SELx = 11
+        P1, Pin7, // OA1+
+        P1, Pin6, // OA1-
+        P1, Pin5, // OA1O
         sac1oa, sac1pga, sac1dac, sac1dat, sac1iv
     );
-    // SAC2: SLASEC4D Table 6-28, p. 79; pins in SLASEC4D Table 6-65, p. 100; registers at 0CA0h (SLASEC4D
-    // Table 6-61, p. 93)
     impl_sac_periph!(
         Sac2,
-        P3, Pin3, // OA2+, P3SELx = 11
-        P3, Pin2, // OA2-, P3SELx = 11
-        P3, Pin1, // OA2O, P3SELx = 11
+        P3, Pin3, // OA2+
+        P3, Pin2, // OA2-
+        P3, Pin1, // OA2O
         sac2oa, sac2pga, sac2dac, sac2dat, sac2iv
     );
-    // SAC3: SLASEC4D Table 6-30, p. 80; pins in SLASEC4D Table 6-65, p. 100; registers at 0CB0h (SLASEC4D
-    // Table 6-62, p. 94)
     impl_sac_periph!(
         Sac3,
-        P3, Pin7, // OA3+, P3SELx = 11
-        P3, Pin6, // OA3-, P3SELx = 11
-        P3, Pin5, // OA3O, P3SELx = 11
+        P3, Pin7, // OA3+
+        P3, Pin6, // OA3-
+        P3, Pin5, // OA3O
         sac3oa, sac3pga, sac3dac, sac3dat, sac3iv
     );
 }

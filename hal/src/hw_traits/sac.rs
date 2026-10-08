@@ -1,11 +1,10 @@
 /// Trait representing a Smart Analog Combo (SAC) peripheral.
 pub trait SacPeriph {
-    /// Non-inverting opamp input pin, OAx+ (PSEL = 00: SLASEC4D Table 6-27, p. 79, to SLASEC4D Table 6-30,
-    /// p. 80)
+    /// Non-inverting opamp input pin, OAx+
     type PosInputPin;
-    /// Inverting opamp input pin, OAx- (NSEL = 00: SLASEC4D Table 6-27, p. 79, to SLASEC4D Table 6-30, p. 80)
+    /// Inverting opamp input pin, OAx-
     type NegInputPin;
-    /// Opamp output pin, OAxO (SLASEC4D Table 6-63, p. 96, and SLASEC4D Table 6-65, p. 100)
+    /// Opamp output pin, OAxO
     type OutputPin;
     /// Write SACxOA: NSEL, PSEL, OAPM, NMUXEN, PMUXEN, SACEN and OAEN (SLAU445I Table 20-6, p. 532)
     fn configure_sacoa(psel: u8, nsel: NSel, pm: bool);
@@ -22,8 +21,7 @@ pub trait SacPeriph {
 
 // The sac module's input enums give the PSEL value of each source, so no need for a separate enum
 
-// NSEL (SLAU445I Table 20-6, p. 532); 10b, device specific, is the paired OA (SLASEC4D Table 6-27, p. 79, to
-// SLASEC4D Table 6-30, p. 80)
+// NSEL (SLAU445I Table 20-6, p. 532); 10b, device specific, is the paired OA
 #[derive(Debug, Copy, Clone)]
 pub enum NSel {
     ExtPinMinus = 0b00,
@@ -47,12 +45,9 @@ macro_rules! impl_sac_periph {
         $out_port: ident, $out_pin: ident, // Output 
         $sacXoa: ident, $sacXpga: ident, $sacXdac: ident, $sacXdat: ident, $sacXiv: ident) => {
         impl SacPeriph for $SAC {
-            // The OA pins are their port's tertiary module function, PxSELx = 11 (SLAU445I Table 8-3, p. 314;
-            // SLASEC4D Table 6-63, p. 96, and SLASEC4D Table 6-65, p. 100)
             type PosInputPin = Pin<$pos_port, $pos_pin, Alternate3<Input<Floating>>>;
             type NegInputPin = Pin<$neg_port, $neg_pin, Alternate3<Input<Floating>>>;
             type OutputPin   = Pin<$out_port, $out_pin, Alternate3<Input<Floating>>>;
-            // SACxOA: NSEL, PSEL, OAPM, NMUXEN, PMUXEN, SACEN and OAEN (SLAU445I Table 20-6, p. 532)
             #[inline(always)]
             fn configure_sacoa(psel: u8, nsel: NSel, pm: bool) {
                 unsafe {
@@ -68,7 +63,6 @@ macro_rules! impl_sac_periph {
                     );
                 }
             }
-            // SACxPGA: GAIN and MSEL (SLAU445I Table 20-7, p. 533)
             #[inline(always)]
             fn configure_sacpga(gain: u8, msel: MSel) {
                 unsafe {
@@ -78,9 +72,7 @@ macro_rules! impl_sac_periph {
                         .msel().bits(msel as u8));
                 }
             }
-            // SACxDAC: DACSREF, DACLSEL, DACDMAE, DACIE and DACEN (SLAU445I Table 20-8, p. 534). "This
-            // register can be modified only when DACEN = 0" (SLAU445I 20.4.3, p. 534), as it is after reset
-            // (SLAU445I Table 20-5, p. 531)
+            // SACxDAC can only be modified while DACEN = 0, as it is after reset (SLAU445I 20.4.3, p. 534)
             #[inline(always)]
             fn configure_dac(lsel: u8, vref: bool, interrupts: bool) {
                 unsafe {
@@ -94,8 +86,7 @@ macro_rules! impl_sac_periph {
                     );
                 }
             }
-            // SACxDAT, written as a word: "Only word access to the SACxDAT register is allowed" (SLAU445I
-            // Table 20-9 note 1, p. 535)
+            // SACxDAT is written as a word: only word access is allowed (SLAU445I Table 20-9, p. 535)
             #[inline(always)]
             fn set_dac_count(val: u16) {
                 unsafe {
@@ -103,7 +94,6 @@ macro_rules! impl_sac_periph {
                     sac.$sacXdat().write(|w| w.dacdata().bits(val));
                 }
             }
-            // SACxIV (SLAU445I Table 20-11, p. 537)
             #[inline(always)]
             fn dac_iv() -> u16 {
                 unsafe { $SAC::steal() }.$sacXiv().read().bits()
