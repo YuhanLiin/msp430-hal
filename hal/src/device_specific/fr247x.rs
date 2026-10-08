@@ -122,7 +122,7 @@ mod adc {
 }
 
 /* Backup Memory */
-/// Size of the Backup Memory segment on this device, in bytes
+/// Size of the Backup Memory (BAKMEM register block) on this device, in bytes (SLASEO7C 9.10.10, p. 61)
 pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */

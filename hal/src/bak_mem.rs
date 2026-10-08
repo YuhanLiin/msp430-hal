@@ -1,9 +1,12 @@
 //! Backup Memory.
-//! [BAK_MEM_SIZE] bytes of volatile memory that survives system resets.
+//! [BAK_MEM_SIZE] bytes of volatile memory that survives system resets. It keeps its content through
+//! LPM3.5 (SLAU445I chapter 7, p. 309), whose wake-up is a BOR (SLAU445I 1.4.3.2, p. 42), and a reset
+//! doesn't load a value into it (reset value "Undefined", SLAU445I Table 7-1, p. 310).
 //!
 //! This memory is still volatile however, so it won't survive power loss. The backup memory is powered in all modes except LPM4.5.
 //!
-//! The peripheral access crate exposes the backup memory as 16 individual 16-bit registers.
+//! The peripheral access crate exposes the backup memory as individual 16-bit registers (SLAU445I
+//! Table 7-1, p. 310).
 //! This module provides helper functions for reinterpreting the backup memory as various array types.
 //!
 //! After choosing the most convenient data type for your application call the relevant method,
@@ -24,6 +27,7 @@ macro_rules! as_x {
         #[inline(always)]
         pub fn $fn_name(_reg: Bkmem) -> &'static mut $arr {
             const { assert!(core::mem::size_of::<$arr>() == BAK_MEM_SIZE) }
+            // The BAKMEM registers are consecutive, and word or byte accessible (SLAU445I Table 7-1, p. 310)
             unsafe { &mut *(Bkmem::PTR as *mut $arr) }
         }
     };

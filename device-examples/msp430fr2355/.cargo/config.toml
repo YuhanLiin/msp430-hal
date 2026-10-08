@@ -10,12 +10,16 @@ rustflags = [
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=-mcpu=msp430",
 
-    # Even though this chip has a HW multiplier, enabling it causes link errors, so we'll link the software multiplier for now
-    "-C", "link-arg=-lmul_none",
-    #"-C", "link-arg=-lmul_32",
-    #"-C", "link-arg=-Wl,--allow-multiple-definition", # Prevent __muldi3 dupe errors
+    # Use the 32-bit hardware multiplier (MPY32) at 04C0h, which every supported device has (MPY_TYPE 8 in
+    # msp430-gcc's include/devices.csv). libmul_32 is for MPY_TYPE 4 devices, with the MPY32 at 0130h,
+    # which is PM5CTL0 on these devices.
+    # (MPY32 at 04C0h: SLASEC4D Table 6-49, p. 89. PM5CTL0 at 0120h + 10h = 0130h: SLASEC4D Table 6-35,
+    # p. 85. The same on the other devices: SLASE59F Table 6-39, p. 66 and SLASE59F Table 6-26, p. 62;
+    # SLASEO7C Table 9-49, p. 79 and SLASEO7C Table 9-34, p. 74; SLASEE4C Table 6-32, p. 67 and
+    # SLASEE4C Table 6-22, p. 63.)
+    "-C", "link-arg=-lmul_f5",
     
-    # libgcc must be linked after everything that depends on it (e.g. lmul_none)
+    # libgcc must be linked after everything that depends on it (e.g. lmul_f5)
     "-C", "link-arg=-lgcc",
 ]
 
