@@ -449,7 +449,7 @@ mod i2c {
 }
 
 /* Information Memory */
-/// Size of the Information Memory segment on this device, in bytes
+/// Size of the Information Memory segment on this device, in bytes (SLASEO7C Table 9-31, p. 73)
 pub const INFO_MEM_SIZE: usize = 512;
 
 /* PWM */
