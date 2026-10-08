@@ -102,9 +102,7 @@ mod adc {
 }
 
 /* Backup Memory */
-/// Size of the Backup Memory segment on this device, in bytes (SLASEC4D 6.10.10, p. 76: "This device
-/// provides up to 32 bytes that are retained during LPM3.5"; BAKMEM0 to BAKMEM15 in SLASEC4D
-/// Table 6-54, p. 92)
+/// Size of the Backup Memory (BAKMEM register block) on this device, in bytes (SLASEC4D 6.10.10, p. 76)
 pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */

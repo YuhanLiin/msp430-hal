@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
-- Document the backup memory, its size, address, registers and LPM3.5 retention, with references to the user's guide and the data sheets.
+- Document the backup memory, its LPM3.5 retention and its registers, with references to the user's guide.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
