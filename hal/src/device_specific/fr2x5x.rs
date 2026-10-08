@@ -444,8 +444,9 @@ mod sac {
     use crate::pac::{Sac0, Sac1, Sac2, Sac3};
     use crate::{gpio::*, hw_traits::sac::*};
 
-    // The SAC pins are in their PxSELx = 11 function (SLASEC4D Table 6-63, p. 96, and Table 6-65, p. 100):
-    // OAx+ is PSEL = 00 and OAx- is NSEL = 00 (SLASEC4D Table 6-27, p. 79, to Table 6-30, p. 80)
+    // SAC pins, all in their PxSELx = 11 function: OAx+ is PSEL = 00 and OAx- is NSEL = 00. The SAC registers
+    // are in SLAU445I Table 20-5, p. 531.
+    // SAC0: SLASEC4D Table 6-27, p. 79; pins in Table 6-63, p. 96; registers at 0C80h in Table 6-59, p. 93
     impl_sac_periph!(
         Sac0,
         P1, Pin3, // Positive input pin: OA0+
@@ -453,6 +454,7 @@ mod sac {
         P1, Pin1, // Output pin: OA0O
         sac0oa, sac0pga, sac0dac, sac0dat, sac0iv
     );
+    // SAC1: SLASEC4D Table 6-29, p. 79; pins in Table 6-63, p. 96; registers at 0C90h in Table 6-60, p. 93
     impl_sac_periph!(
         Sac1,
         P1, Pin7, // OA1+
@@ -460,6 +462,7 @@ mod sac {
         P1, Pin5, // OA1O
         sac1oa, sac1pga, sac1dac, sac1dat, sac1iv
     );
+    // SAC2: SLASEC4D Table 6-28, p. 79; pins in Table 6-65, p. 100; registers at 0CA0h in Table 6-61, p. 93
     impl_sac_periph!(
         Sac2,
         P3, Pin3, // OA2+
@@ -467,6 +470,7 @@ mod sac {
         P3, Pin1, // OA2O
         sac2oa, sac2pga, sac2dac, sac2dat, sac2iv
     );
+    // SAC3: SLASEC4D Table 6-30, p. 80; pins in Table 6-65, p. 100; registers at 0CB0h in Table 6-62, p. 94
     impl_sac_periph!(
         Sac3,
         P3, Pin7, // OA3+
