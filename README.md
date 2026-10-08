@@ -8,10 +8,10 @@
 
 > A high-level Hardware Abstraction Layer (HAL) for the MSP430 family of microcontrollers, principally targetting the FR2xxx / 4xxx family, but seeking to support the all MSP430 devices eventually.
 
-[![Crates.io](https://img.shields.io/crates/v/msp430fr2x5x-hal.svg)](https://crates.io/crates/msp430fr2x5x-hal)
-[![Docs.rs](https://docs.rs/msp430fr2x5x-hal/badge.svg)](https://docs.rs/msp430fr2x5x-hal)
-[![CI](https://github.com/YuhanLiin/msp430fr2x5x-hal/actions/workflows/build.yml/badge.svg)](https://github.com/YuhanLiin/msp430fr2x5x-hal/actions)
-[![License](https://img.shields.io/crates/l/msp430fr2x5x-hal.svg)](https://crates.io/crates/msp430fr2x5x-hal)
+[![Crates.io](https://img.shields.io/crates/v/msp430-hal.svg)](https://crates.io/crates/msp430-hal)
+[![Docs.rs](https://docs.rs/msp430-hal/badge.svg)](https://docs.rs/msp430-hal)
+[![CI](https://github.com/YuhanLiin/msp430-hal/actions/workflows/build.yml/badge.svg)](https://github.com/YuhanLiin/msp430-hal/actions)
+[![License](https://img.shields.io/crates/l/msp430-hal.svg)](https://crates.io/crates/msp430-hal)
 [![MSRV](https://img.shields.io/badge/rust-1.82%2B-blue.svg)](https://www.rust-lang.org)
 
 This crate is primarily designed to be used as a dependency in another project, but 
