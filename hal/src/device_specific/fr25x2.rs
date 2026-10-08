@@ -12,69 +12,58 @@ pub mod gpio {
     use crate::hw_traits::gpio::gpio_impl;
     use crate::adc;
 
-    // Define alternate pin transitions (SLASEE4C Table 6-15, p. 58 for P1; SLASEE4C Table 6-16, p. 60 for
-    // P2). Alternate1, 2 and 3 are PxSEL1/PxSEL0 = 01, 10 and 11, the primary, secondary and tertiary
-    // module functions (SLAU445I Table 8-3, p. 314). PxSEL doesn't set the direction
-    // (SLAU445I 8.2.5, p. 314), so the functions the tables list with a fixed PxDIR only take pins of
-    // that direction.
+    // Define alternate pin transitions (SLASEE4C Table 6-15, p. 58 for P1; SLASEE4C Table 6-16, p. 60 for P2)
 
-    // P1 alternate 1, P1SELx = 01: eUSCI, any P1DIR (SLASEE4C Table 6-15, p. 58):
-    // P1.0 UCB0STE, P1.1 UCB0CLK, P1.2 UCB0SIMO/UCB0SDA, P1.3 UCB0SOMI/UCB0SCL, all with USCIBRMP = 0;
-    // P1.4 UCA0TXD/UCA0SIMO, P1.5 UCA0RXD/UCA0SOMI, both with USCIARMP = 0;
-    // P1.6 UCA0CLK, P1.7 UCA0STE, with either USCIARMP (SLASEE4C Table 6-11, p. 53).
+    // P1 alternate 1: UCB0STE, UCB0CLK, UCB0SIMO/UCB0SDA and UCB0SOMI/UCB0SCL on P1.0 to P1.3 with
+    // USCIBRMP = 0, UCA0TXD/UCA0SIMO and UCA0RXD/UCA0SOMI on P1.4 and P1.5 with USCIARMP = 0, UCA0CLK and
+    // UCA0STE on P1.6 and P1.7 (SLASEE4C Table 6-11, p. 53)
     impl<PIN: PinNum, DIR> ToAlternate1 for Pin<P1, PIN, DIR> {}
-    // P1 alternate 2, P1SELx = 10 (SLASEE4C Table 6-15, p. 58). P1.0 and P1.7 have no function 10.
-    impl       ToAlternate2 for Pin<P1, Pin1, Output> {} // ACLK, P1SELx = 10, P1DIR = 1
-    impl       ToAlternate2 for Pin<P1, Pin2, Output> {} // SMCLK, P1SELx = 10, P1DIR = 1
-    impl       ToAlternate2 for Pin<P1, Pin3, Output> {} // MCLK, P1SELx = 10, P1DIR = 1
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin4, DIR> {}    // TA0.1 / TA0.CCI1A, P1SELx = 10, P1DIR = 1 / 0
-    impl<DIR>  ToAlternate2 for Pin<P1, Pin5, DIR> {}    // TA0.2 / TA0.CCI2A, P1SELx = 10, P1DIR = 1 / 0
-    impl<PULL> ToAlternate2 for Pin<P1, Pin6, Input<PULL>> {} // TA0CLK, P1SELx = 10, P1DIR = 0
-    // P1 alternate 3: CapTIvate. CAP1.0 to CAP1.3 only exist on the MSP430FR2522.
-    // P1SELx = 11, any P1DIR (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-15 note 3, p. 58: "CapTIvate
-    // channel 1 is available on the MSP430FR2522 only")
+    // P1 alternate 2: P1.0 and P1.7 have none
+    impl       ToAlternate2 for Pin<P1, Pin1, Output> {} // ACLK
+    impl       ToAlternate2 for Pin<P1, Pin2, Output> {} // SMCLK
+    impl       ToAlternate2 for Pin<P1, Pin3, Output> {} // MCLK
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin4, DIR> {}    // TA0.1 / TA0.CCI1A
+    impl<DIR>  ToAlternate2 for Pin<P1, Pin5, DIR> {}    // TA0.2 / TA0.CCI2A
+    impl<PULL> ToAlternate2 for Pin<P1, Pin6, Input<PULL>> {} // TA0CLK
+    // P1 alternate 3: CapTIvate. CAP1.0 to CAP1.3 only exist on the MSP430FR2522 (SLASEE4C Table 6-15 note 3,
+    // p. 58)
     #[cfg(feature = "msp430fr2522")]
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin0, DIR> {} // CAP1.0, P1SELx = 11
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin0, DIR> {} // CAP1.0
     #[cfg(feature = "msp430fr2522")]
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin1, DIR> {} // CAP1.1, P1SELx = 11
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin1, DIR> {} // CAP1.1
     #[cfg(feature = "msp430fr2522")]
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin2, DIR> {} // CAP1.2, P1SELx = 11
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin2, DIR> {} // CAP1.2
     #[cfg(feature = "msp430fr2522")]
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin3, DIR> {} // CAP1.3, P1SELx = 11
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin4, DIR> {} // CAP0.0, P1SELx = 11
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin5, DIR> {} // CAP0.1, P1SELx = 11
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin6, DIR> {} // CAP0.2, P1SELx = 11
-    impl<DIR>  ToAlternate3 for Pin<P1, Pin7, DIR> {} // CAP0.3, P1SELx = 11
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin3, DIR> {} // CAP1.3
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin4, DIR> {} // CAP0.0
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin5, DIR> {} // CAP0.1
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin6, DIR> {} // CAP0.2
+    impl<DIR>  ToAlternate3 for Pin<P1, Pin7, DIR> {} // CAP0.3
 
-    // P2 alternate 1, P2SELx = 01 (SLASEE4C Table 6-16, p. 60). eUSCI_A0 uses P2.0 and P2.1 only with
-    // USCIARMP = 1 (SLASEE4C Table 6-11, p. 53). P2.5 and P2.6 have no function 01.
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {}    // UCA0TXD/UCA0SIMO, P2SELx = 01, USCIARMP = 1
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {}    // UCA0RXD/UCA0SOMI, P2SELx = 01, USCIARMP = 1
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin2, DIR> {}    // TA1.1 / TA1.CCI1A, P2SELx = 01, P2DIR = 1 / 0
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin3, DIR> {}    // TA1.2 / TA1.CCI2A, P2SELx = 01, P2DIR = 1 / 0
-    impl<PULL> ToAlternate1 for Pin<P2, Pin4, Input<PULL>> {} // TA1CLK, P2SELx = 01, P2DIR = 0
-    // P2 alternate 2, P2SELx = 10 (SLASEE4C Table 6-16, p. 60). The eUSCI_B0 pins are its remapped ones,
-    // used with USCIBRMP = 1 (SLASEE4C Table 6-11, p. 53). SYNC is the "CapTIvate synchronous trigger
-    // input" (SLASEE4C Table 4-2, p. 13). P2.3 to P2.6 only exist on the 20-pin RHL package
-    // (SLASEE4C Table 4-2, p. 14).
-    impl<DIR>  ToAlternate2 for Pin<P2, Pin0, DIR> {}    // XOUT, P2SELx = 10
-    impl<DIR>  ToAlternate2 for Pin<P2, Pin1, DIR> {}    // XIN, P2SELx = 10
-    impl<PULL> ToAlternate2 for Pin<P2, Pin2, Input<PULL>> {} // CapTIvate SYNC, P2SELx = 10, P2DIR = 0
-    impl<DIR>  ToAlternate2 for Pin<P2, Pin3, DIR> {}    // UCB0STE, P2SELx = 10, USCIBRMP = 1
-    impl<DIR>  ToAlternate2 for Pin<P2, Pin4, DIR> {}    // UCB0CLK, P2SELx = 10, USCIBRMP = 1
-    impl<DIR>  ToAlternate2 for Pin<P2, Pin5, DIR> {}    // UCB0SIMO/UCB0SDA, P2SELx = 10, USCIBRMP = 1
-    impl<DIR>  ToAlternate2 for Pin<P2, Pin6, DIR> {}    // UCB0SOMI/UCB0SCL, P2SELx = 10, USCIBRMP = 1
+    // P2 alternate 1: P2.5 and P2.6 have none. eUSCI_A0 on P2.0 and P2.1 needs USCIARMP = 1 (SLASEE4C
+    // Table 6-11, p. 53)
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {}    // UCA0TXD/UCA0SIMO
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {}    // UCA0RXD/UCA0SOMI
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin2, DIR> {}    // TA1.1 / TA1.CCI1A
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin3, DIR> {}    // TA1.2 / TA1.CCI2A
+    impl<PULL> ToAlternate1 for Pin<P2, Pin4, Input<PULL>> {} // TA1CLK
+    // P2 alternate 2: the remapped eUSCI_B0 pins, USCIBRMP = 1 (SLASEE4C Table 6-11, p. 53). P2.3 to P2.6
+    // only exist on the 20-pin RHL package (SLASEE4C Table 4-2, p. 14)
+    impl<DIR>  ToAlternate2 for Pin<P2, Pin0, DIR> {}    // XOUT
+    impl<DIR>  ToAlternate2 for Pin<P2, Pin1, DIR> {}    // XIN
+    impl<PULL> ToAlternate2 for Pin<P2, Pin2, Input<PULL>> {} // CapTIvate SYNC (SLASEE4C Table 4-2, p. 13)
+    impl<DIR>  ToAlternate2 for Pin<P2, Pin3, DIR> {}    // UCB0STE
+    impl<DIR>  ToAlternate2 for Pin<P2, Pin4, DIR> {}    // UCB0CLK
+    impl<DIR>  ToAlternate2 for Pin<P2, Pin5, DIR> {}    // UCB0SIMO/UCB0SDA
+    impl<DIR>  ToAlternate2 for Pin<P2, Pin6, DIR> {}    // UCB0SOMI/UCB0SCL
 
-    // ADC inputs A0 to A7 are enabled through SYSCFG2.ADCPCTLx, not through PxSEL
-    // (SLASEE4C Table 6-15, p. 58 and SLASEE4C Table 6-16, p. 60: "ADCPCTLx = 1 ... from SYSCFG2";
-    // SLAU445I Table 1-31, p. 82)
+    // ADC inputs A0 to A7 are enabled through SYSCFG2.ADCPCTLx, not through PxSEL (SLASEE4C Table 6-15, p. 58;
+    // SLASEE4C Table 6-16, p. 60)
     impl<PIN: PinNum, DIR> ToAdcPctl for Pin<P1, PIN, DIR> where Self: adc::AdcPctlCapable {}
     impl<PIN: PinNum, DIR> ToAdcPctl for Pin<P2, PIN, DIR> where Self: adc::AdcPctlCapable {}
 
-    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable: P1 and P2 both have
-    // edge-selectable interrupts (SLASEE4C 6.10.3, p. 51; port registers: SLASEE4C Table 6-28, p. 65;
-    // descriptions in SLAU445I 8.4, p. 319). SLASEE4C Table 6-28, p. 65 gives P2SEL1 the offset 0Ch, the
-    // same as P1SEL1; the PAC places it at 0Dh, as SLAU445I Table 8-4, p. 320 does.
+    // GPIO port impls, PAC register methods, and marking ports as interrupt-capable (SLASEE4C 6.10.3, p. 51;
+    // port registers: SLASEE4C Table 6-28, p. 65; SLAU445I 8.4, p. 319)
     gpio_impl!(p1: P1 => p1in, p1out, p1dir, p1ren, p1selc, p1sel0, p1sel1, [p1ies, p1ie, p1ifg, p1iv]);
     gpio_impl!(p2: P2 => p2in, p2out, p2dir, p2ren, p2selc, p2sel0, p2sel1, [p2ies, p2ie, p2ifg, p2iv]);
 }
@@ -83,8 +72,7 @@ pub mod gpio {
 mod adc {
     use crate::{adc::*, gpio::*};
 
-    // Channels A0 to A7, ADCINCHx = 0 to 7 (SLASEE4C Table 6-13, p. 55), each pin enabled by its
-    // SYSCFG2.ADCPCTLx (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60)
+    // Channels A0 to A7 (SLASEE4C Table 6-13, p. 55)
     impl_adc_channel_pin!(P1, Pin0, AdcMode => 0);
     impl_adc_channel_pin!(P1, Pin1, AdcMode => 1);
     impl_adc_channel_pin!(P1, Pin2, AdcMode => 2);
@@ -96,23 +84,19 @@ mod adc {
 }
 
 /* Backup Memory */
-/// Size of the Backup Memory segment on this device, in bytes (SLASEE4C 6.10.10, p. 55: "up to 32 bytes";
-/// SLASEE4C Table 6-20, p. 63: size 0020h)
+/// Size of the Backup Memory segment on this device, in bytes (SLASEE4C 6.10.10, p. 55)
 pub const BAK_MEM_SIZE: usize = 32;
 
 /* Capture */
-// Capture input A of each CCR (SLASEE4C Figure 6-2, p. 54). CCR0 has no pin: "The CCR0 registers on both
-// Timer0_A3 and Timer1_A3 are not externally connected" (SLASEE4C 6.10.8, p. 54). Inside the device, input
-// A of TA0's CCR0 is ACLK, selected with `()`, and TA1's isn't connected, so it is `NoCapturePin`, which
-// can't be selected (SLASEE4C Figure 6-2, p. 54).
+// CCR0 of both timers is not externally connected, so only CCR1 and CCR2 have a pin (SLASEE4C 6.10.8, p. 54)
 mod capture {
     use crate::{capture::CapturePeriph, gpio::*, pac::*};
 
     // TA0.CCI1A on P1.4 and TA0.CCI2A on P1.5 (SLASEE4C Table 6-15, p. 58)
     impl CapturePeriph for Ta0 {
         type Gpio0 = ();
-        type Gpio1 = Pin<P1, Pin4, Alternate2<Input<Floating>>>; // TA0.CCI1A, P1SELx = 10, P1DIR = 0
-        type Gpio2 = Pin<P1, Pin5, Alternate2<Input<Floating>>>; // TA0.CCI2A, P1SELx = 10, P1DIR = 0
+        type Gpio1 = Pin<P1, Pin4, Alternate2<Input<Floating>>>;
+        type Gpio2 = Pin<P1, Pin5, Alternate2<Input<Floating>>>;
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
@@ -122,8 +106,8 @@ mod capture {
     // TA1.CCI1A on P2.2 and TA1.CCI2A on P2.3 (SLASEE4C Table 6-16, p. 60)
     impl CapturePeriph for Ta1 {
         type Gpio0 = ();
-        type Gpio1 = Pin<P2, Pin2, Alternate1<Input<Floating>>>; // TA1.CCI1A, P2SELx = 01, P2DIR = 0
-        type Gpio2 = Pin<P2, Pin3, Alternate1<Input<Floating>>>; // TA1.CCI2A, P2SELx = 01, P2DIR = 0
+        type Gpio1 = Pin<P2, Pin2, Alternate1<Input<Floating>>>;
+        type Gpio2 = Pin<P2, Pin3, Alternate1<Input<Floating>>>;
         type Gpio3 = ();
         type Gpio4 = ();
         type Gpio5 = ();
@@ -132,9 +116,8 @@ mod capture {
 }
 
 /* Clocks */
-/// MODCLK frequency, typical (SLASEE4C Table 5-9, p. 28: 3.8 MHz to 5.8 MHz, 4.8 MHz typical). The
-/// clock distribution table gives "5 MHz ±10%" instead (SLASEE4C Table 6-8, p. 49); this follows the
-/// electrical specification.
+/// MODCLK frequency, typical (SLASEE4C Table 5-9, p. 28). The clock distribution table gives 5 MHz ±10%
+/// (SLASEE4C Table 6-8, p. 49), this follows the electrical specification.
 pub const MODCLK_FREQ_HZ: u32 = 4_800_000;
 
 /* eUSCI */
@@ -159,8 +142,7 @@ mod i2c {
         pin_mapping::*,
     };
 
-    // eUSCI_B0 registers in I2C mode: addresses in SLASEE4C Table 6-34, p. 67 to p. 68; descriptions in
-    // SLAU445I 24.4, p. 648 (UCBxCTLW0: SLAU445I Table 24-4, p. 649)
+    // eUSCI_B0 registers: SLASEE4C Table 6-34, p. 67 to p. 68; SLAU445I 24.4, p. 648
     eusci_i2c_impl!(
         EUsciB0,
         ucb0ctlw0,
@@ -183,41 +165,33 @@ mod i2c {
         crate::pac::e_usci_b0::ucb0ifg::R,
     );
 
-    // eUSCI_B0 I2C pins (SLASEE4C Table 6-11, p. 53): SCL on P1.3 and SDA on P1.2 with USCIBRMP = 0, on
-    // P2.6 and P2.5 with USCIBRMP = 1. The P1 pins use P1SELx = 01, Alternate1 (SLASEE4C Table 6-15, p. 58),
-    // the P2 pins P2SELx = 10, Alternate2 (SLASEE4C Table 6-16, p. 60). UCLKI is the clock on the eUSCI_B
-    // clock pin, UCB0CLK, selected with UCSSELx = 00 (SLAU445I Figure 24-1, p. 628;
-    // SLASEE4C Table 6-8, p. 49).
+    // eUSCI_B0 I2C pins (SLASEE4C Table 6-11, p. 53): SCL, SDA and the UCLKI clock, UCB0CLK, are P1.3, P1.2
+    // and P1.1 with USCIBRMP = 0 (SLASEE4C Table 6-15, p. 58) and P2.6, P2.5 and P2.4 with USCIBRMP = 1
+    // (SLASEE4C Table 6-16, p. 60)
 
-    /// I2C SCL pin for eUSCI B0 (default mapping): P1.3, UCB0SCL with P1SELx = 01 and USCIBRMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// I2C SCL pin for eUSCI B0 (default mapping)
     pub struct UsciB0SCLPinDefault;
     impl_i2c_pin!(UsciB0SCLPinDefault, P1, Pin3);
 
-    /// I2C SCL pin for eUSCI B0 (remapped mapping): P2.6, UCB0SCL with P2SELx = 10 and USCIBRMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// I2C SCL pin for eUSCI B0 (remapped mapping)
     pub struct UsciB0SCLPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_i2c_pin!(UsciB0SCLPinRemapped, P2, Pin6, Alternate2);
 
-    /// I2C SDA pin for eUSCI B0 (default mapping): P1.2, UCB0SDA with P1SELx = 01 and USCIBRMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// I2C SDA pin for eUSCI B0 (default mapping)
     pub struct UsciB0SDAPinDefault;
     impl_i2c_pin!(UsciB0SDAPinDefault, P1, Pin2);
 
-    /// I2C SDA pin for eUSCI B0 (remapped mapping): P2.5, UCB0SDA with P2SELx = 10 and USCIBRMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// I2C SDA pin for eUSCI B0 (remapped mapping)
     pub struct UsciB0SDAPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_i2c_pin!(UsciB0SDAPinRemapped, P2, Pin5, Alternate2);
 
-    /// UCLKI pin for eUSCI B0. Used as an external clock source. (default mapping): P1.1, UCB0CLK with
-    /// P1SELx = 01 and USCIBRMP = 0 (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// UCLKI pin for eUSCI B0. Used as an external clock source. (default mapping)
     pub struct UsciB0UCLKIPinDefault;
     impl_i2c_pin!(UsciB0UCLKIPinDefault, P1, Pin1);
 
-    /// UCLKI pin for eUSCI B0. Used as an external clock source. (remapped mapping): P2.4, UCB0CLK with
-    /// P2SELx = 10 and USCIBRMP = 1 (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// UCLKI pin for eUSCI B0. Used as an external clock source. (remapped mapping)
     pub struct UsciB0UCLKIPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_i2c_pin!(UsciB0UCLKIPinRemapped, P2, Pin4, Alternate2);
@@ -227,8 +201,8 @@ mod i2c {
         type DataPin = UsciB0SDAPinDefault;
         type ExternalClockPin = UsciB0UCLKIPinDefault;
 
-        // USCIBRMP = 0: eUSCI_B0 on P1.0 to P1.3 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG2.USCIB0RMP (SLAU445I Table 1-31, p. 82).
+        // USCIBRMP = 0: eUSCI_B0 on P1.0 to P1.3 (SLASEE4C 6.10.7, p. 53), SYSCFG2.USCIB0RMP is described in
+        // SLAU445I Table 1-31, p. 82
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg2().clear_bits(|w| w.uscibrmp().clear_bit()) };
@@ -239,8 +213,7 @@ mod i2c {
         type DataPin = UsciB0SDAPinRemapped;
         type ExternalClockPin = UsciB0UCLKIPinRemapped;
 
-        // USCIBRMP = 1: eUSCI_B0 on P2.3 to P2.6 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG2.USCIB0RMP (SLAU445I Table 1-31, p. 82).
+        // USCIBRMP = 1: eUSCI_B0 on P2.3 to P2.6
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg2().set_bits(|w| w.uscibrmp().set_bit()) };
@@ -254,28 +227,27 @@ mod i2c {
 pub const INFO_MEM_SIZE: usize = 256;
 
 /* PWM */
-// Only CCR1 and CCR2 have output pins (SLASEE4C 1.4, p. 4: "Only CCR1 and CCR2 are externally connected";
-// SLASEE4C Figure 6-2, p. 54)
+// Only CCR1 and CCR2 have output pins (SLASEE4C 1.4, p. 4; SLASEE4C Figure 6-2, p. 54)
 mod pwm {
     use crate::{gpio::*, pac::*, pwm::*};
 
     // TA0: TA0.1 on P1.4 and TA0.2 on P1.5 (SLASEE4C Table 6-15, p. 58)
     impl PwmPeriph<CCR1> for Ta0 {
-        type Gpio = Pin<P1, Pin4, Alternate2<Output>>; // TA0.1, P1SELx = 10, P1DIR = 1
+        type Gpio = Pin<P1, Pin4, Alternate2<Output>>;
         const ALT: Alt = Alt::Alt2;
     }
     impl PwmPeriph<CCR2> for Ta0 {
-        type Gpio = Pin<P1, Pin5, Alternate2<Output>>; // TA0.2, P1SELx = 10, P1DIR = 1
+        type Gpio = Pin<P1, Pin5, Alternate2<Output>>;
         const ALT: Alt = Alt::Alt2;
     }
 
     // TA1: TA1.1 on P2.2 and TA1.2 on P2.3 (SLASEE4C Table 6-16, p. 60)
     impl PwmPeriph<CCR1> for Ta1 {
-        type Gpio = Pin<P2, Pin2, Alternate1<Output>>; // TA1.1, P2SELx = 01, P2DIR = 1
+        type Gpio = Pin<P2, Pin2, Alternate1<Output>>;
         const ALT: Alt = Alt::Alt1;
     }
     impl PwmPeriph<CCR2> for Ta1 {
-        type Gpio = Pin<P2, Pin3, Alternate1<Output>>; // TA1.2, P2SELx = 01, P2DIR = 1
+        type Gpio = Pin<P2, Pin3, Alternate1<Output>>;
         const ALT: Alt = Alt::Alt1;
     }
 }
@@ -284,8 +256,7 @@ mod pwm {
 mod serial {
     use crate::{gpio::*, hw_traits::eusci::*, pac::*, pin_mapping::*, serial::*};
 
-    // eUSCI_A0 registers in UART mode: addresses in SLASEE4C Table 6-33, p. 67; descriptions in
-    // SLAU445I 22.4, p. 592 (UCAxCTLW0: SLAU445I Table 22-8, p. 593)
+    // eUSCI_A0 registers: SLASEE4C Table 6-33, p. 67; SLAU445I 22.4, p. 592
     eusci_uart_impl!(
         EUsciA0,
         uca0ctlw0,
@@ -306,10 +277,9 @@ mod serial {
         type TxPin = UsciA0TxPinDefault;
         type RxPin = UsciA0RxPinDefault;
 
-        // USCIARMP = 0: TXD and RXD on P1.4 and P1.5 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG3.USCIA0RMP (SLAU445I Table 1-32, p. 83). SLASEE4C Table 6-23, p. 64 lists no
-        // SYSCFG3; the code follows SLASEE4C 6.10.7, p. 53 and SLAU445I Table 1-28, p. 79, which puts
-        // SYSCFG3 at offset 26h on the MSP430FR25xx.
+        // USCIARMP = 0: TXD and RXD on P1.4 and P1.5 (SLASEE4C 6.10.7, p. 53), SYSCFG3.USCIA0RMP is described
+        // in SLAU445I Table 1-32, p. 83. SLASEE4C Table 6-23, p. 64 lists no SYSCFG3, SLAU445I Table 1-28,
+        // p. 79 has it at offset 26h on the MSP430FR25xx
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg3().clear_bits(|w| w.usciarmp().clear_bit()) };
@@ -320,46 +290,37 @@ mod serial {
         type TxPin = UsciA0TxPinRemapped;
         type RxPin = UsciA0RxPinRemapped;
 
-        // USCIARMP = 1: TXD and RXD on P2.0 and P2.1 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG3.USCIA0RMP (SLAU445I Table 1-32, p. 83).
+        // USCIARMP = 1: TXD and RXD on P2.0 and P2.1
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg3().set_bits(|w| w.usciarmp().set_bit()) };
         }
     }
 
-    // eUSCI_A0 UART pins (SLASEE4C Table 6-11, p. 53), all P1SELx or P2SELx = 01, Alternate1
-    // (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60). The clock pin, UCA0CLK, is the external
-    // clock of UCSSELx = 00 (SLASEE4C Table 6-8, p. 49) and stays on P1.6 in both mappings
-    // (SLASEE4C Table 4-2 note 5, p. 14: "The CLK and STE assignments are fixed").
+    // eUSCI_A0 UART pins (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60).
+    // UCA0CLK stays on P1.6 in both mappings (SLASEE4C Table 4-2 note 5, p. 14)
 
-    /// UCLK pin for E_USCI_A0 (default mapping): P1.6, UCA0CLK with P1SELx = 01, with either USCIARMP
-    /// (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 4-2 note 5, p. 14)
+    /// UCLK pin for E_USCI_A0 (default mapping)
     pub struct UsciA0ClockPinDefault;
     impl_serial_pin!(UsciA0ClockPinDefault, P1, Pin6);
 
-    /// UCLK pin for E_USCI_A0 (remapped mapping): also P1.6, UCA0CLK with P1SELx = 01, which USCIARMP
-    /// doesn't move (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 4-2 note 5, p. 14)
+    /// UCLK pin for E_USCI_A0 (remapped mapping)
     pub struct UsciA0ClockPinRemapped;
     impl_serial_pin!(UsciA0ClockPinRemapped, P1, Pin6);
 
-    /// Tx pin for E_USCI_A0 (default mapping): P1.4, UCA0TXD with P1SELx = 01 and USCIARMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// Tx pin for E_USCI_A0 (default mapping)
     pub struct UsciA0TxPinDefault;
     impl_serial_pin!(UsciA0TxPinDefault, P1, Pin4);
 
-    /// Tx pin for E_USCI_A0 (remapped mapping): P2.0, UCA0TXD with P2SELx = 01 and USCIARMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// Tx pin for E_USCI_A0 (remapped mapping)
     pub struct UsciA0TxPinRemapped;
     impl_serial_pin!(UsciA0TxPinRemapped, P2, Pin0);
 
-    /// Rx pin for E_USCI_A0 (default mapping): P1.5, UCA0RXD with P1SELx = 01 and USCIARMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// Rx pin for E_USCI_A0 (default mapping)
     pub struct UsciA0RxPinDefault;
     impl_serial_pin!(UsciA0RxPinDefault, P1, Pin5);
 
-    /// Rx pin for E_USCI_A0 (remapped mapping): P2.1, UCA0RXD with P2SELx = 01 and USCIARMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// Rx pin for E_USCI_A0 (remapped mapping)
     pub struct UsciA0RxPinRemapped;
     impl_serial_pin!(UsciA0RxPinRemapped, P2, Pin1);
 }
@@ -368,9 +329,8 @@ mod serial {
 mod spi {
     use crate::{gpio::*, hw_traits::eusci::*, pac::*, pin_mapping::*, spi::*};
 
-    // eUSCI_A0 and eUSCI_B0 registers in SPI mode: addresses in SLASEE4C Table 6-33, p. 67 and
-    // SLASEE4C Table 6-34, p. 67 to p. 68; descriptions in SLAU445I 23.4, p. 612 (eUSCI_A) and
-    // SLAU445I 23.5, p. 619 (eUSCI_B)
+    // eUSCI_A0 and eUSCI_B0 registers: SLASEE4C Table 6-33, p. 67 and SLASEE4C Table 6-34, p. 67 to p. 68;
+    // SLAU445I 23.4, p. 612 and 23.5, p. 619
     eusci_spi_impl!(
         EUsciA0,
         uca0ctlw0_spi,
@@ -402,8 +362,7 @@ mod spi {
         type SCLK = UsciA0SCLKPinDefault;
         type STE = UsciA0STEPinDefault;
 
-        // USCIARMP = 0: SIMO and SOMI on P1.4 and P1.5 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG3.USCIA0RMP (SLAU445I Table 1-32, p. 83).
+        // USCIARMP = 0: SIMO and SOMI on P1.4 and P1.5
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg3().clear_bits(|w| w.usciarmp().clear_bit()) };
@@ -416,8 +375,7 @@ mod spi {
         type SCLK = UsciA0SCLKPinRemapped;
         type STE = UsciA0STEPinRemapped;
 
-        // USCIARMP = 1: SIMO and SOMI on P2.0 and P2.1 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG3.USCIA0RMP (SLAU445I Table 1-32, p. 83).
+        // USCIARMP = 1: SIMO and SOMI on P2.0 and P2.1
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg3().set_bits(|w| w.usciarmp().set_bit()) };
@@ -430,8 +388,7 @@ mod spi {
         type SCLK = UsciB0SCLKPinDefault;
         type STE = UsciB0STEPinDefault;
 
-        // USCIBRMP = 0: eUSCI_B0 on P1.0 to P1.3 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG2.USCIB0RMP (SLAU445I Table 1-31, p. 82).
+        // USCIBRMP = 0: eUSCI_B0 on P1.0 to P1.3
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg2().clear_bits(|w| w.uscibrmp().clear_bit()) };
@@ -444,104 +401,83 @@ mod spi {
         type SCLK = UsciB0SCLKPinRemapped;
         type STE = UsciB0STEPinRemapped;
 
-        // USCIBRMP = 1: eUSCI_B0 on P2.3 to P2.6 (SLASEE4C 6.10.7, p. 53; SLASEE4C Table 6-11, p. 53).
-        // The bit is SYSCFG2.USCIB0RMP (SLAU445I Table 1-31, p. 82).
+        // USCIBRMP = 1: eUSCI_B0 on P2.3 to P2.6
         fn configure_pin_mapping() {
             let sys = unsafe { crate::_pac::Sys::steal() };
             unsafe { sys.syscfg2().set_bits(|w| w.uscibrmp().set_bit()) };
         }
     }
 
-    // eUSCI_A0 SPI pins (SLASEE4C Table 6-11, p. 53): SIMO, SOMI, SCLK and STE on P1.4 to P1.7 with
-    // USCIARMP = 0; SIMO and SOMI move to P2.0 and P2.1 with USCIARMP = 1, while SCLK and STE stay on P1.6
-    // and P1.7 (SLASEE4C Table 4-2 note 5, p. 14: "The CLK and STE assignments are fixed and shared by
-    // both SPI function groups"). All use P1SELx or P2SELx = 01, Alternate1 (SLASEE4C Table 6-15, p. 58;
-    // SLASEE4C Table 6-16, p. 60).
+    // eUSCI_A0 SPI pins (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60).
+    // SCLK and STE stay on P1.6 and P1.7 in both mappings (SLASEE4C Table 4-2 note 5, p. 14)
 
-    /// SPI MISO pin for eUSCI A0 (P1.5) (default mapping): UCA0SOMI, P1SELx = 01, USCIARMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI MISO pin for eUSCI A0 (P1.5) (default mapping)
     pub struct UsciA0MISOPinDefault;
     impl_spi_pin!(UsciA0MISOPinDefault, P1, Pin5);
 
-    /// SPI MISO pin for eUSCI A0 (P2.1) (remapped mapping): UCA0SOMI, P2SELx = 01, USCIARMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// SPI MISO pin for eUSCI A0 (P2.1) (remapped mapping)
     pub struct UsciA0MISOPinRemapped;
     impl_spi_pin!(UsciA0MISOPinRemapped, P2, Pin1);
 
-    /// SPI MOSI pin for eUSCI A0 (P1.4) (default mapping): UCA0SIMO, P1SELx = 01, USCIARMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI MOSI pin for eUSCI A0 (P1.4) (default mapping)
     pub struct UsciA0MOSIPinDefault;
     impl_spi_pin!(UsciA0MOSIPinDefault, P1, Pin4);
 
-    /// SPI MOSI pin for eUSCI A0 (P2.0) (remapped mapping): UCA0SIMO, P2SELx = 01, USCIARMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// SPI MOSI pin for eUSCI A0 (P2.0) (remapped mapping)
     pub struct UsciA0MOSIPinRemapped;
     impl_spi_pin!(UsciA0MOSIPinRemapped, P2, Pin0);
 
-    /// SPI SCLK pin for eUSCI A0 (P1.6) (default mapping): UCA0CLK, P1SELx = 01, USCIARMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI SCLK pin for eUSCI A0 (P1.6) (default mapping)
     pub struct UsciA0SCLKPinDefault;
     impl_spi_pin!(UsciA0SCLKPinDefault, P1, Pin6);
 
-    /// SPI SCLK pin for eUSCI A0 (P1.6) (remapped mapping): UCA0CLK, P1SELx = 01, on P1.6 with
-    /// USCIARMP = 1 as well (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI SCLK pin for eUSCI A0 (P1.6) (remapped mapping)
     pub struct UsciA0SCLKPinRemapped;
     impl_spi_pin!(UsciA0SCLKPinRemapped, P1, Pin6);
 
-    /// SPI STE pin for eUSCI A0 (P1.7) (default mapping): UCA0STE, P1SELx = 01, USCIARMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI STE pin for eUSCI A0 (P1.7) (default mapping)
     pub struct UsciA0STEPinDefault;
     impl_spi_pin!(UsciA0STEPinDefault, P1, Pin7);
 
-    /// SPI STE pin for eUSCI A0 (P1.7) (remapped mapping): UCA0STE, P1SELx = 01, on P1.7 with
-    /// USCIARMP = 1 as well (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI STE pin for eUSCI A0 (P1.7) (remapped mapping)
     pub struct UsciA0STEPinRemapped;
     impl_spi_pin!(UsciA0STEPinRemapped, P1, Pin7);
 
-    // eUSCI_B0 SPI pins (SLASEE4C Table 6-11, p. 53): STE, SCLK, SIMO and SOMI on P1.0 to P1.3 with
-    // USCIBRMP = 0, P1SELx = 01, Alternate1 (SLASEE4C Table 6-15, p. 58); on P2.3 to P2.6 with
-    // USCIBRMP = 1, P2SELx = 10, Alternate2 (SLASEE4C Table 6-16, p. 60).
+    // eUSCI_B0 SPI pins (SLASEE4C Table 6-11, p. 53): P1.0 to P1.3 with USCIBRMP = 0 (SLASEE4C Table 6-15,
+    // p. 58), P2.3 to P2.6 with USCIBRMP = 1 (SLASEE4C Table 6-16, p. 60)
 
-    /// SPI MISO pin for eUSCI B0 (P1.3) (default mapping): UCB0SOMI, P1SELx = 01, USCIBRMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI MISO pin for eUSCI B0 (P1.3) (default mapping)
     pub struct UsciB0MISOPinDefault;
     impl_spi_pin!(UsciB0MISOPinDefault, P1, Pin3);
 
-    /// SPI MISO pin for eUSCI B0 (P2.6) (remapped mapping): UCB0SOMI, P2SELx = 10, USCIBRMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// SPI MISO pin for eUSCI B0 (P2.6) (remapped mapping)
     pub struct UsciB0MISOPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_spi_pin!(UsciB0MISOPinRemapped, P2, Pin6, Alternate2);
 
-    /// SPI MOSI pin for eUSCI B0 (P1.2) (default mapping): UCB0SIMO, P1SELx = 01, USCIBRMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI MOSI pin for eUSCI B0 (P1.2) (default mapping)
     pub struct UsciB0MOSIPinDefault;
     impl_spi_pin!(UsciB0MOSIPinDefault, P1, Pin2);
 
-    /// SPI MOSI pin for eUSCI B0 (P2.5) (remapped mapping): UCB0SIMO, P2SELx = 10, USCIBRMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// SPI MOSI pin for eUSCI B0 (P2.5) (remapped mapping)
     pub struct UsciB0MOSIPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_spi_pin!(UsciB0MOSIPinRemapped, P2, Pin5, Alternate2);
 
-    /// SPI SCLK pin for eUSCI B0 (P1.1) (default mapping): UCB0CLK, P1SELx = 01, USCIBRMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI SCLK pin for eUSCI B0 (P1.1) (default mapping)
     pub struct UsciB0SCLKPinDefault;
     impl_spi_pin!(UsciB0SCLKPinDefault, P1, Pin1);
 
-    /// SPI SCLK pin for eUSCI B0 (P2.4) (remapped mapping): UCB0CLK, P2SELx = 10, USCIBRMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// SPI SCLK pin for eUSCI B0 (P2.4) (remapped mapping)
     pub struct UsciB0SCLKPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_spi_pin!(UsciB0SCLKPinRemapped, P2, Pin4, Alternate2);
 
-    /// SPI STE pin for eUSCI B0 (P1.0) (default mapping): UCB0STE, P1SELx = 01, USCIBRMP = 0
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58)
+    /// SPI STE pin for eUSCI B0 (P1.0) (default mapping)
     pub struct UsciB0STEPinDefault;
     impl_spi_pin!(UsciB0STEPinDefault, P1, Pin0);
 
-    /// SPI STE pin for eUSCI B0 (P2.3) (remapped mapping): UCB0STE, P2SELx = 10, USCIBRMP = 1
-    /// (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-16, p. 60)
+    /// SPI STE pin for eUSCI B0 (P2.3) (remapped mapping)
     pub struct UsciB0STEPinRemapped;
     // TODO: support other mapping then only Alternate1
     // impl_spi_pin!(UsciB0STEPinRemapped, P2, Pin3, Alternate2);
@@ -556,8 +492,8 @@ mod timer {
         timer::*,
     };
 
-    // Timer0_A3 and Timer1_A3, three capture/compare registers each (SLASEE4C 6.10.8, p. 54; registers:
-    // SLASEE4C Table 6-30, p. 66 and SLASEE4C Table 6-31, p. 66; descriptions in SLAU445I 13.3, p. 383)
+    // Timer0_A3 and Timer1_A3 (SLASEE4C 6.10.8, p. 54); registers: SLASEE4C Table 6-30, p. 66 and
+    // SLASEE4C Table 6-31, p. 66; SLAU445I 13.3, p. 383
     timer_a_impl!(
         Ta0,
         ta0,
@@ -592,18 +528,15 @@ mod timer {
         [CCR2, ta1cctl2, ta1ccr2]
     );
 
-    // External clock pins, TASSEL = 00 (SLASEE4C Table 6-8, p. 49)
     impl TimerPeriph for Ta0 {
-        // TA0CLK on P1.6: P1SELx = 10 with P1DIR = 0 (SLASEE4C Table 6-15, p. 58)
+        // TA0CLK on P1.6 (SLASEE4C Table 6-15, p. 58)
         type Tbxclk = Pin<P1, Pin6, Alternate2<Input<Floating>>>;
     }
-    // Three capture/compare registers (SLASEE4C 6.10.8, p. 54)
     impl CapCmpTimer3 for Ta0 {}
 
     impl TimerPeriph for Ta1 {
-        // TA1CLK on P2.4: P2SELx = 01 with P2DIR = 0 (SLASEE4C Table 6-16, p. 60)
+        // TA1CLK on P2.4 (SLASEE4C Table 6-16, p. 60)
         type Tbxclk = Pin<P2, Pin4, Alternate1<Input<Floating>>>;
     }
-    // Three capture/compare registers (SLASEE4C 6.10.8, p. 54)
     impl CapCmpTimer3 for Ta1 {}
 }

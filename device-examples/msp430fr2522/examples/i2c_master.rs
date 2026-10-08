@@ -26,20 +26,13 @@ fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
 
     let mut fram = Fram::new(periph.frctl);
-    // Halt the watchdog, which runs from every PUC (SLAU445I 12.2.2, p. 363)
     let _wdt = Wdt::constrain(periph.wdt_a);
 
-    // Pmm::new clears LOCKLPM5, so the pins take on their configuration (SLAU445I 8.3.1, p. 316)
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
-    // No board document covers the LEDs on P1.0 and P2.0: there is none for the MSP430FR25x2. Both pins
-    // are GPIO outputs, PxSELx = 00 and PxDIR = 1 (SLASEE4C Table 6-15, p. 58; SLASEE4C Table 6-16, p. 60).
     let mut red_led = p1.pin0.to_output();
     let mut green_led = Batch::new(periph.p2).split(&pmm).pin0.to_output();
 
-    // UCB0SCL on P1.3 and UCB0SDA on P1.2: P1SELx = 01 in the default mapping, USCIBRMP = 0
-    // (SLASEE4C Table 6-11, p. 53; SLASEE4C Table 6-15, p. 58). The internal pullups are 20 kΩ to 50 kΩ
-    // (SLASEE4C Table 5-10, p. 29: RPull).
     let scl = p1.pin3.pullup().to_alternate1(); // You may need stronger external pullup resistors
     let sda = p1.pin2.pullup().to_alternate1();
 
@@ -49,8 +42,6 @@ fn main() -> ! {
         .aclk_refoclk()
         .freeze(&mut fram);
 
-    // fBitClock = fBRCLK / UCBRx (SLAU445I 24.3.7, p. 642); 100 kHz is the I2C standard mode
-    // (SLAU445I 24.2, p. 627: "standard mode up to 100 kbps")
     let mut i2c: I2cSingleMaster<_, DefaultMapping> =
         I2cConfig::new(periph.e_usci_b0, GlitchFilter::Max50ns)
             .as_single_master()
@@ -62,14 +53,12 @@ fn main() -> ! {
     loop {
         // Below are examples of the various I2C methods provided for writing to / reading from the bus.
         // 7- and 10-bit addressing modes are controlled by passing the address as either a u8 or a u16.
-        // (SLAU445I 24.2, p. 627: "7-bit and 10-bit device addressing modes")
 
         let mut is_ok = true;
         let send_buf = [(1 << 7) + (0b01 << 5), 0b11];
 
         // Check if anything with this address is present on the bus by
         // sending a zero-byte write and listening for an ACK.
-        // (SLAU445I 24.3.5.2.1, p. 637: the STOP is generated "even if no data was transmitted to the slave")
         if let Ok(is_present) = i2c.is_slave_present(SLAVE_ADDR) {
             if !is_present {
                 is_ok = false;
@@ -78,8 +67,6 @@ fn main() -> ! {
 
         // Blocking write. Write two bytes (length of buffer) to SLAVE_ADDR.
         // If a NACK is recieved the transmission is aborted.
-        // (UCNACKIFG, after which "The master must react with either a STOP condition or a repeated START
-        // condition": SLAU445I 24.3.5.2.1, p. 637)
         let wr_res = i2c.write(SLAVE_ADDR, &send_buf);
         if wr_res.is_err() {
             is_ok = false;
@@ -87,8 +74,6 @@ fn main() -> ! {
 
         // Blocking read. Read one byte from SLAVE_ADDR.
         // Each byte recieved is automatically ACKed, except for the last one which is NACKed.
-        // (SLAU445I 24.3.5.2.2, p. 639: "The next byte received from the slave is followed by a NACK and
-        // a STOP condition")
         let mut recv = [0];
         let rd_res = i2c.read(SLAVE_ADDR, &mut recv);
         if rd_res.is_err() {
@@ -98,7 +83,6 @@ fn main() -> ! {
         // Do a write then a read within one transaction.
         // Commonly used to read a specific register from the slave.
         // There is no 'stop' between the write and read, only a repeated start.
-        // (SLAU445I 24.3.5.2.1, p. 637: "Setting UCTXSTT generates a repeated START condition")
         let wr_rd_res = i2c.write_read(SLAVE_ADDR, &send_buf, &mut recv);
         if wr_rd_res.is_err() {
             is_ok = false;

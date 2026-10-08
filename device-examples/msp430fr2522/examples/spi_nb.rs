@@ -2,8 +2,6 @@
 #![no_std]
 
 // This example uses the non-blocking interface from embedded-hal-nb, with a software controlled CS pin.
-// The CS pin is a GPIO output, as the user's guide suggests for slave selects the eUSCI's STE can't make
-// (SLAU445I 23.3.3.2, p. 608: "use general-purpose I/O pins instead to generate STE signals").
 
 use embedded_hal::{delay::DelayNs, digital::OutputPin, spi::MODE_0};
 use msp430_rt::entry;
@@ -24,20 +22,14 @@ fn main() -> ! {
     let periph = msp430fr25x2::Peripherals::take().unwrap();
 
     let mut fram = Fram::new(periph.frctl);
-    // Halt the watchdog, which runs from every PUC (SLAU445I 12.2.2, p. 363)
     let _wdt = Wdt::constrain(periph.wdt_a);
 
-    // Pmm::new clears LOCKLPM5, so the pins take on their configuration (SLAU445I 8.3.1, p. 316)
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
     let p2 = Batch::new(periph.p2).split(&pmm);
-    // eUSCI_A0 in its remapped mapping, USCIARMP = 1: UCA0SIMO on P2.0 and UCA0SOMI on P2.1 with
-    // P2SELx = 01, UCA0CLK on P1.6 with P1SELx = 01 (SLASEE4C Table 6-11, p. 53;
-    // SLASEE4C Table 6-16, p. 60; SLASEE4C Table 6-15, p. 58)
     let mosi = p2.pin0.to_alternate1();
     let miso = p2.pin1.to_alternate1();
     let sck = p1.pin6.to_alternate1();
-    // CS on P1.3 as a GPIO output, P1SELx = 00 and P1DIR = 1 (SLASEE4C Table 6-15, p. 58)
     let mut cs = p1.pin3.to_output();
     cs.set_high().ok();
 
@@ -47,7 +39,6 @@ fn main() -> ! {
         .aclk_refoclk()
         .freeze(&mut fram);
 
-    // The bit clock is fBRCLK / UCBRx (SLAU445I 23.3.6, p. 609)
     let mut spi: Spi<_, RemappedMapping> = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
         .to_master_using_smclk(&smclk, 16) // 8MHz / 16 = 500kHz
         .single_master_bus(miso, mosi, sck);
@@ -63,7 +54,6 @@ fn main() -> ! {
         block!(spi.write(0b10101010)).unwrap();
 
         // Writing on MOSI also shifts in data on MISO - read from the hardware buffer with `.read()`.
-        // (SLAU445I 23.3.3, p. 607: "receive and transmit operations operate concurrently")
         // Every successful `.write()` call should be followed by a `.read()`.
         // You should handle errors here rather than unwrapping
         let _ = block!(spi.read()).unwrap();
