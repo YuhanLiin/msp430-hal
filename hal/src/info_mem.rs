@@ -3,7 +3,8 @@
 //!
 //! A single instance of [InfoMemory] is returned by [`Pmm::new()`](crate::pmm::Pmm::new()).
 //!
-//! Because the information memory has write protection, access is managed via a write method.
+//! Because the information memory has write protection, access is managed via a write method (SYSCFG0.DFWP,
+//! SLAU445I 1.9.3, p. 45).
 //!
 //! For convenience there is also a method [`InfoMemory::into_unprotected()`] that disables write protection
 //! and returns the infomation memory directly as an array instead.
@@ -14,7 +15,7 @@ use core::ops::Index;
 use crate::_pac;
 pub use crate::device_specific::INFO_MEM_SIZE;
 
-/// Start address of the information memory
+/// Start address of the information memory (SLAU445I 1.9.1, p. 44)
 const INFO_MEM_START_ADDR: *mut u8 = 0x1800 as *mut u8;
 const SYSCFG0_PASSWORD: u8 = 0xA5;
 
@@ -44,13 +45,15 @@ impl InfoMemory {
         })
     }
 
-    /// Disable write protection and directly return the info memory as an array.
+    /// Disable write protection and directly return the info memory as an array (clears SYSCFG0.DFWP:
+    /// SLAU445I Table 1-24, p. 75; SLAU445I Table 1-29, p. 80).
     #[inline]
     pub fn into_unprotected(self) -> &'static mut [u8; INFO_MEM_SIZE] {
         Self::disable_write_protect();
         self.info_mem
     }
 
+    // DFWP = 0 lets the information FRAM be written (SLAU445I Table 1-24, p. 75; SLAU445I Table 1-29, p. 80)
     #[inline(always)]
     fn disable_write_protect() {
         let sys = unsafe { _pac::Sys::steal() };
@@ -60,6 +63,7 @@ impl InfoMemory {
         });
     }
 
+    // DFWP = 1 protects the information FRAM again (SLAU445I Table 1-24, p. 75; SLAU445I Table 1-29, p. 80)
     #[inline(always)]
     fn enable_write_protect() {
         let sys = unsafe { _pac::Sys::steal() };

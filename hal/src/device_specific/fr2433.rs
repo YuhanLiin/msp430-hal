@@ -169,7 +169,7 @@ mod i2c {
 }
 
 /* Information Memory */
-/// Size of the Information Memory segment on this device, in bytes
+/// Size of the Information Memory segment on this device, in bytes (SLASE59F Table 6-23, p. 61)
 pub const INFO_MEM_SIZE: usize = 512;
 
 /* PWM */
