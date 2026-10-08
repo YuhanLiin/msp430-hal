@@ -8,10 +8,10 @@
 
 > A high-level Hardware Abstraction Layer (HAL) for the MSP430 family of microcontrollers, principally targetting the FR2xxx / 4xxx family, but seeking to support the all MSP430 devices eventually.
 
-[![Crates.io](https://img.shields.io/crates/v/msp430fr2x5x-hal.svg)](https://crates.io/crates/msp430fr2x5x-hal)
-[![Docs.rs](https://docs.rs/msp430fr2x5x-hal/badge.svg)](https://docs.rs/msp430fr2x5x-hal)
-[![CI](https://github.com/YuhanLiin/msp430fr2x5x-hal/actions/workflows/build.yml/badge.svg)](https://github.com/YuhanLiin/msp430fr2x5x-hal/actions)
-[![License](https://img.shields.io/crates/l/msp430fr2x5x-hal.svg)](https://crates.io/crates/msp430fr2x5x-hal)
+[![Crates.io](https://img.shields.io/crates/v/msp430-hal.svg)](https://crates.io/crates/msp430-hal)
+[![Docs.rs](https://docs.rs/msp430-hal/badge.svg)](https://docs.rs/msp430-hal)
+[![CI](https://github.com/YuhanLiin/msp430-hal/actions/workflows/build.yml/badge.svg)](https://github.com/YuhanLiin/msp430-hal/actions)
+[![License](https://img.shields.io/crates/l/msp430-hal.svg)](https://crates.io/crates/msp430-hal)
 [![MSRV](https://img.shields.io/badge/rust-1.82%2B-blue.svg)](https://www.rust-lang.org)
 
 This crate is primarily designed to be used as a dependency in another project, but 
@@ -33,6 +33,22 @@ They can be built by moving into the relevant project folder, then running `carg
 
 An example can be flashed to a connected device with 
 `cargo run --example <example_name>`
+
+## Hardware multiplier
+
+Every supported device has the 32-bit hardware multiplier (MPY32). For multiplications to use it, link TI's
+`libmul_f5` before `libgcc`, as the example projects do in `.cargo/config.toml`:
+
+```toml
+rustflags = [
+    # ...
+    "-C", "link-arg=-lmul_f5",
+    "-C", "link-arg=-lgcc",
+]
+```
+
+With `libmul_none` multiplications run in software, about 5 to 10 times slower. Don't use `libmul_32`: it
+expects the multiplier at another address, which is PM5CTL0 on these devices.
 
 # Supported Devices
 The library currently supports a subset of the MSP430FR2xxx / 4xxx family: the MSP430FR2x5x and MSP430FR247x and MSP430FR25x2 subfamilies, and the MSP430FR2433.
@@ -97,6 +113,7 @@ To add support for a device (or subfamily) you should fork this repo and:
 3. Append an entry to `hal/src/device_specific.rs` to re-export your PAC and any device-specific constants to the rest of the library.
 4. Add a project crate to `device_examples/` and add some examples to test everything works (again refer to the msp430fr2355 as an example/template). 
     * Ensure the `memory.x` file is correct, as this is usually unique to each device.
+    * Check that the device's hardware multiplier suits `libmul_f5` in `.cargo/config.toml`: an MPY32 at 04C0h, `MPY_TYPE` 8 in msp430-gcc's `include/devices.csv`.
 5. Add the device name to the CI in `.github/workflows/build.yml` to make it automatically build all your device examples. Check that the CI passes.
 
 For issues or concerns, feel free to open an issue.

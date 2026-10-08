@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+- The example projects now link `libmul_f5`, so multiplication uses the hardware multiplier (MPY32): 16-bit products are about 5 times and 32/64-bit products about 10 times faster than with `libmul_none`. The commented-out `libmul_32` used the register addresses of other devices, which are PM5CTL0 here.
+- Document the CRC module and its examples with references to the user's guide.
+- Fixed `delay_ns()` and `delay_us()`, which waited whole milliseconds, at most 1 ms. They now wait the requested time, counted in MCLK cycles, plus about 60 MCLK cycles for the call. `SysDelay` also implements the embedded-hal 0.2 `DelayUs` now.
+- Add `delay::delay_cycles()`, which busy-waits for at least a number of MCLK cycles, like TI's `__delay_cycles()`. It needs no configured clock and works in steps of 3 cycles: the count is rounded up to a multiple of 3, so a count above 0 waits at least 3 cycles.
 - Document the backup memory, its LPM3.5 retention and its registers, with references to the user's guide.
 
 ## [v0.8.0] - 2026-08-14
