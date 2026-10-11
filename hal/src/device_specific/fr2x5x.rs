@@ -167,41 +167,45 @@ pub mod ecomp {
         sac::Amplifier,
     };
 
+    // eCOMP pins: the inputs in their PxSELx = 11 function, the outputs in their PxSELx = 10 function
+    // (SLASEC4D Tables 6-63 to 6-65, p. 96 to p. 100)
+    // eCOMP0: SLASEC4D Table 6-23, p. 78; output in Table 6-25, p. 78; registers at 08E0h in Table 6-57, p. 93
     impl ECompInputs for EComp0 {
-        type COMPx_0   = Pin<P1, Pin0, Alternate2<Input<Floating>>>;
-        type COMPx_1   = Pin<P1, Pin1, Alternate2<Input<Floating>>>;
+        type COMPx_0   = Pin<P1, Pin0, Alternate3<Input<Floating>>>; // COMP0.0
+        type COMPx_1   = Pin<P1, Pin1, Alternate3<Input<Floating>>>; // COMP0.1
         type COMPx_2   = Infallible; // Not used
         type COMPx_3   = Infallible; // Not used
-        type COMPx_Out = Pin<P2, Pin0, Alternate2<Output>>;
+        type COMPx_Out = Pin<P2, Pin0, Alternate2<Output>>; // COMP0.O
         #[cfg(feature = "sac")]
-        type SACp = Amplifier<Sac0>;
+        type SACp = Amplifier<Sac0>; // OA0O
         #[cfg(feature = "sac")]
-        type SACn = Amplifier<Sac2>;
-        
-        type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
-        type DeviceSpecific1    = Infallible; // Not used
-        type DeviceSpecific2Pos = Infallible; // Not used
-        type DeviceSpecific2Neg = Infallible; // Not used
-        type DeviceSpecific3Pos = Pin<P1, Pin1, Alternate2<Input<Floating>>>;
-        type DeviceSpecific3Neg = Pin<P3, Pin1, Alternate2<Input<Floating>>>;
-    }
-    impl ECompInputs for EComp1 {
-        type COMPx_0   = Pin<P2, Pin5, Alternate2<Input<Floating>>>;
-        type COMPx_1   = Pin<P2, Pin4, Alternate2<Input<Floating>>>;
-        type COMPx_2   = Infallible; // Not used
-        type COMPx_3   = Infallible; // Not used
-        type COMPx_Out = Pin<P2, Pin1, Alternate2<Output>>;
-        #[cfg(feature = "sac")]
-        type SACp = Amplifier<Sac1>;
-        #[cfg(feature = "sac")]
-        type SACn = Amplifier<Sac3>;
+        type SACn = Amplifier<Sac2>; // OA2O
 
         type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
         type DeviceSpecific1    = Infallible; // Not used
         type DeviceSpecific2Pos = Infallible; // Not used
         type DeviceSpecific2Neg = Infallible; // Not used
-        type DeviceSpecific3Pos = Pin<P1, Pin5, Alternate2<Input<Floating>>>;
-        type DeviceSpecific3Neg = Pin<P3, Pin5, Alternate2<Input<Floating>>>;
+        type DeviceSpecific3Pos = Pin<P1, Pin1, Alternate3<Input<Floating>>>; // OA0O
+        type DeviceSpecific3Neg = Pin<P3, Pin1, Alternate3<Input<Floating>>>; // OA2O
+    }
+    // eCOMP1: SLASEC4D Table 6-24, p. 78; output in Table 6-26, p. 79; registers at 0900h in Table 6-58, p. 93
+    impl ECompInputs for EComp1 {
+        type COMPx_0   = Pin<P2, Pin5, Alternate3<Input<Floating>>>; // COMP1.0
+        type COMPx_1   = Pin<P2, Pin4, Alternate3<Input<Floating>>>; // COMP1.1
+        type COMPx_2   = Infallible; // Not used
+        type COMPx_3   = Infallible; // Not used
+        type COMPx_Out = Pin<P2, Pin1, Alternate2<Output>>; // COMP1.O
+        #[cfg(feature = "sac")]
+        type SACp = Amplifier<Sac1>; // OA1O
+        #[cfg(feature = "sac")]
+        type SACn = Amplifier<Sac3>; // OA3O
+
+        type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
+        type DeviceSpecific1    = Infallible; // Not used
+        type DeviceSpecific2Pos = Infallible; // Not used
+        type DeviceSpecific2Neg = Infallible; // Not used
+        type DeviceSpecific3Pos = Pin<P1, Pin5, Alternate3<Input<Floating>>>; // OA1O
+        type DeviceSpecific3Neg = Pin<P3, Pin5, Alternate3<Input<Floating>>>; // OA3O
     }
 
     /// List of possible inputs to the positive input of an eCOMP comparator.
@@ -215,7 +219,7 @@ pub mod ecomp {
         /// Internal 1.2V reference
         _1V2,
         #[cfg(feature = "sac")]
-        /// Output of amplifier SAC0 for eCOMP0, SAC2 for eCOMP1.
+        /// Output of amplifier SAC0 for eCOMP0, SAC1 for eCOMP1.
         ///
         /// Requires a reference to ensure that it has been configured.
         OAxO(&'a COMP::SACp),
@@ -249,7 +253,7 @@ pub mod ecomp {
         /// Internal 1.2V reference
         _1V2,
         #[cfg(feature = "sac")]
-        /// Output of amplifier SAC1 for eCOMP0, SAC3 for eCOMP1.
+        /// Output of amplifier SAC2 for eCOMP0, SAC3 for eCOMP1.
         OAxO(&'a COMP::SACn),
         /// This eCOMP's internal 6-bit DAC
         Dac(&'a dyn CompDacPeriph<COMP>),

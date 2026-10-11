@@ -1,9 +1,9 @@
 //! Enhanced Comparator (eCOMP)
 //!
 //! The enhanced comparator peripheral consists of a comparator with configurable inputs - including
-//! a pair of GPIO pins, a low power 1.2V reference, the outputs of two separate Smart Analog Combo
+//! GPIO pins, a low power 1.2V reference, on the MSP430FR235x the outputs of two Smart Analog Combo
 //! (SAC) amplifiers, and a 6-bit DAC. The comparator output can be read by software and/or routed
-//! to a GPIO pin.
+//! to a GPIO pin (SLAU445I 18.1, p. 504).
 //!
 //! The comparator has a pair of inputs. In normal operation, when the positive input is larger than
 //! the negative input the output is high, otherwise it is low. This behaviour can be inverted by
@@ -17,7 +17,9 @@
 //! The voltage reference of the DAC can be chosen as either VCC or the internal shared reference
 //! (provided it has been previously configured).
 //!
-//! Interrupts can be triggered on rising, falling, or both edges of the comparator output.
+//! Interrupts can be triggered on rising, falling, or both edges of the comparator output. Each edge also sets a
+//! flag, which [`Comparator::interrupt_source()`] reads and clears in the `ECOMP0` (MSP430FR247x) or
+//! `ECOMP0_ECOMP1` (MSP430FR2x5x) interrupt handler.
 //!
 //! See the simplified diagram below:
 //!
@@ -29,10 +31,14 @@
 //!
 //! Linked pins and peripherals:
 //!
-//! |        | SACp | SACn | COMPx.0 | COMPx.1 | COMPxOut |
-//! |:------:|:----:|:----:|:-------:|:-------:|:--------:|
-//! | eCOMP0 | SAC0 | SAC1 | `P1.0`  | `P1.1`  | `P2.0`   |
-//! | eCOMP1 | SAC2 | SAC3 | `P2.5`  | `P2.4`  | `P2.1`   |
+//! | Device       |        | SAC (+) | SAC (-) | COMPx.0 | COMPx.1 | COMPx.2 | COMPx.3 | COMPxOut |
+//! |:------------:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:--------:|
+//! | MSP430FR2x5x | eCOMP0 | SAC0    | SAC2    | `P1.0`  | `P1.1`  |         |         | `P2.0`   |
+//! | MSP430FR2x5x | eCOMP1 | SAC1    | SAC3    | `P2.5`  | `P2.4`  |         |         | `P2.1`   |
+//! | MSP430FR247x | eCOMP0 |         |         | `P1.1`  | `P2.2`  | `P5.7`  | `P6.0`  | `P3.4`   |
+//!
+//! After reset, a high comparator output also switches Timer_B outputs to high impedance: eCOMP0 those of TB0
+//! and TB1, eCOMP1 those of TB2 and TB3 (on the MSP430FR247x, eCOMP0 those of TB0).
 
 pub use crate::device_specific::ecomp::{NegativeInput, PositiveInput};
 use crate::{
@@ -71,7 +77,7 @@ impl<COMP: ECompInputs> ComparatorConfig<COMP, NoModeSet> {
     }
 }
 impl<COMP: ECompInputs> ComparatorConfig<COMP, ModeSet> {
-    /// Route the comparator output to its GPIO pin (P2.0 for COMP0, P2.1 for COMP1).
+    /// Route the comparator output to its GPIO pin (see the table in the module documentation).
     #[inline(always)]
     pub fn with_output_pin(self, _pin: COMP::COMPx_Out) -> Comparator<COMP> {
         Comparator(PhantomData)
@@ -111,6 +117,41 @@ impl<COMP: ECompInputs> Comparator<COMP> {
     /// Disable falling-edge interrupts (CPIIFG).
     #[inline(always)]
     pub fn disable_falling_interrupts(&mut self) { COMP::dis_cpiie(); }
+
+    /// Whether the output rose since the flag was last cleared (CPIFG), whether or not its interrupt is enabled.
+    #[inline(always)]
+    pub fn rising_edge_flag(&self) -> bool { COMP::int_flags() & 0b01 != 0 }
+
+    /// Whether the output fell since the flag was last cleared (CPIIFG), whether or not its interrupt is enabled.
+    #[inline(always)]
+    pub fn falling_edge_flag(&self) -> bool { COMP::int_flags() & 0b10 != 0 }
+
+    /// Clear both edge flags. Clear them before enabling interrupts, or an edge from before requests one.
+    /// Configuring the comparator can set them too.
+    #[inline(always)]
+    pub fn clear_edge_flags(&mut self) { COMP::clear_int_flags(0b11); }
+
+    /// The highest-priority pending interrupt among the enabled ones (CPxIV). Reading it clears its flag.
+    #[inline(always)]
+    pub fn interrupt_source(&mut self) -> ComparatorVector {
+        match COMP::iv() {
+            0x02 => ComparatorVector::RisingEdge,
+            0x04 => ComparatorVector::FallingEdge,
+            _ => ComparatorVector::None,
+        }
+    }
+}
+
+/// The highest-priority pending comparator interrupt, as read from CPxIV by [`Comparator::interrupt_source()`]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ComparatorVector {
+    /// No interrupt pending
+    None,
+    /// The output rose (CPIFG)
+    RisingEdge,
+    /// The output fell (CPIIFG)
+    FallingEdge,
 }
 
 /// Represents a configuration for the DAC in an eCOMP peripheral
@@ -226,11 +267,11 @@ pub enum Hysteresis {
 pub enum PowerMode {
     /// eCOMP0: 1us @ 24 uA.
     ///
-    /// eCOMP1: 100ns @ 162 uA
+    /// eCOMP1 (MSP430FR2x5x only): 100ns @ 162 uA
     HighSpeed,
     /// eCOMP0: 3.2us @ 1.6uA.
     ///
-    /// eCOMP1: 320ns @ 10uA
+    /// eCOMP1 (MSP430FR2x5x only): 320ns @ 20uA
     LowPower,
 }
 impl From<PowerMode> for bool {

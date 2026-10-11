@@ -210,12 +210,14 @@ pub mod ecomp {
     use crate::pac::EComp0;
     use crate::{ecomp::*, gpio::*};
 
+    // eCOMP0: SLASEO7C Tables 9-21 and 9-22, p. 63; pin functions in Tables 9-23 to 9-28, p. 65 to p. 70;
+    // registers in Table 9-56, p. 82
     impl ECompInputs for EComp0 {
-        type COMPx_0   = Pin<P1, Pin1, Alternate3<Input<Floating>>>;
-        type COMPx_1   = Pin<P2, Pin2, Alternate3<Input<Floating>>>;
-        type COMPx_2   = Pin<P5, Pin7, Alternate3<Input<Floating>>>;
-        type COMPx_3   = Pin<P6, Pin0, Alternate3<Input<Floating>>>;
-        type COMPx_Out = Pin<P3, Pin4, Alternate2<Output>>;
+        type COMPx_0   = Pin<P1, Pin1, Alternate3<Input<Floating>>>; // COMP0.0
+        type COMPx_1   = Pin<P2, Pin2, Alternate3<Input<Floating>>>; // COMP0.1
+        type COMPx_2   = Pin<P5, Pin7, Alternate3<Input<Floating>>>; // COMP0.2
+        type COMPx_3   = Pin<P6, Pin0, Alternate3<Input<Floating>>>; // COMP0.3
+        type COMPx_Out = Pin<P3, Pin4, Alternate2<Output>>;          // COMP0OUT
 
         type DeviceSpecific0    = (); // Internal 1.2V reference. No type required.
         type DeviceSpecific1    = Infallible; // Not used
@@ -226,7 +228,7 @@ pub mod ecomp {
     }
 
     /// List of possible inputs to the positive input of an eCOMP comparator.
-    /// The amplifier output and DAC options take a reference to ensure they have been configured.
+    /// The DAC option takes a reference to ensure it has been configured.
     #[allow(non_camel_case_types)]
     pub enum PositiveInput<'a, COMP: ECompInputs> {
         /// COMPx.0. P1.1 for COMP0
@@ -247,6 +249,7 @@ pub mod ecomp {
     impl<COMP: ECompInputs> PositiveInput<'_, COMP> {
         #[inline(always)]
         pub(crate) fn cppsel(&self) -> u8 {
+            // The 1.2 V reference is channel 010b, so COMP0.2 and COMP0.3 are 011b and 100b
             match self {
                 PositiveInput::COMPx_0(_) => 0b000,
                 PositiveInput::COMPx_1(_) => 0b001,
@@ -259,7 +262,7 @@ pub mod ecomp {
     }
 
     /// List of possible inputs to the negative input of an eCOMP comparator.
-    /// The amplifier output and DAC options take a reference to ensure they have been configured.
+    /// The DAC option takes a reference to ensure it has been configured.
     #[allow(non_camel_case_types)]
     pub enum NegativeInput<'a, COMP: ECompInputs> {
         /// COMPx.0. P1.1 for COMP0
@@ -289,7 +292,7 @@ pub mod ecomp {
         }
     }
 
-    impl_ecomp!(EComp0, cp0ctl0, cp0ctl1, cp0dacctl, cp0dacdata, cpint, cpiv);
+    impl_ecomp!(EComp0, cp0ctl0, cp0ctl1, cp0dacctl, cp0dacdata, cp0int, cp0iv);
 }
 
 /* eUSCI */
