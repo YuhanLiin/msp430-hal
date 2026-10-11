@@ -9,7 +9,6 @@ use panic_msp430 as _;
 #[entry]
 fn main() -> ! {
     let periph = msp430fr247x::Peripherals::take().unwrap();
-    // Stop the watchdog (WDTHOLD = 1: SLAU445I Table 12-2, p. 366)
     let _wdt = Wdt::constrain(periph.wdt_a);
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
@@ -25,11 +24,6 @@ fn main() -> ! {
     ];
 
     // Configure the hardware CRC module, pass in the data and retrieve the signature.
-    // The module computes CRC-16-CCITT, x^16 + x^12 + x^5 + 1 (SLASEO7C 9.10.6, p. 53), starting from
-    // the seed written to CRCINIRES (SLAU445I 11.3, p. 354). Of each word, the lower byte goes in
-    // first (SLAU445I 11.3.1, p. 354), as in the software version below.
-    // The words go through CRCDIRB, "CRC data in reverse byte" (SLAU445I Table 11-3, p. 358), and the
-    // result is read from CRCINIRES (SLAU445I Table 11-4, p. 359).
     let mut crc_hw = Crc::new(periph.crc, 0xFFFF);
     crc_hw.add_words_lsb(&crc_input);
     let hw_sig = crc_hw.result();
@@ -37,7 +31,7 @@ fn main() -> ! {
     // Calculate the same CRC using a software implementation
     let sw_sig = calculate_software_sig(0xFFFF, &crc_input);
 
-    // Turn on the LED if the signatures match (LED1 on P1.0: SLAU802 Figure 19, p. 25)
+    // Turn on the LED if the signatures match
     led.set_state((sw_sig == hw_sig).into()).ok();
 
     loop {

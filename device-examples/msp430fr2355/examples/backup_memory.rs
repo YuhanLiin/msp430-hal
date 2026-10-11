@@ -21,7 +21,7 @@ fn main() -> ! {
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let mut led = Batch::new(periph.p1).split(&pmm).pin0.to_output();
 
-    // Interpret register block as a &mut [u8;32]
+    // Interpret the BAKMEM register block as a &mut [u8;32]
     let bk_mem = BackupMemory::as_u8s(periph.bkmem);
 
     bk_mem[0] = bk_mem[0].wrapping_add(1);

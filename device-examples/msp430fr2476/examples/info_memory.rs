@@ -7,8 +7,8 @@ use msp430_rt::entry;
 use msp430_hal::{gpio::Batch, pmm::Pmm, watchdog::Wdt};
 use panic_msp430 as _;
 
-// Use the non-volatile information memory to toggle the red onboard LED.
-// Resetting or power cycling the board toggles the red LED.
+// Use the non-volatile information memory to toggle the onboard LED1 (P1.0), which is green.
+// Resetting or power cycling the board toggles LED1.
 
 #[entry]
 fn main() -> ! {

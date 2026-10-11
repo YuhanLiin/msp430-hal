@@ -13,7 +13,6 @@ fn main() -> ! {
 
     let (pmm, _) = Pmm::new(periph.pmm, periph.sys);
     let p1 = Batch::new(periph.p1).split(&pmm);
-    // LED1, red, on P1.0 (SLAU680 Figure 18, p. 26)
     let mut led = p1.pin0.to_output();
 
     // Some random data to create a signature over. Can be modified.
@@ -24,8 +23,7 @@ fn main() -> ! {
         0xc58c, 0xd1e2, 0xe144, 0xb691,
     ];
 
-    // Configure the hardware CRC module, pass in the data and retrieve the signature. The module uses the
-    // CRC-CCITT polynomial x^16 + x^12 + x^5 + 1 (SLAU445I 11.1, p. 353).
+    // Configure the hardware CRC module, pass in the data and retrieve the signature.
     let mut crc_hw = Crc::new(periph.crc, 0xFFFF);
     crc_hw.add_words_lsb(&crc_input);
     let hw_sig = crc_hw.result();
@@ -33,7 +31,7 @@ fn main() -> ! {
     // Calculate the same CRC using a software implementation
     let sw_sig = calculate_software_sig(0xFFFF, &crc_input);
 
-    // Turn on the LED if the signatures match (LED1, red, on P1.0: SLAU680 Figure 18, p. 26)
+    // Turn on the LED if the signatures match
     led.set_state((sw_sig == hw_sig).into()).ok();
 
     loop {
@@ -56,7 +54,6 @@ fn calculate_software_sig(seed: u16, data: &[u16]) -> u16 {
 
 // Software algorithm - CCITT CRC16 code. Derived from msp430fr235x_CRC.c, at:
 // https://dev.ti.com/tirex/explore/node?node=A__AIgIaFR0j9SeqBvdp6wD2w__msp430ware__IOGqZri__LATEST
-// It computes the polynomial of the CRC module, x^16 + x^12 + x^5 + 1 (SLAU445I 11.1, p. 353).
 fn ccitt_update(sig: &mut u16, input: u8) {
     let mut new = *sig;
     new = new.rotate_right(8);
