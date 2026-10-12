@@ -29,7 +29,7 @@ fn main() -> ! {
 
     let mut comparator = comp_conf.configure(
             PositiveInput::_1V2,
-            NegativeInput::COMPx_1(port1.pin1.to_alternate2()),
+            NegativeInput::COMPx_1(port1.pin1.to_alternate3()),
             OutputPolarity::Noninverted,
             PowerMode::LowPower,
             Hysteresis::Off,

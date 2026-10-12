@@ -53,6 +53,12 @@ pub trait ECompPeriph {
     fn dis_cpie();
     fn en_cpiie();
     fn dis_cpiie();
+    /// CPxINT: CPIFG in bit 0, CPIIFG in bit 1
+    fn int_flags() -> u16;
+    /// Clear the CPxINT flags in `mask`, which clear when written with 1
+    fn clear_int_flags(mask: u16);
+    /// Read CPxIV, which clears the highest-priority enabled flag
+    fn iv() -> u16;
 }
 
 // Marker trait for an eCOMP DAC. Since the DAC has a typestate (hardware/software double buffer)
@@ -187,6 +193,21 @@ macro_rules! impl_ecomp {
                     let comp = { $COMP::steal() };
                     comp.$cpctl1().clear_bits(|w| w.cpiie().clear_bit())
                 }
+            }
+            #[inline(always)]
+            fn int_flags() -> u16 {
+                let comp = unsafe { $COMP::steal() };
+                comp.$cpint().read().bits()
+            }
+            #[inline(always)]
+            fn clear_int_flags(mask: u16) {
+                let comp = unsafe { $COMP::steal() };
+                comp.$cpint().write(|w| unsafe { w.bits(mask) });
+            }
+            #[inline(always)]
+            fn iv() -> u16 {
+                let comp = unsafe { $COMP::steal() };
+                comp.$cpiv().read().bits()
             }
         }
     };
