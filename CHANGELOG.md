@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - The MSP430FR25x2 capture and alternate examples capture on CCR2 and output SMCLK on P1.2.
 - GPIO batches now turn pin interrupts off while reconfiguring a port, and switch pins whose two function select bits both change through PxSELC. Pins a device doesn't have start out `Unavailable` and can't be used. On the MSP430FR2433 and MSP430FR25x2, a batch's `to_adc_mode()` and `from_adc_mode()` now set and clear the pin's ADCPCTL bit; before, they only changed its type.
 - Add `to_output_low()` and `to_output_high()` for GPIO pins, since PxOUT is undefined after a reset.
+- Fixed the TB0 clock input pin (TB0CLK) on the MSP430FR247x, which is P6.1, not P2.7.
 - Fixed on the MSP430FR2x5x: pin directions as in the data sheet, and the SAC op-amp pins on P3 only on the MSP430FR235x.
 - Fixed on the MSP430FR2433: the ACLK output on P2.2 uses alternate function 2.
 
