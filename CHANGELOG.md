@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Fixed GPIO batches not turning the pin interrupts off while reconfiguring a port: PxIE was ORed with 0 instead of cleared.
 - GPIO batches switch pins whose two function select bits both change through PxSELC, so they don't pass through another function on the way. Pins a device doesn't have start out `Unavailable` and can't be used.
 - Add `to_output_low()` and `to_output_high()` for GPIO pins, since PxOUT is undefined after a reset.
+- Fixed the TB0 clock input pin (TB0CLK) on the MSP430FR247x, which is P6.1, not P2.7.
 - Fixed on the MSP430FR2x5x: pin directions as in the data sheet, and the SAC op-amp pins on P3 only on the MSP430FR235x.
 - Fixed the TB0 clock input pin (TB0CLK) on the MSP430FR247x, which is P6.1, not P2.7.
 - Fixed on the MSP430FR2x5x: the SAC op-amp pins on P3 only exist on the MSP430FR235x.
