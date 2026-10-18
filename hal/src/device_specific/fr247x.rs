@@ -1049,7 +1049,7 @@ mod timer {
     impl CapCmpTimer3<RemappedMapping> for Ta3 {}
 
     impl TimerPeriph for Tb0 {
-        type Tbxclk = Pin<P2, Pin7, Alternate1<Input<Floating>>>;
+        type Tbxclk = Pin<P6, Pin1, Alternate1<Input<Floating>>>;
     }
     impl CapCmpTimer7 for Tb0 {}
 }
