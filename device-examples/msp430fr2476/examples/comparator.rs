@@ -37,7 +37,7 @@ fn main() -> ! {
             FilterStrength::Off,
         ).no_output_pin();
 
-    // If P1.1 is less than 1.2V then LED turns on
+    // If P2.2 is less than 1.2V then LED turns on
     loop {
         led.set_state(comparator.value().into()).ok();
     }
