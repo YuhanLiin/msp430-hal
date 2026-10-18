@@ -37,13 +37,15 @@ pub mod gpio {
     // P1 ADCPCTLx. 'x' determined by ADC channel impl in adc module.
     impl<PIN: PinNum, DIR> ToAdcPctl for Pin<P1, PIN, DIR> where Self: adc::AdcPctlCapable {}
 
-    // P2 alternate 1
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {}
-    impl       ToAlternate1 for Pin<P2, Pin2, Output> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin4, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin5, DIR> {}
-    impl<DIR>  ToAlternate1 for Pin<P2, Pin6, DIR> {}
+    // P2 alternate 1 (SLASE59F Table 6-18, p. 56, for P2.0 to P2.2 and SLASE59F Table 6-19, p. 58, for
+    // P2.3 to P2.7). P2.3 and P2.7 are GPIO only.
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin0, DIR> {} // XOUT
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin1, DIR> {} // XIN
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin4, DIR> {} // UCA1CLK
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin5, DIR> {} // UCA1RXD/UCA1SOMI
+    impl<DIR>  ToAlternate1 for Pin<P2, Pin6, DIR> {} // UCA1TXD/UCA1SIMO
+    // P2 alternate 2
+    impl       ToAlternate2 for Pin<P2, Pin2, Output> {} // ACLK
 
     // P3 alternate 1
     impl<DIR>  ToAlternate1 for Pin<P3, Pin1, DIR> {}
@@ -52,6 +54,12 @@ pub mod gpio {
     gpio_impl!(p1: P1 => p1in, p1out, p1dir, p1ren, p1selc, p1sel0, p1sel1, [p1ies, p1ie, p1ifg, p1iv]);
     gpio_impl!(p2: P2 => p2in, p2out, p2dir, p2ren, p2selc, p2sel0, p2sel1, [p2ies, p2ie, p2ifg, p2iv]);
     gpio_impl!(p3: P3 => p3in, p3out, p3dir, p3ren, p3selc, p3sel0, p3sel1);
+
+    // Pins per port (SLASE59F 6.10.3, p. 46). The DSBGA package also lacks P2.4 and P3.1 (SLASE59F Table 4-1,
+    // p. 11).
+    impl_port_pins!(P1, 8);
+    impl_port_pins!(P2, 8);
+    impl_port_pins!(P3, 3);
 }
 
 /* ADC */
