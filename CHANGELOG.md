@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Breaking: the MSP430FR25x2 ADC is 10-bit with a 1.5 V reference only, so 12-bit results and the 2.0 V and 2.5 V references are not available there. Its analog inputs are now enabled with `to_adc_mode()` (SYSCFG2.ADCPCTLx), as on the MSP430FR2433; alternate function 3 selected CapTIvate.
 - Fixed on the MSP430FR25x2: 256 bytes of information memory, pin functions as in the data sheet (CAP1.x only on the MSP430FR2522), and the MODCLK frequency constant, now the data sheet's typical 4.8 MHz.
 - The MSP430FR25x2 capture and alternate examples capture on CCR2 and output SMCLK on P1.2.
-- GPIO batches now turn pin interrupts off while reconfiguring a port, and switch pins whose two function select bits both change through PxSELC. Pins a device doesn't have start out `Unavailable` and can't be used. On the MSP430FR2433 and MSP430FR25x2, a batch's `to_adc_mode()` and `from_adc_mode()` now set and clear the pin's ADCPCTL bit; before, they only changed its type.
+- Fixed GPIO batches not turning the pin interrupts off while reconfiguring a port: PxIE was ORed with 0 instead of cleared.
+- GPIO batches switch pins whose two function select bits both change through PxSELC, so they don't pass through another function on the way. Pins a device doesn't have start out `Unavailable` and can't be used.
 - Add `to_output_low()` and `to_output_high()` for GPIO pins, since PxOUT is undefined after a reset.
 - Fixed the TB0 clock input pin (TB0CLK) on the MSP430FR247x, which is P6.1, not P2.7.
 - Fixed on the MSP430FR2x5x: pin directions as in the data sheet, and the SAC op-amp pins on P3 only on the MSP430FR235x.

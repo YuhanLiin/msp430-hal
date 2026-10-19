@@ -413,11 +413,9 @@ impl<PORT: PortNum, DIR0, DIR1, DIR2, DIR3, DIR4, DIR5, DIR6, DIR7>
         p.maybe_write_pxie(0);
         // Pins whose PxSEL0 and PxSEL1 bits both change switch through PxSELC, so they don't pass
         // through another function on the way (SLAU445I 8.2.5, p. 314). After that, every
-        // remaining change is a single bit.
-        let both = (p.pxsel0_rd() ^ pxsel0) & (p.pxsel1_rd() ^ pxsel1);
-        if both != 0 {
-            p.pxselc_wr(both);
-        }
+        // remaining change is a single bit. A 0 in PxSELC changes nothing, so it is always written.
+        let pxselc = (p.pxsel0_rd() ^ pxsel0) & (p.pxsel1_rd() ^ pxsel1);
+        p.pxselc_wr(pxselc);
         p.pxsel0_wr(pxsel0);
         p.pxsel1_wr(pxsel1);
 

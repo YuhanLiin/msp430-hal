@@ -116,8 +116,7 @@ macro_rules! impl_port_pins {
 pub(crate) use impl_port_pins;
 
 /// Starting typestate of the pins that exist
-#[doc(hidden)]
-pub type In = Input<Floating>;
+pub(crate) type In = Input<Floating>;
 
 /// Pin number 0
 pub struct Pin0;
