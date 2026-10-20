@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Fixed the TB0 clock input pin (TB0CLK) on the MSP430FR247x, which is P6.1, not P2.7.
 - Fixed on the MSP430FR2x5x: the SAC op-amp pins on P3 only exist on the MSP430FR235x.
 - Fixed on the MSP430FR2433: the ACLK output on P2.2 uses alternate function 2.
+- A pin in an alternate function can switch directly to another one with `to_alternate1()`, `to_alternate2()` and `to_alternate3()`, without passing through GPIO. Before, these methods existed but couldn't be called on a single pin.
+- Fixed `to_alternate1()`, `to_alternate2()` and `to_alternate3()` not being callable on a pin in an alternate function when its `ToAlternateN` impl only exists for one direction, such as MCLK on P1.3 of the MSP430FR247x. The pin switches directly to the other function, without passing through GPIO.
+- Add the `gpio_alternate_switch` example for the MSP430FR2476.
 
 ## [v0.8.0] - 2026-08-14
 - Changed name of project from `msp430fr2x5c-hal` to `msp430-hal` to better represent the scope of the project.
