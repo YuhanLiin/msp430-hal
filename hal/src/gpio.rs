@@ -679,7 +679,7 @@ impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate1<DIR>> {
 }
 
 impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate1<DIR>>
-where Self: ToAlternate2
+where Pin<PORT, PIN, DIR>: ToAlternate2
 {
     /// Convert pin to alternate function 2
     #[inline]
@@ -690,7 +690,7 @@ where Self: ToAlternate2
 }
 
 impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate1<DIR>>
-where Self: ToAlternate3
+where Pin<PORT, PIN, DIR>: ToAlternate3
 {
     /// Convert pin to alternate function 3
     #[inline]
@@ -711,7 +711,7 @@ impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate2<DIR>> {
 }
 
 impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate2<DIR>>
-where Self: ToAlternate1
+where Pin<PORT, PIN, DIR>: ToAlternate1
 {
     /// Convert pin to alternate function 1
     #[inline]
@@ -722,7 +722,7 @@ where Self: ToAlternate1
 }
 
 impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate2<DIR>>
-where Self: ToAlternate3
+where Pin<PORT, PIN, DIR>: ToAlternate3
 {
     /// Convert pin to alternate function 3
     #[inline]
@@ -743,7 +743,7 @@ impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate3<DIR>> {
 }
 
 impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate3<DIR>>
-where Self: ToAlternate1
+where Pin<PORT, PIN, DIR>: ToAlternate1
 {
     /// Convert pin to alternate function 1
     #[inline]
@@ -754,7 +754,7 @@ where Self: ToAlternate1
 }
 
 impl<PORT: PortNum, PIN: PinNum, DIR> Pin<PORT, PIN, Alternate3<DIR>>
-where Self: ToAlternate2
+where Pin<PORT, PIN, DIR>: ToAlternate2
 {
     /// Convert pin to alternate function 2
     #[inline]
