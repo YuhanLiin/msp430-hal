@@ -23,6 +23,10 @@ rustflags = [
     # libgcc must be linked after everything that depends on it (e.g. lmul_f5)
     "-C",
     "link-arg=-lgcc",
+    
+    # These two options can be used to reduce the size of debug builds. See the readme for more details.
+    # "-Z", "ub-checks=no",
+    # "-Z", "location-detail=line,column"
 ]
 
 [build]

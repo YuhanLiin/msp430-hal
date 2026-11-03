@@ -151,6 +151,40 @@ This is not checked in the HAL.
 The library is intended to be panic-free, though this hasn't been verified. If you encounter panics
 while using the library (or `panic-never` points to the existence of possible panics) please open an issue.
 
+# Comments on Managing Binary Size
+
+The MSP430 family is very limited in terms of program memory, so careful attention must be paid to binary size. Rust debug builds can be quite large, especially if any panic paths exist in the program. The device example projects come set up with sensible defaults, but there are a few additional levers you can pull to reduce the size of your program:
+
+- The most important option to reduce binary size is to use release mode. This strips all unused or debug info out of the binary, and removes all runtime bounds checks, overflow checks, etc.. This does mean that if you need to temporarily debug something you may have to step back to debug mode and rely on some of the other options below instead.
+- Don't panic - handle all error cases in your program. Panicking requires pulling in the panic and string formatting infrastructure from the standard library. Removing panics can sometimes be difficult, as even seemingly innocuous actions can cause panics (e.g. array indexing in debug mode).
+  - You can check for the existence of panics using the `panic-never` crate, which will throw an error if something in your program would require calling the panic handler. This only works in release mode.
+- Use `defmt` for printing and panicking. `defmt` can greatly reduce program size by offloading strings and string formatting to the debugging computer instead.
+- Avoid non-native data types where possible - floats, 32-bit (or larger) integers, strings, etc.. These will require additional code to emulate in software.
+
+If you are trying to debug a panic, consider using these options to control how much panic debug info is added:
+
+- Add `-Zlocation-detail=line,column` to `.cargo/config.toml`. This removes filepath info (stored as absolute filepaths in the binary) from panics. Most of the savings come from removing filepaths, but you can also remove line and column info with `-Zlocation-detail=none` to save a bit more.
+- Add `-Zub-checks=no` to `.cargo/config.toml`. This removes runtime debug mode undefined behaviour (UB) checks on e.g. 'unchecked' methods (often called from within the standard library), which can add additional panic paths to your program. Of course, if your program would have panicked due to these checks then disabling the checks will instead cause UB.
+  - Adding `debug-assertions=false` to `cargo.toml` disables additional debug checks like overflow detection. This implies `-Zub-checks=no`.
+- Add `panic="immediate-abort"` to `cargo.toml`. This immediately halts the program on any panic, bypassing all panic handling, including user-defined panic handlers. This of course makes debugging panics a lot harder.
+
+The table below shows the effect of these options on the size of the `spi_nb.rs` example (which contains some possible panics):
+| Configuration                                               | `.text` (B) | `.rodata` (B) | Total (B)  |
+|-------------------------------------------------------------|------------:|--------------:|-----------:|
+| Debug                                                       | 9,530       | 14,726        | **24,256** |
+| Debug + `-Zub-checks=no`                                    | 7,058       | 9,308         | **16,366** |
+| Debug + `-Zlocation-detail=line,column`                     | 9,530       | 5,914         | **15,444** |
+| Debug + `-Zlocation-detail=none`                            | 9,122       | 5,152         | **14,274** |
+| Debug + `-Zlocation-detail=none` + `-Zub-checks=no`         | 6,956       | 2,122         | **9,078**  |
+| Debug + defmt                                               | 2,048       | 10,838        | **12,886** |
+| Debug + defmt + `-Zub-checks=no`                            | 1,910       | 652           | **2,562**  |
+| Debug + defmt + `-Zlocation-detail=none` + `-Zub-checks=no` | 1,910       | 170           | **2,080**  |
+| Debug + panic-free implementation                           | 1,020       | 80            | **1,100**  |
+| Debug + `panic="immediate-abort"`                           | 1,010       | 4             | **1,014**  |
+| Release                                                     | 528         | 4             | **532**    |
+
+You can use tools like `cargo-bloat` to further analyze the contents of your binary.
+
 # License
 
 Licensed under either of
