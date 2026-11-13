@@ -29,7 +29,7 @@ fn main() -> ! {
         Predivider::_1,
         Resolution::_8BIT,
         SamplingRate::_50KSPS,
-        SampleTime::_4,
+        SampleTime::_16,
     )
     .use_modclk()
     .configure(periph.adc);
