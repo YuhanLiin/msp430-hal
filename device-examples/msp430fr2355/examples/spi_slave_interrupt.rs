@@ -58,6 +58,14 @@ fn main() -> ! {
         .aclk_vloclk()
         .freeze(&mut fram);
 
+    // Configure another peripheral as an SPI master to drive the bus. It is configured before the slave, so
+    // SCLK is at its idle level (low in MODE_0) when the slave leaves reset: an SPI slave with UCCKPH = 1
+    // goes wrong otherwise (erratum USCI47).
+    let mut spi = SpiConfig::new(periph.e_usci_b1, MODE_0, true)
+        // fBitClock = fBRCLK / UCBRx
+        .to_master_using_smclk(&smclk, 800) // 8MHz / 800 = 10kHz
+        .single_master_bus(miso, mosi, sclk);
+
     // Configure a peripheral as an SPI slave.
     // It can be configured for either a shared or exclusive bus depending on whether
     // there are other slaves on the bus. On an exclusive bus MISO is always an output.
@@ -65,11 +73,6 @@ fn main() -> ! {
     let mut spi_slave = SpiConfig::new(periph.e_usci_a0, MODE_0, true)
         .to_slave()
         .shared_bus(sl_miso, sl_mosi, sl_sclk, sl_ste, StePolarity::EnabledWhenLow);
-
-    // Configure another as an SPI master to drive the bus.
-    let mut spi = SpiConfig::new(periph.e_usci_b1, MODE_0, true)
-        .to_master_using_smclk(&smclk, 800) // 8MHz / 80 = 100kHz
-        .single_master_bus(miso, mosi, sclk);
 
     critical_section::with(|cs| {
         spi_slave.set_rx_interrupt();

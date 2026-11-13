@@ -53,7 +53,8 @@ fn main() -> ! {
     let mut ste = p2.pin7.to_output();
     ste.set_high().ok();
 
-    let mut red_led = p1.pin0.to_output();
+    // LED1 on P1.0 is green, whatever the variable name says
+    let mut led1 = p1.pin0.to_output();
     // let mut green_led = Batch::new(periph.p6).split(&pmm).pin6.to_output();
 
     let (smclk, _aclk, mut delay) = ClockConfig::new(periph.cs)
@@ -94,9 +95,9 @@ fn main() -> ! {
 
         ste.set_high().ok(); // Make slave MISO high impedance
 
-        // Green LED on if result matches expected
-        red_led.set_state( (recv_buf[1..] == [13, 15, 00]).into() ).ok();
-        // red_led.toggle().ok();
+        // Green LED on if result matches expected (LED1)
+        led1.set_state( (recv_buf[1..] == [13, 15, 00]).into() ).ok();
+        // led1.toggle().ok();
 
         delay.delay_ms(1000);
     }
