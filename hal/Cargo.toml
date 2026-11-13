@@ -27,8 +27,8 @@ msp430fr2512 = ["25x2"]           # 2kB RAM up to 8 self-capacitive and 16 mutua
 msp430fr2522 = ["25x2"]           # 2kB RAM up to 4 self-capacitive or mutual-capacitive sensors
 
 # Derived features. Do not provide these.
-2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source"]
-247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source"]
+2x5x = ["dep:msp430fr2355", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source", "timer_b"]
+247x = ["dep:msp430fr247x", "eusci_aclk", "info_mem", "enhanced_ref", "adc12bit", "ecomp", "eusci_b", "vloclk_source", "timer_b"]
 25x2 = ["dep:msp430fr25x2", "eusci_aclk", "info_mem", "adc", "adcpctl", "eusci_b"]
 eusci_aclk = [] # eUSCI peripherals can source from ACLK
 eusci_modclk = [] # eUSCI peripherals can source from MODCLK
@@ -44,6 +44,9 @@ sac = []
 tia = []
 info_mem = []
 vloclk_source = []
+# Timer_B on the MSP430FR2x5x (SLASEC4D Table 3-1, p. 8) and the MSP430FR247x (SLASEO7C Table 6-1, p. 6); the
+# MSP430FR2433 and MSP430FR25x2 have only Timer_A (SLASE59F Table 3-1, p. 7; SLASEE4C Table 3-1, p. 8)
+timer_b = []
 
 [dependencies]
 defmt = {version = "1.0", optional = true }

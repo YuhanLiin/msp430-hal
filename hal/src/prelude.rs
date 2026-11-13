@@ -17,9 +17,12 @@ pub use crate::pwm::PwmPeriph as _msp430fr2x5x_hal_PwmPeriph;
 pub use crate::rtc::RtcClockSrc as _msp430fr2x5x_hal_RtcClockSrc;
 pub use crate::serial::SerialUsci as _msp430fr2x5x_hal_SerialUsci;
 pub use crate::timer::CapCmp as _msp430fr2x5x_hal_CapCmp;
+pub use crate::timer::CapCmpTimer2 as _msp430fr2x5x_hal_CapCmpTimer2;
 pub use crate::timer::CapCmpTimer3 as _msp430fr2x5x_hal_CapCmpTimer3;
 pub use crate::timer::CapCmpTimer7 as _msp430fr2x5x_hal_CapCmpTimer7;
+pub use crate::timer::CascadedTimer as _msp430fr2x5x_hal_CascadedTimer;
 pub use crate::timer::TimerPeriph as _msp430fr2x5x_hal_TimerPeriph;
+pub use crate::timer::VloclkTimer as _msp430fr2x5x_hal_VloclkTimer;
 pub use crate::watchdog::WatchdogSelect as _msp430fr2x5x_hal_WatchdogSelect;
 
 #[cfg(feature = "embedded-hal-02")]
